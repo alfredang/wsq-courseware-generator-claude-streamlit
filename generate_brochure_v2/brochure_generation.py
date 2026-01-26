@@ -71,11 +71,32 @@ if sys.platform == 'win32':
     asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 # Web scraping imports - Playwright for dynamic content
+PLAYWRIGHT_AVAILABLE = False
+PLAYWRIGHT_BROWSERS_INSTALLED = False
 try:
     from playwright.sync_api import sync_playwright
     PLAYWRIGHT_AVAILABLE = True
 except ImportError:
     PLAYWRIGHT_AVAILABLE = False
+
+def _ensure_playwright_browsers():
+    """Install Playwright browsers if not already installed (for Streamlit Cloud)."""
+    global PLAYWRIGHT_BROWSERS_INSTALLED
+    if PLAYWRIGHT_BROWSERS_INSTALLED:
+        return True
+    try:
+        import subprocess
+        # Try to install chromium browser
+        result = subprocess.run(
+            ['playwright', 'install', 'chromium'],
+            capture_output=True,
+            timeout=180
+        )
+        PLAYWRIGHT_BROWSERS_INSTALLED = True
+        return True
+    except Exception as e:
+        st.warning(f"Could not install Playwright browsers: {e}")
+        return False
 
 # PDF generation imports - prioritize libraries that don't need external deps
 PDF_GENERATOR = None
@@ -206,6 +227,9 @@ def scrape_with_playwright(url: str):
     Returns:
         BeautifulSoup: Parsed HTML content
     """
+    # Ensure browsers are installed (for Streamlit Cloud)
+    _ensure_playwright_browsers()
+
     try:
         with sync_playwright() as p:
             browser = p.chromium.launch(headless=True)
@@ -1654,6 +1678,8 @@ def generate_pdf_output(html_content: str, output_path: str) -> bool:
     try:
         # Use Playwright for PDF generation first - best CSS support
         if PLAYWRIGHT_AVAILABLE:
+            # Ensure browsers are installed (for Streamlit Cloud)
+            _ensure_playwright_browsers()
             try:
                 with sync_playwright() as p:
                     browser = p.chromium.launch(headless=True)
