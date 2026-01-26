@@ -1,5 +1,4 @@
 # Core dependencies
-# Note: Order matters - griffe must be installed before openai-agents
 beautifulsoup4
 docxtpl
 google-api-python-client
@@ -23,9 +22,9 @@ python-dotenv
 psycopg2-binary
 
 # OpenAI dependencies
-# griffe must be installed before openai-agents to avoid version conflicts
-griffe>=1.5.0
+# Note: Requires Python 3.11 or 3.12 (set in Streamlit Cloud settings)
 openai>=1.12.0
+griffe>=1.5.6,<2.0.0
 openai-agents>=0.0.7
 
 # Note: PyMuPDF, xhtml2pdf removed for Streamlit Cloud compatibility

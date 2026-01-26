@@ -11,7 +11,34 @@ Date: 26 January 2026
 
 import os
 from typing import List, Any, Optional, Callable, Dict
-from agents import Agent, set_default_openai_api
+
+# Conditional import for openai-agents package
+# This allows the app to run on Streamlit Cloud even if the package isn't fully available
+AGENTS_AVAILABLE = False
+Agent = None
+set_default_openai_api = None
+
+try:
+    from agents import Agent, set_default_openai_api
+    AGENTS_AVAILABLE = True
+except ImportError as e:
+    print(f"Warning: openai-agents package not available: {e}")
+    print("Agent features will be disabled. The app will run in limited mode.")
+
+    # Create a stub Agent class for compatibility
+    class Agent:
+        """Stub Agent class when openai-agents is not available."""
+        def __init__(self, **kwargs):
+            self.name = kwargs.get("name", "StubAgent")
+            self.instructions = kwargs.get("instructions", "")
+            self.tools = kwargs.get("tools", [])
+            self.handoffs = kwargs.get("handoffs", [])
+            self.model = kwargs.get("model", "")
+            print(f"Warning: Agent '{self.name}' created as stub - openai-agents not available")
+
+    def set_default_openai_api(api_type: str):
+        """Stub function when openai-agents is not available."""
+        pass
 
 
 def setup_openrouter() -> bool:
