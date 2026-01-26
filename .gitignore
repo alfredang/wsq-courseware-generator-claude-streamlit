@@ -1,0 +1,53 @@
+# Environment
+.env
+CourseProposal/venv
+.venv/
+venv/
+ENV/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+
+# Streamlit secrets (DO NOT COMMIT - Add these to Streamlit Cloud UI)
+.streamlit/secrets.toml
+settings/config/api_keys.json
+settings/config/custom_models.json
+
+# Data and cache (generated at runtime)
+data/
+*.docx
+*.pdf
+*.xlsx
+*.tmp
+*.log
+
+# Generated outputs (created at runtime)
+generate_cp/output_docs/*.docx
+generate_cp/output_docs/*.xlsx
+generate_cp/json_output/*.json
+generate_assessment/output/*
+common/generated_brochures/*.html
+
+# Keep template files but ignore outputs
+!generate_cp/templates/
+
+# OS files
+.DS_Store
+Thumbs.db
+**/.DS_Store
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Temporary files
+temp/
+tmp/
+remove_soon/
