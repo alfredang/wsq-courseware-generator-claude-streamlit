@@ -1,4 +1,4 @@
-# Core dependencies (Python 3.13 compatible)
+# Core dependencies (Python 3.11)
 beautifulsoup4
 docxtpl
 google-api-python-client
@@ -24,11 +24,8 @@ jinja2
 
 # OpenAI dependencies
 openai>=1.12.0
-
-# OpenAI Agents SDK - disabled (not yet compatible with Python 3.13)
-# Install locally with: pip install openai-agents
-# openai-agents>=0.0.7
+openai-agents>=0.0.7
 
 # Note: PyMuPDF, xhtml2pdf removed for Streamlit Cloud compatibility
 # PDF reading uses pypdf2 fallback
-# Agent features will run in limited mode without openai-agents
+# MCP features require Node.js (not available on Streamlit Cloud)
