@@ -118,6 +118,10 @@ def display_homepage():
                 st.session_state['nav_to'] = "Check Documents"
                 st.rerun()
 
+    # Chat section header
+    st.markdown("### Chat with Courseware Orchestrator")
+    st.caption("Ask questions or request help with courseware generation")
+
     # Initialize chat history
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
@@ -128,39 +132,27 @@ def display_homepage():
             st.markdown(message["content"])
 
     # Chat input
-    if prompt := st.chat_input("Ask about courseware generation..."):
+    if prompt := st.chat_input("Ask about courseware generation or request help..."):
         # Add user message to history
         st.session_state.chat_messages.append({"role": "user", "content": prompt})
 
-        # Get response from AI using openai-agents
+        # Get response from AI using the Orchestrator agent
         try:
             from settings.api_manager import load_api_keys
-            from agents import Agent, Runner, WebSearchTool
+            from agents import Runner
 
             api_keys = load_api_keys()
-            openai_key = api_keys.get("OPENAI_API_KEY", "")
+            openrouter_key = api_keys.get("OPENROUTER_API_KEY", "")
 
-            if openai_key:
-                # Set API key for agents library
-                os.environ["OPENAI_API_KEY"] = openai_key
+            if openrouter_key:
+                # Import and create the orchestrator
+                from courseware_agents.orchestrator import create_orchestrator
 
-                # Create the courseware assistant agent with tools
-                courseware_agent = Agent(
-                    name="Courseware Assistant",
-                    instructions="""You are a helpful assistant for the WSQ Courseware Generator with OpenAI Multi Agents.
-                    This system helps create educational courseware documents including:
-                    - Course Proposals (CP)
-                    - Assessment Plans (AP), Facilitator Guides (FG), Learner Guides (LG), and Lesson Plans (LP)
-                    - Assessment materials
-                    - Course brochures
-                    - Document validation
+                # Get selected model from session state (default to GPT-4o for orchestrator)
+                chat_model = st.session_state.get('selected_model', 'GPT-4o')
 
-                    Help users understand how to use the system and answer questions about courseware development.
-                    You can use web search to find relevant information about educational content,
-                    training methodologies, and best practices in courseware development.""",
-                    tools=[WebSearchTool()],
-                    model="gpt-4o-mini"
-                )
+                # Create orchestrator with handoffs to specialized agents
+                orchestrator = create_orchestrator(model_name=chat_model)
 
                 # Build conversation context from history
                 conversation_history = ""
@@ -171,19 +163,25 @@ def display_homepage():
                 # Create the full prompt with context
                 full_prompt = f"{conversation_history}User: {prompt}" if conversation_history else prompt
 
-                # Run the agent asynchronously
-                async def run_agent():
-                    result = await Runner.run(courseware_agent, full_prompt)
+                # Run the orchestrator asynchronously
+                async def run_orchestrator():
+                    result = await Runner.run(orchestrator, full_prompt)
                     return result.final_output
 
                 # Execute async function
-                assistant_message = asyncio.run(run_agent())
+                with st.spinner("Thinking..."):
+                    assistant_message = asyncio.run(run_orchestrator())
                 st.session_state.chat_messages.append({"role": "assistant", "content": assistant_message})
             else:
                 st.session_state.chat_messages.append({
                     "role": "assistant",
-                    "content": "OpenAI API key not configured. Please set up your OpenAI API key in Settings > API & Models to use the agent features."
+                    "content": "OpenRouter API key not configured. Please set up your OPENROUTER_API_KEY in Settings > API & Models to use the orchestrator agent."
                 })
+        except ImportError as e:
+            st.session_state.chat_messages.append({
+                "role": "assistant",
+                "content": f"Agent module not found. Please ensure the courseware_agents package is properly installed. Error: {str(e)}"
+            })
         except Exception as e:
             st.session_state.chat_messages.append({
                 "role": "assistant",

@@ -1,6 +1,6 @@
 # WSQ Courseware Generator with OpenAI Multi Agents
 
-A comprehensive AI-powered courseware generation platform built with OpenAI Multi Agents and Streamlit. This system automates the creation of educational documents including Course Proposals, Assessment Plans, Learning Guides, and more for workforce skills qualification (WSQ) training programs.
+A comprehensive AI-powered courseware generation platform built with **OpenAI Agents SDK** and Streamlit. This system uses an **orchestrator-based multi-agent architecture** to automate the creation of educational documents including Course Proposals, Assessment Plans, Learning Guides, and more for workforce skills qualification (WSQ) training programs.
 
 ### 🔴 [Live Demo](https://courseware-generator-openai.streamlit.app/)
 
@@ -90,20 +90,109 @@ streamlit run app.py
 - **Document Verification** - Supporting document validation and entity extraction
 
 ### Advanced AI Architecture
-- **Multi-Agent Workflows** - Specialized agent teams for different tasks
-- **Model Flexibility** - Support for DeepSeek, OpenAI, Anthropic, and Google models via OpenRouter
-- **Content Intelligence** - Context-aware content generation
+- **Orchestrator Agent** - Central coordinator that interacts with users and delegates to specialized agents
+- **Multi-Agent Handoffs** - Seamless workflow transitions between specialized agents
+- **Model Flexibility** - Support for 38+ models (DeepSeek, OpenAI, Anthropic, Google) via OpenRouter
+- **Dynamic Model Selection** - Configure models per agent from the Settings UI
+- **Content Intelligence** - Context-aware content generation with memory
 - **Quality Assurance** - Multi-layer validation and error correction
+
+## 🤖 Multi-Agent Architecture
+
+The system uses an **orchestrator-based architecture** powered by the [OpenAI Agents SDK](https://github.com/openai/openai-agents-python). The orchestrator agent coordinates specialized agents via handoffs:
+
+```
+                    ┌─────────────────────────┐
+                    │   Orchestrator Agent    │
+                    │  (User Interaction)     │
+                    └───────────┬─────────────┘
+                                │ handoffs
+        ┌───────────┬───────────┼───────────┬───────────┐
+        ▼           ▼           ▼           ▼           ▼
+   ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐
+   │CP Agent │ │Courseware│ │Assessment│ │Brochure │ │Document │
+   │         │ │  Agent   │ │  Agent   │ │  Agent  │ │  Agent  │
+   └─────────┘ └─────────┘ └─────────┘ └─────────┘ └─────────┘
+```
+
+### Agent Descriptions
+
+| Agent | Purpose | Default Model |
+|-------|---------|---------------|
+| **Orchestrator** | User interaction, task routing, workflow coordination | GPT-4o |
+| **CP Agent** | Course Proposal generation from TSC documents | DeepSeek-Chat |
+| **Courseware Agent** | Assessment Plan, Facilitator Guide, Learner Guide, Lesson Plan | DeepSeek-Chat |
+| **Assessment Agent** | SAQ, Practical Performance, Case Study generation | DeepSeek-Chat |
+| **Brochure Agent** | Marketing brochure creation with web scraping | GPT-4o-Mini |
+| **Document Agent** | Supporting document verification and entity extraction | GPT-4o-Mini |
+
+### How It Works
+
+1. **User chats** with the Orchestrator on the homepage
+2. **Orchestrator analyzes** the request and identifies the appropriate specialized agent
+3. **Handoff occurs** - control transfers to the specialized agent with context
+4. **Specialized agent** executes using its tools (document parsing, AI generation, web scraping)
+5. **Results returned** to user through the orchestrator
+
+### Key Features
+
+- **Natural Language Interface**: Chat with the orchestrator to generate any document
+- **Automatic Agent Selection**: The orchestrator routes requests to the right agent
+- **Tool-Equipped Agents**: Each agent has specialized function tools
+- **Configurable Models**: Change models per agent via Settings UI
+- **OpenRouter Integration**: Unified access to 38+ models from multiple providers
+
+### Agent Tools
+
+Each agent is equipped with specialized function tools:
+
+**CP Agent Tools:**
+- `parse_tsc_document` - Parse TSC DOCX files
+- `run_extraction_pipeline` - Extract course info, learning outcomes
+- `run_research_pipeline` - Job role analysis
+- `generate_cp_document` - Create final Word document
+
+**Courseware Agent Tools:**
+- `generate_assessment_plan` - Create AP document
+- `generate_facilitator_guide` - Create FG document
+- `generate_learner_guide` - Create LG document
+- `generate_lesson_plan` - Create LP document
+- `generate_timetable` - Create course schedule
+
+**Assessment Agent Tools:**
+- `generate_saq_questions` - Short Answer Questions
+- `generate_practical_performance` - PP assessments
+- `generate_case_study` - Case study scenarios
+- `parse_facilitator_guide` - Extract FG structure
+
+**Brochure Agent Tools:**
+- `scrape_course_info` - Web scrape course details
+- `generate_brochure_html` - Create HTML brochure
+- `generate_brochure_pdf` - Convert to PDF
+- `generate_marketing_content` - AI-enhanced copy
+
+**Document Agent Tools:**
+- `extract_document_entities` - Entity extraction
+- `verify_company_uen` - UEN validation
+- `check_document_completeness` - Completeness check
 
 ## 📋 Prerequisites
 
 - Python 3.11+
 - Streamlit account (for deployment)
-- API Keys (via OpenRouter recommended):
+- **OpenRouter API Key** (recommended - single key for all providers)
+- Or individual API Keys:
   - DeepSeek
   - OpenAI
   - Anthropic
   - Google Gemini
+
+### Key Dependencies
+- `openai-agents` - OpenAI Agents SDK for multi-agent orchestration
+- `openai` - OpenAI Python client (used with OpenRouter)
+- `streamlit` - Web UI framework
+- `python-docx` - Word document generation
+- `jinja2` - Template rendering
 
 ## 🛠 Installation
 
@@ -156,11 +245,20 @@ streamlit run app.py
 
 ```
 courseware_openai_agents/
-├── app.py                      # Main Streamlit application
+├── app.py                      # Main Streamlit application with orchestrator chat
+├── courseware_agents/          # 🤖 Multi-Agent System (OpenAI Agents SDK)
+│   ├── __init__.py            # Package exports
+│   ├── base.py                # Agent factory & OpenRouter configuration
+│   ├── orchestrator.py        # Main orchestrator with handoffs to all agents
+│   ├── cp_agent.py            # Course Proposal generation agent
+│   ├── courseware_agent.py    # AP/FG/LG/LP generation agent
+│   ├── assessment_agent.py    # SAQ/PP/Case Study generation agent
+│   ├── brochure_agent.py      # Marketing brochure agent
+│   └── document_agent.py      # Document verification agent
 ├── settings/                   # API and model configuration
 │   ├── settings.py            # API Keys & LLM Models UI
-│   ├── api_manager.py         # API key management
-│   └── model_configs.py       # AI model configurations
+│   ├── api_manager.py         # API key management (SQLite storage)
+│   └── model_configs.py       # AI model configurations (38+ models)
 ├── company/                    # Company/organization management
 │   ├── company_settings.py    # Company management UI
 │   ├── company_manager.py     # Company selection & branding utilities
@@ -172,7 +270,7 @@ courseware_openai_agents/
 │   └── prompts/               # AI prompt templates
 ├── generate_cp/               # Course Proposal generation
 │   ├── app.py                 # Streamlit interface
-│   ├── agents/                # Multi-agent implementations
+│   ├── agents/                # Legacy multi-agent implementations
 │   └── utils/                 # CP-specific utilities
 ├── generate_assessment/       # Assessment generation (SAQ, CS, PP)
 │   ├── assessment_generation.py
@@ -191,6 +289,18 @@ courseware_openai_agents/
 ```
 
 ## 💡 Usage Guide
+
+### Chat with the Orchestrator (Recommended)
+The homepage features a **chat interface** powered by the Orchestrator Agent. Simply describe what you need:
+
+```
+"I want to generate a Course Proposal from my TSC document"
+"Create assessment materials for my course"
+"Generate a marketing brochure"
+"Verify my supporting documents"
+```
+
+The orchestrator will automatically route your request to the appropriate specialized agent.
 
 ### 1. Generate Course Proposal
 1. Upload TSC (Training Specification Content) document
@@ -216,10 +326,24 @@ courseware_openai_agents/
 
 ## 🔧 Configuration
 
+### OpenRouter Integration
+All models are accessed through **OpenRouter**, providing unified access to 38+ models:
+
+| Provider | Models |
+|----------|--------|
+| **OpenAI** | GPT-4o, GPT-4o-Mini, GPT-4-Turbo, o1, o1-mini, o3-mini |
+| **Anthropic** | Claude Opus 4.5, Claude Sonnet 4, Claude 3.5 Sonnet |
+| **Google** | Gemini 2.5 Pro/Flash, Gemini 2.0 Flash |
+| **DeepSeek** | DeepSeek-Chat, DeepSeek-R1 |
+| **Meta** | Llama 3.3 70B, Llama 3.1 405B |
+| **Qwen** | Qwen 2.5 72B, QwQ 32B |
+| **Mistral** | Mistral Large, Codestral |
+
 ### Model Selection
-- **GPT-4o-Mini**: Default for structured tasks (cost-effective)
-- **Gemini-2.5-Pro**: Best for content generation
-- **GPT5/GPT-4o**: Premium options for complex tasks
+- **DeepSeek-Chat**: Best performance/cost ratio (recommended default)
+- **GPT-4o-Mini**: Fast and cost-effective for simple tasks
+- **Claude Sonnet 4**: Excellent for complex reasoning
+- **Gemini 2.5 Flash**: Very fast, good for bulk operations
 
 ### Document Templates
 All document templates are located in respective module directories:
