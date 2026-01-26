@@ -1,9 +1,6 @@
 # Core dependencies
-autogen-agentchat
-autogen-ext[openai,azure]
 beautifulsoup4
 docxtpl
-flaml[automl]
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
@@ -17,13 +14,19 @@ PyMuPDF
 python-docx
 streamlit-option-menu
 requests
-playwright
 lxml
 google-generativeai
 pypdf2
-pymupdf
 gspread
 rapidfuzz
 oauth2client
 streamlit-modal
-weasyprint
+xhtml2pdf
+
+# AutoGen dependencies (pinned for stability)
+autogen-agentchat==0.4.0
+autogen-ext==0.4.0
+autogen-core==0.4.0
+
+# Playwright for web scraping (browsers installed at runtime)
+playwright
