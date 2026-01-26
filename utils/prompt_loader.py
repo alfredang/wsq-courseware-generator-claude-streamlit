@@ -2,7 +2,7 @@
 Prompt Loading Utility
 
 This module provides centralized prompt management for the courseware generation system.
-All prompts are stored as markdown files in the prompts/ folder and can be loaded with variable substitution.
+All prompt templates are stored as markdown files in the prompt_templates/ folder and can be loaded with variable substitution.
 
 Usage:
     from utils.prompt_loader import load_prompt
@@ -27,11 +27,11 @@ _cache_enabled = True
 
 def load_prompt(prompt_path: str, **kwargs) -> str:
     """
-    Load a prompt from the prompts folder with optional variable substitution.
+    Load a prompt from the prompt_templates folder with optional variable substitution.
     Supports caching and hot-reloading for development.
     
     Args:
-        prompt_path (str): Path to the prompt file relative to prompts/ folder.
+        prompt_path (str): Path to the prompt file relative to prompt_templates/ folder.
                           Example: "assessment/saq_generation" or "courseware/cp_interpretation"
         **kwargs: Variables to substitute in the prompt using string formatting.
     
@@ -54,7 +54,7 @@ def load_prompt(prompt_path: str, **kwargs) -> str:
     project_root = os.path.dirname(current_dir)
     
     # Construct full path to prompt file
-    prompt_file_path = os.path.join(project_root, "prompts", f"{prompt_path}.md")
+    prompt_file_path = os.path.join(project_root, "prompt_templates", f"{prompt_path}.md")
     
     # Check if file exists
     if not os.path.exists(prompt_file_path):
@@ -108,15 +108,15 @@ def load_prompt(prompt_path: str, **kwargs) -> str:
     return prompt_content
 
 
-def list_available_prompts() -> Dict[str, list]:
+def list_available_prompt_templates() -> Dict[str, list]:
     """
-    List all available prompts organized by category.
+    List all available prompt templates organized by category.
     
     Returns:
         Dict[str, list]: Dictionary with categories as keys and list of prompt names as values.
         
     Example:
-        >>> list_available_prompts()
+        >>> list_available_prompt_templates()
         {
             'assessment': ['saq_generation', 'practical_performance', 'case_study'],
             'courseware': ['cp_interpretation', 'timetable_generation'],
@@ -127,17 +127,17 @@ def list_available_prompts() -> Dict[str, list]:
     # Get the directory containing this script
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_dir)
-    prompts_dir = os.path.join(project_root, "prompts")
+    prompt_templates_dir = os.path.join(project_root, "prompt_templates")
     
-    if not os.path.exists(prompts_dir):
+    if not os.path.exists(prompt_templates_dir):
         return {}
     
-    available_prompts = {}
+    available_prompt_templates = {}
     
-    # Walk through all subdirectories in prompts/
-    for root, dirs, files in os.walk(prompts_dir):
-        # Get relative path from prompts directory
-        rel_path = os.path.relpath(root, prompts_dir)
+    # Walk through all subdirectories in prompt_templates/
+    for root, dirs, files in os.walk(prompt_templates_dir):
+        # Get relative path from prompt_templates directory
+        rel_path = os.path.relpath(root, prompt_templates_dir)
         
         # Skip root directory
         if rel_path == '.':
@@ -147,9 +147,9 @@ def list_available_prompts() -> Dict[str, list]:
         txt_files = [os.path.splitext(f)[0] for f in files if f.endswith('.md')]
         
         if txt_files:
-            available_prompts[rel_path] = txt_files
+            available_prompt_templates[rel_path] = txt_files
     
-    return available_prompts
+    return available_prompt_templates
 
 
 def validate_prompt_variables(prompt_path: str, **kwargs) -> bool:
@@ -221,7 +221,7 @@ def get_prompt_preview(prompt_path: str, max_chars: int = 200) -> str:
     """Get a preview of a prompt file without full loading."""
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_dir)
-    prompt_file_path = os.path.join(project_root, "prompts", f"{prompt_path}.md")
+    prompt_file_path = os.path.join(project_root, "prompt_templates", f"{prompt_path}.md")
     
     if not os.path.exists(prompt_file_path):
         return f"❌ File not found: {prompt_path}.md"
@@ -240,9 +240,9 @@ def get_prompt_stats() -> Dict[str, Any]:
     """Get statistics about all prompt files."""
     current_dir = os.path.dirname(os.path.abspath(__file__))
     project_root = os.path.dirname(current_dir)
-    prompts_dir = os.path.join(project_root, "prompts")
+    prompt_templates_dir = os.path.join(project_root, "prompt_templates")
     
-    if not os.path.exists(prompts_dir):
+    if not os.path.exists(prompt_templates_dir):
         return {'error': 'Prompts directory not found'}
     
     stats = {
@@ -254,8 +254,8 @@ def get_prompt_stats() -> Dict[str, Any]:
     
     latest_mtime = 0
     
-    for root, dirs, files in os.walk(prompts_dir):
-        category = os.path.relpath(root, prompts_dir)
+    for root, dirs, files in os.walk(prompt_templates_dir):
+        category = os.path.relpath(root, prompt_templates_dir)
         if category == '.':
             continue
             
