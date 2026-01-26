@@ -10,6 +10,7 @@ Date: 26 January 2026
 
 from agents import function_tool
 from courseware_agents.base import create_agent
+from courseware_agents.schemas import CPAgentResponse, CourseEnsembleOutput
 import json
 import os
 

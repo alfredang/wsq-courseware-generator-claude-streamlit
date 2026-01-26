@@ -47,12 +47,11 @@ class AssessmentMethods(BaseModel):
 class CourseEnsembleOutput(BaseModel):
     """Main output schema for the course ensemble"""
     course_information: CourseInformation = Field(..., alias="Course Information")
-    learning_outcomes: LearningOutcomes = Field(..., alias="Learning Outcomes") 
+    learning_outcomes: LearningOutcomes = Field(..., alias="Learning Outcomes")
     tsc_and_topics: TSCAndTopics = Field(..., alias="TSC and Topics")
     assessment_methods: AssessmentMethods = Field(..., alias="Assessment Methods")
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True}
 
 # Assessment Justification Schema
 class AssessmentEvidence(BaseModel):
@@ -114,13 +113,14 @@ class ResearchOutput(BaseModel):
     performance_analysis: PerformanceAnalysis = Field(..., alias="Performance Analysis")
     sequencing_analysis: SequencingAnalysis = Field(..., alias="Sequencing Analysis")
 
-    class Config:
-        allow_population_by_field_name = True
+    model_config = {"populate_by_name": True}
 
 # Excel Agent Schema
-class DynamicContent(BaseModel):
+from pydantic import RootModel
+
+class DynamicContent(RootModel[Dict[str, Any]]):
     """Base model for dynamic content"""
-    __root__: Dict[str, Any]
+    pass
 
 class CourseOverview(BaseModel):
     """Course overview information"""
@@ -131,7 +131,6 @@ class ExcelData(BaseModel):
     course_overview: CourseOverview
     ka_analysis: Dict[str, str]  # Dynamic K&A factors
     instructional_methods: Optional[Dict[str, str]] = None  # Dynamic instructional methods
-    
+
     # Allow for additional dynamic sections
-    class Config:
-        extra = "allow"
+    model_config = {"extra": "allow"}

@@ -18,8 +18,25 @@ Date: 26 January 2026
 
 from courseware_agents.base import create_agent, get_model_for_agent, setup_openrouter
 
+# Import schemas for structured outputs
+from courseware_agents.schemas import (
+    CPAgentResponse,
+    CoursewareAgentResponse,
+    AssessmentAgentResponse,
+    BrochureAgentResponse,
+    DocumentAgentResponse,
+    OrchestratorResponse,
+)
+
 __all__ = [
     "create_agent",
     "get_model_for_agent",
     "setup_openrouter",
+    # Schemas
+    "CPAgentResponse",
+    "CoursewareAgentResponse",
+    "AssessmentAgentResponse",
+    "BrochureAgentResponse",
+    "DocumentAgentResponse",
+    "OrchestratorResponse",
 ]
