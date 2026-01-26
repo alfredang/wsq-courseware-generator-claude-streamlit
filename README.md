@@ -2,6 +2,8 @@
 
 A comprehensive AI-powered courseware generation platform built with OpenAI Multi Agents and Streamlit. This system automates the creation of educational documents including Course Proposals, Assessment Plans, Learning Guides, and more for workforce skills qualification (WSQ) training programs.
 
+### 🔴 [Live Demo](https://courseware-generator-openai.streamlit.app/)
+
 ## 🚀 Quick Start for New Users
 
 ### 1. System Requirements
