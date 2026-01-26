@@ -11,6 +11,7 @@ A comprehensive AI-powered courseware generation platform built with OpenAI Mult
 - **macOS/Linux/Windows** supported
 - **4GB+ RAM** recommended
 - **Git** installed
+- **uv** installed (modern Python package manager)
 
 ### 2. Download & Setup
 
@@ -19,16 +20,14 @@ A comprehensive AI-powered courseware generation platform built with OpenAI Mult
 # 1. Navigate to the downloaded project folder
 cd "/path/to/courseware_openai_agents"
 
-# 2. Create virtual environment (IMPORTANT - isolates dependencies)
-python3 -m venv .venv
-
-# 3. Activate virtual environment
+# 2. Initialize project with uv
+uv venv
 source .venv/bin/activate          # macOS/Linux
 # OR
 .venv\Scripts\activate             # Windows
 
-# 4. Install all dependencies (this may take 5-10 minutes)
-pip install -r requirements.txt
+# 3. Install dependencies (Fast)
+uv pip install -r requirements.txt
 ```
 
 **Option B: If downloading from Git repository:**
@@ -37,79 +36,47 @@ pip install -r requirements.txt
 git clone https://github.com/alfredang/courseware_openai_agents.git
 cd courseware_openai_agents
 
-# 2. Create virtual environment
-python3 -m venv .venv
-
-# 3. Activate virtual environment
+# 2. Setup with uv
+uv venv
 source .venv/bin/activate          # macOS/Linux
-
-# 4. Install dependencies
-pip install -r requirements.txt
+uv pip install -r requirements.txt
 ```
 
-### 3. Configure API Keys (2 Options)
+### 3. Configure API Keys
 
-**Option A: Using Settings UI (Recommended)**
-1. Skip manual configuration - just run the app
-2. Go to **Settings** → **API Keys** tab in the web interface
-3. Add your API keys through the user-friendly interface
-4. Keys are automatically saved and managed
+**Using Settings UI (Recommended)**
+1. Run the app: `streamlit run app.py`
+2. Go to **Settings** → **API Keys** tab
+3. Add your **OpenRouter API Key** (recommended for access to all models) or individual provider keys.
 
-**Option B: Manual Configuration (Fallback)**
-```bash
-# 1. Create the secrets directory
-mkdir -p .streamlit
-
-# 2. Create secrets file
-touch .streamlit/secrets.toml
-
-# 3. Add system configuration (API keys now managed via UI):
-```
-
-**Edit `.streamlit/secrets.toml`:**
+**Manual Configuration (Fallback)**
+Create `.streamlit/secrets.toml`:
 ```toml
-# System Configuration (required)
-GENERATION_MODEL = "gpt-4o"
-REPLACEMENT_MODEL = "gpt-4o-mini"
-LLAMA_CLOUD_API_KEY = "llx-your_llama_key_here"
+# System Configuration
+GENERATION_MODEL = "deepseek/deepseek-chat"
 
-# API Keys - Now managed through Settings UI
-# These are fallback only - use Settings UI instead
-# OPENAI_API_KEY = "sk-proj-your_openai_key_here"
-# GEMINI_API_KEY = "AIza-your_gemini_key_here"
-# DEEPSEEK_API_KEY = "sk-your_deepseek_key_here"
-# OPENROUTER_API_KEY = "sk-or-your_openrouter_key"
-# GROQ_API_KEY = "gsk_your_groq_key"
-# GROK_API_KEY = "your_grok_key_here"
+# API Keys - Use Settings UI instead
+# OPENROUTER_API_KEY = "sk-or-your_key_here"
 ```
 
 ### 4. Run the Application
 ```bash
-# Make sure virtual environment is activated
-source .venv/bin/activate          # macOS/Linux
-
-# Start the application
 streamlit run app.py
 ```
 
 ### 5. First Use
 1. Open browser to `http://localhost:8501`
-2. **Set up API Keys**: Go to **Settings** → **API Keys** tab and add your API keys
-3. **Available Models**: GPT-5, GPT-4o, GPT-4o-Mini, Gemini-2.5-Pro/Flash, DeepSeek-V3.1, OpenRouter, Groq, Grok-2
+2. **Set up API Keys**: Go to **Settings** → **API Keys**
+3. **Available Models**: DeepSeek-Chat, GPT-4o-Mini, Claude-3.5-Sonnet, Gemini-Flash, Gemini-Pro
 4. Select **"Generate CP"** from sidebar
-5. Choose **"DeepSeek-V3.1"** model (best value)
+5. Choose **"DeepSeek-Chat"** (Default & Recommended)
 6. Upload a TSC document to test
-7. Generate your first course proposal!
 
 ### 💡 Model Recommendations
-- **DeepSeek-3.1**: Best overall (cheap + high quality)
-- **Gemini-2.5-Pro**: Best for content generation
-- **GPT-4o-Mini**: Cheapest for simple tasks
-
-### 🆘 Common First-Time Issues
-**"API key not provided"**: Check your `.streamlit/secrets.toml` file
-**"Import errors"**: Restart terminal and reactivate virtual environment
-**"pandas security warning"**: Click "Allow" in macOS System Preferences > Privacy & Security
+- **DeepSeek-Chat**: Best overall (performance/cost ratio)
+- **GPT-4o-Mini**: Good for simple tasks
+- **Claude-3.5-Sonnet**: Excellent for complex reasoning
+- **Gemini-Flash**: Fast and cost-effective
 
 ## 🚀 Key Features
 
@@ -118,88 +85,58 @@ streamlit run app.py
 - **Assessment Documents** - Question & Answer papers (SAQ, CS, PP formats)
 - **Courseware Suite** - Assessment Plan, Learning Guide, Lesson Plan, Facilitator Guide
 - **Course Brochures** - Marketing materials with web scraping automation
-- **Presentation Slides** - AI-powered slide generation (in development)
 - **Document Integration** - Assessment integration into AP annexes
 - **Document Verification** - Supporting document validation and entity extraction
 
 ### Advanced AI Architecture
 - **Multi-Agent Workflows** - Specialized agent teams for different tasks
-- **Model Flexibility** - Support for OpenAI GPT, Google Gemini, and DeepSeek models
-- **Content Intelligence** - RAG-based content retrieval and generation
+- **Model Flexibility** - Support for DeepSeek, OpenAI, Anthropic, and Google models via OpenRouter
+- **Content Intelligence** - Context-aware content generation
 - **Quality Assurance** - Multi-layer validation and error correction
 
 ## 📋 Prerequisites
 
 - Python 3.11+
 - Streamlit account (for deployment)
-- API Keys for:
-  - OpenAI (GPT models)
-  - Google Gemini API
-  - DeepSeek API (optional)
-  - LlamaCloud API (document parsing)
+- API Keys (via OpenRouter recommended):
+  - DeepSeek
+  - OpenAI
+  - Anthropic
+  - Google Gemini
 
 ## 🛠 Installation
 
-### Option 1: Standard Installation (pip)
+### Recommended Method (UV)
+
+1. **Install UV (if not installed):**
+   ```bash
+   curl -LsSf https://astral.sh/uv/install.sh | sh
+   ```
+   *Windows users: `powershell -c "irm https://astral.sh/uv/install.ps1 | iex"`*
+
+2. **Clone and Setup:**
+   ```bash
+   git clone https://github.com/alfredang/courseware_openai_agents.git
+   cd courseware_openai_agents
+   uv venv
+   source .venv/bin/activate
+   uv pip install -r requirements.txt
+   ```
+
+### Legacy Method (pip)
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/alfredang/courseware_autogen.git
-   cd courseware_autogen
+   git clone https://github.com/alfredang/courseware_openai_agents.git
+   cd courseware_openai_agents
    ```
 
-2. **Create virtual environment (recommended):**
+2. **Create virtual environment:**
    ```bash
    python -m venv venv
-   source venv/bin/activate  # Linux/Mac
-   # OR
-   venv\Scripts\activate     # Windows
-   ```
-
-3. **Install dependencies:**
-   ```bash
+   source venv/bin/activate
    pip install -r requirements.txt
    ```
-
-### Option 2: UV Installation (Faster & Modern)
-
-1. **Install UV:**
-   ```bash
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-   source $HOME/.local/bin/env  # Add to PATH
-   ```
-
-2. **Clone and set up project:**
-   ```bash
-   git clone https://github.com/alfredang/courseware_autogen.git
-   cd courseware_autogen
-   uv venv                    # Create virtual environment
-   source .venv/bin/activate  # Activate environment
-   uv pip install -r requirements.txt  # Install dependencies (10-100x faster)
-   ```
-
-### Benefits of UV:
-- ⚡ **10-100x faster** package installation
-- 🔒 **Isolated environment** by default (no system conflicts)
-- 📋 **Lock file support** for reproducible builds
-- 🛡️ **Better dependency resolution**
-
-### Configure API Keys (Both Methods):
-
-**Primary Method**: Use **Settings UI** in the web application (recommended)
-
-**Fallback Method**: Create a `.streamlit/secrets.toml` file:
-```toml
-# System Configuration
-LLAMA_CLOUD_API_KEY = "your_llama_cloud_api_key"
-GENERATION_MODEL = "gpt-4o"
-REPLACEMENT_MODEL = "gpt-4o-mini"
-
-# API Keys - Use Settings UI instead
-# OPENAI_API_KEY = "your_openai_api_key"
-# GEMINI_API_KEY = "your_gemini_api_key" 
-# DEEPSEEK_API_KEY = "your_deepseek_api_key"
-```
 
 ## 🚀 Quick Start
 
