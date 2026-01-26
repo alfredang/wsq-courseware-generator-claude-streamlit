@@ -1,61 +1,44 @@
 """
 Organizations Management Utilities
 
-This module handles loading and saving organization data,
-including company details and templates.
+This module handles loading organization data from the Neon PostgreSQL database.
 """
 
-import json
-import os
 from typing import List, Dict, Any
+from settings.database import (
+    get_all_organizations,
+    get_organization_by_name as db_get_organization_by_name,
+    add_organization,
+    update_organization_by_name,
+    delete_organization_by_name
+)
 
-ORGANIZATIONS_FILE = "generate_ap_fg_lg_lp/utils/organizations.json"
 
 def get_organizations() -> List[Dict[str, Any]]:
-    """Load organizations from JSON file"""
-    try:
-        if os.path.exists(ORGANIZATIONS_FILE):
-            with open(ORGANIZATIONS_FILE, 'r') as f:
-                organizations = json.load(f)
-                
-            # Ensure all organizations have required fields
-            for org in organizations:
-                if "templates" not in org:
-                    org["templates"] = {
-                        "course_proposal": "",
-                        "courseware": "",
-                        "assessment": "",
-                        "brochure": ""
-                    }
-                if "address" not in org:
-                    org["address"] = ""
-                    
-            return organizations
-    except Exception as e:
-        print(f"Error loading organizations: {e}")
-    
-    return []
+    """Load organizations from database"""
+    return get_all_organizations()
+
 
 def save_organizations(organizations: List[Dict[str, Any]]) -> bool:
-    """Save organizations to JSON file"""
+    """Save organizations to database (upsert)"""
     try:
-        # Ensure directory exists
-        os.makedirs(os.path.dirname(ORGANIZATIONS_FILE), exist_ok=True)
-        
-        with open(ORGANIZATIONS_FILE, 'w') as f:
-            json.dump(organizations, f, indent=4)
+        for org in organizations:
+            existing = db_get_organization_by_name(org.get("name", ""))
+            if existing:
+                update_organization_by_name(org.get("name", ""), org)
+            else:
+                add_organization(org)
         return True
     except Exception as e:
         print(f"Error saving organizations: {e}")
         return False
 
+
 def get_organization_by_name(name: str) -> Dict[str, Any]:
     """Get specific organization by name"""
-    organizations = get_organizations()
-    for org in organizations:
-        if org["name"] == name:
-            return org
-    return {}
+    org = db_get_organization_by_name(name)
+    return org if org else {}
+
 
 def get_default_organization() -> Dict[str, Any]:
     """Get Tertiary Infotech as default organization"""
@@ -63,11 +46,11 @@ def get_default_organization() -> Dict[str, Any]:
     for org in organizations:
         if "tertiary infotech" in org["name"].lower():
             return org
-    
+
     # Return first organization if Tertiary Infotech not found
     if organizations:
         return organizations[0]
-    
+
     # Fallback empty organization
     return {
         "name": "Tertiary Infotech Academy Pte Ltd",
@@ -82,6 +65,7 @@ def get_default_organization() -> Dict[str, Any]:
         }
     }
 
+
 def replace_company_branding(content: str, company: Dict[str, Any]) -> str:
     """Replace company branding placeholders in content"""
     replacements = {
@@ -93,9 +77,9 @@ def replace_company_branding(content: str, company: Dict[str, Any]) -> str:
         "Tertiary Infotech Pte Ltd": company.get("name", "Tertiary Infotech Academy Pte Ltd"),
         "201200696W": company.get("uen", "201200696W")
     }
-    
+
     result = content
     for placeholder, replacement in replacements.items():
         result = result.replace(placeholder, replacement)
-    
+
     return result
