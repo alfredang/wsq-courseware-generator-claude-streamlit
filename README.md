@@ -52,11 +52,12 @@ uv pip install -r requirements.txt
 **Manual Configuration (Fallback)**
 Create `.streamlit/secrets.toml`:
 ```toml
-# System Configuration
-GENERATION_MODEL = "deepseek/deepseek-chat"
-
 # API Keys - Use Settings UI instead
-# OPENROUTER_API_KEY = "sk-or-your_key_here"
+OPENAI_API_KEY = "sk-your_key_here"
+OPENROUTER_API_KEY = "sk-or-your_key_here"
+
+# Database (Neon PostgreSQL for company data)
+DATABASE_URL = "postgresql://user:password@host/database?sslmode=require"
 ```
 
 ### 4. Run the Application
@@ -154,16 +155,19 @@ streamlit run app.py
 ## 📁 Project Structure
 
 ```
-courseware_autogen/
+courseware_openai_agents/
 ├── app.py                      # Main Streamlit application
 ├── settings/                   # Configuration and API management
 │   ├── settings.py            # Settings UI and configuration
+│   ├── database.py            # Neon PostgreSQL database operations
 │   ├── api_manager.py         # API key management
 │   └── model_configs.py       # AI model configurations
-├── common/                     # Shared utilities
-│   ├── common.py              # Common helper functions
-│   ├── company_manager.py     # Company/organization management
-│   ├── logo/                  # Company logos storage
+├── company/                    # Company/organization management
+│   ├── company_manager.py     # Company selection & branding utilities
+│   └── logo/                  # Company logos storage
+├── utils/                      # Shared utilities
+│   ├── helpers.py             # Common helper functions (parse_json, etc.)
+│   ├── prompt_loader.py       # AI prompt loading utilities
 │   └── prompts/               # AI prompt templates
 ├── generate_cp/               # Course Proposal generation
 │   ├── app.py                 # Streamlit interface
@@ -174,12 +178,12 @@ courseware_autogen/
 │   └── utils/                 # Assessment utilities & templates
 ├── generate_ap_fg_lg_lp/      # Courseware document generation
 │   ├── courseware_generation.py  # AP, FG, LG, LP generation
-│   └── utils/                 # Document generators & templates
-├── generate_brochure_v2/      # Marketing brochure generation
-│   ├── brochure_generation_v2.py
+│   └── utils/                 # Document generators, templates & organizations
+├── generate_brochure/         # Marketing brochure generation
+│   ├── brochure_generation.py
 │   └── brochure_template/     # HTML brochure templates
 ├── add_assessment_to_ap/      # Assessment integration into AP
-│   └── annex_assessment.py    # Annex assessment tools
+│   └── annex_assessment_v2.py # Annex assessment tools
 ├── check_documents/           # Supporting document tools
 │   └── sup_doc.py            # Document verification & extraction
 └── requirements.txt           # Python dependencies
@@ -221,7 +225,13 @@ All document templates are located in respective module directories:
 - Course Proposal: `generate_cp/templates/`
 - Courseware: `generate_ap_fg_lg_lp/input/Template/`
 - Assessment: `generate_assessment/utils/Templates/`
-- Brochure: `generate_brochure_v2/brochure_template/`
+- Brochure: `generate_brochure/brochure_template/`
+
+### Company Data Storage
+Company/organization data is stored in a **Neon PostgreSQL database**:
+- Managed via Settings → Companies in the UI
+- Database operations in `settings/database.py`
+- Requires `DATABASE_URL` in environment variables or Streamlit secrets
 
 ## 🔍 TSC Document Requirements
 
@@ -289,6 +299,6 @@ This project is proprietary software developed for Tertiary Infotech. All rights
 
 For technical support or questions:
 - Check the troubleshooting section above
-- Review the comprehensive analysis in `details.md`
+- Review the GitHub repository issues
 - Contact the development team
 
