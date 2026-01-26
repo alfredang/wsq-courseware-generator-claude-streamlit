@@ -9,14 +9,24 @@ import gspread
 from rapidfuzz import fuzz
 from check_documents.acra_call import run_dataset_verifications, search_dataset_by_filters, search_dataset_by_query
 from PyPDF2 import PdfReader, PdfWriter
-import fitz  # PyMuPDF for PDF to image conversion
-import os
 import json
-import google.generativeai as genai
 from typing import Dict, Any, Union
-from PIL import Image
-import io
 from oauth2client.service_account import ServiceAccountCredentials
+
+# Optional imports - may not be available on all platforms
+FITZ_AVAILABLE = False
+try:
+    import fitz  # PyMuPDF for PDF to image conversion
+    FITZ_AVAILABLE = True
+except ImportError:
+    pass
+
+GENAI_AVAILABLE = False
+try:
+    import google.generativeai as genai
+    GENAI_AVAILABLE = True
+except ImportError:
+    pass
 
 # ------------------------------
 # Helper Functions
@@ -50,6 +60,9 @@ def convert_pdf_to_images(file_bytes: bytes) -> list:
     """
     Convert PDF bytes to a list of PIL images using PyMuPDF.
     """
+    if not FITZ_AVAILABLE:
+        st.warning("PDF to image conversion not available (PyMuPDF not installed)")
+        return []
     try:
         doc = fitz.open("pdf", file_bytes)
         images = []

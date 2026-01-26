@@ -1,31 +1,41 @@
 import os
 import json
-import google.generativeai as genai
 from typing import Dict, Any, Union
 from PIL import Image
 import io
 from settings.api_manager import load_api_keys
 
-# Configure API - load from settings
-api_keys = load_api_keys()
-GEMINI_API_KEY = api_keys.get("GEMINI_API_KEY", "")
-genai.configure(api_key=GEMINI_API_KEY)
+# Optional google.generativeai import
+GENAI_AVAILABLE = False
+model = None
+try:
+    import google.generativeai as genai
+    GENAI_AVAILABLE = True
 
-# Use gemini-pro model with specific configuration
-model = genai.GenerativeModel(
-    model_name="gemini-2.5-pro",
-    generation_config={
-        "temperature": 0.2,
-        "top_p": 0.8,
-        "top_k": 40,
-    },
-)
+    # Configure API - load from settings
+    api_keys = load_api_keys()
+    GEMINI_API_KEY = api_keys.get("GEMINI_API_KEY", "")
+    if GEMINI_API_KEY:
+        genai.configure(api_key=GEMINI_API_KEY)
+        # Use gemini-pro model with specific configuration
+        model = genai.GenerativeModel(
+            model_name="gemini-2.5-pro",
+            generation_config={
+                "temperature": 0.2,
+                "top_p": 0.8,
+                "top_k": 40,
+            },
+        )
+except ImportError:
+    pass
 
 def extract_entities(document_content: Union[str, bytes], custom_instructions: str, is_image: bool = False) -> Dict[str, Any]:
     """
     Extract named entities from text or images using Gemini API.
     If `is_image` is True, process the image as a PIL image.
     """
+    if not GENAI_AVAILABLE or model is None:
+        return {"error": "Gemini API not available. Please install google-generativeai package.", "entities": []}
 
     # Force Gemini to return valid JSON
     json_format = """

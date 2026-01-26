@@ -54,8 +54,18 @@ import io
 import zipfile
 import asyncio
 import json
-import pymupdf
 import tempfile
+
+# Try to import pymupdf, fallback to pypdf2
+PYMUPDF_AVAILABLE = False
+try:
+    import pymupdf
+    PYMUPDF_AVAILABLE = True
+except ImportError:
+    try:
+        from PyPDF2 import PdfReader
+    except ImportError:
+        pass
 from copy import deepcopy
 from docx import Document
 from docxtpl import DocxTemplate
@@ -93,22 +103,39 @@ if 'selected_model' not in st.session_state:
 ################################################################################
 def get_pdf_page_count(pdf_path):
     """Get total page count of a PDF file"""
-    doc = pymupdf.open(pdf_path)
-    total_pages = doc.page_count
-    doc.close()
-    return total_pages
+    if PYMUPDF_AVAILABLE:
+        doc = pymupdf.open(pdf_path)
+        total_pages = doc.page_count
+        doc.close()
+        return total_pages
+    else:
+        # Fallback to PyPDF2
+        from PyPDF2 import PdfReader
+        reader = PdfReader(pdf_path)
+        return len(reader.pages)
 
 def extract_pdf_text(pdf_path):
-    """Extract text from PDF using PyMuPDF"""
-    doc = pymupdf.open(pdf_path)
-    text_content = []
-    for page_num in range(doc.page_count):
-        page = doc[page_num]
-        text = page.get_text()
-        if text.strip():
-            text_content.append({"page": page_num + 1, "text": text})
-    doc.close()
-    return text_content
+    """Extract text from PDF using PyMuPDF or PyPDF2 fallback"""
+    if PYMUPDF_AVAILABLE:
+        doc = pymupdf.open(pdf_path)
+        text_content = []
+        for page_num in range(doc.page_count):
+            page = doc[page_num]
+            text = page.get_text()
+            if text.strip():
+                text_content.append({"page": page_num + 1, "text": text})
+        doc.close()
+        return text_content
+    else:
+        # Fallback to PyPDF2
+        from PyPDF2 import PdfReader
+        reader = PdfReader(pdf_path)
+        text_content = []
+        for page_num, page in enumerate(reader.pages):
+            text = page.extract_text() or ""
+            if text.strip():
+                text_content.append({"page": page_num + 1, "text": text})
+        return text_content
 
 ################################################################################
 # Parse Facilitator Guide Document
@@ -454,7 +481,7 @@ async def interpret_fg(fg_data, model_choice: str = "GPT-4o-Mini"):
 # Parse Slide Deck Document
 ################################################################################
 def parse_slides(slides_path):
-    """Parse PDF slides and extract text content using PyMuPDF"""
+    """Parse PDF slides and extract text content using PyMuPDF or PyPDF2 fallback"""
     print(f"Parsing slides from: {slides_path}")
 
     total_pages = get_pdf_page_count(slides_path)
@@ -462,20 +489,33 @@ def parse_slides(slides_path):
     start_page = min(17, total_pages)
     end_page = max(start_page, total_pages - 6)
 
-    doc = pymupdf.open(slides_path)
     slides_content = []
 
-    for page_num in range(start_page - 1, end_page):
-        if page_num < doc.page_count:
-            page = doc[page_num]
-            text = page.get_text()
-            if text.strip():
-                slides_content.append({
-                    "page": page_num + 1,
-                    "text": text.strip()
-                })
+    if PYMUPDF_AVAILABLE:
+        doc = pymupdf.open(slides_path)
+        for page_num in range(start_page - 1, end_page):
+            if page_num < doc.page_count:
+                page = doc[page_num]
+                text = page.get_text()
+                if text.strip():
+                    slides_content.append({
+                        "page": page_num + 1,
+                        "text": text.strip()
+                    })
+        doc.close()
+    else:
+        # Fallback to PyPDF2
+        from PyPDF2 import PdfReader
+        reader = PdfReader(slides_path)
+        for page_num in range(start_page - 1, end_page):
+            if page_num < len(reader.pages):
+                text = reader.pages[page_num].extract_text() or ""
+                if text.strip():
+                    slides_content.append({
+                        "page": page_num + 1,
+                        "text": text.strip()
+                    })
 
-    doc.close()
     print(f"Extracted text from {len(slides_content)} pages")
 
     # Return as a simple dict with the extracted content

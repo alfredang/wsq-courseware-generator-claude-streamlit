@@ -10,17 +10,15 @@ openpyxl
 openai>=1.12.0
 pandas
 Pillow
-PyMuPDF
 python-docx
 streamlit-option-menu
 requests
 lxml
-google-generativeai
 pypdf2
 gspread
 rapidfuzz
 oauth2client
 streamlit-modal
-xhtml2pdf
 
-# Note: Playwright removed - using requests for web scraping on Streamlit Cloud
+# Note: PyMuPDF, xhtml2pdf, google-generativeai removed for Streamlit Cloud compatibility
+# PDF reading uses pypdf2 fallback
