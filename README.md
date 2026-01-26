@@ -157,13 +157,14 @@ streamlit run app.py
 ```
 courseware_openai_agents/
 ├── app.py                      # Main Streamlit application
-├── settings/                   # Configuration and API management
-│   ├── settings.py            # Settings UI and configuration
-│   ├── database.py            # Neon PostgreSQL database operations
+├── settings/                   # API and model configuration
+│   ├── settings.py            # API Keys & LLM Models UI
 │   ├── api_manager.py         # API key management
 │   └── model_configs.py       # AI model configurations
 ├── company/                    # Company/organization management
+│   ├── company_settings.py    # Company management UI
 │   ├── company_manager.py     # Company selection & branding utilities
+│   ├── database.py            # Neon PostgreSQL database operations
 │   └── logo/                  # Company logos storage
 ├── utils/                      # Shared utilities
 │   ├── helpers.py             # Common helper functions (parse_json, etc.)

@@ -34,6 +34,10 @@ def lazy_import_settings():
     import settings.settings as settings
     return settings
 
+def lazy_import_company_settings():
+    import company.company_settings as company_settings
+    return company_settings
+
 
 def display_homepage():
     """Display homepage with navigation boxes and chatbot"""
@@ -372,8 +376,8 @@ if settings_page == "API & LLM Models":
         st.rerun()
 
 elif settings_page == "Company Management":
-    settings = lazy_import_settings()
-    settings.company_management_app()
+    company_settings = lazy_import_company_settings()
+    company_settings.company_management_app()
     # Only clear settings page when main menu is explicitly clicked
     if menu_changed:
         st.session_state['settings_page'] = None

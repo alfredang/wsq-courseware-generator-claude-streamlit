@@ -5,7 +5,7 @@ This module handles loading organization data from the Neon PostgreSQL database.
 """
 
 from typing import List, Dict, Any
-from settings.database import (
+from company.database import (
     get_all_organizations,
     get_organization_by_name as db_get_organization_by_name,
     add_organization,
