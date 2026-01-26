@@ -25,10 +25,10 @@ jinja2
 # OpenAI dependencies
 openai>=1.12.0
 
-# OpenAI Agents SDK - install from GitHub for latest compatibility
-# Comment out if deployment fails and use basic openai instead
-openai-agents @ git+https://github.com/openai/openai-agents-python.git
+# OpenAI Agents SDK - temporarily disabled for Streamlit Cloud deployment
+# Uncomment locally or when Streamlit Cloud supports it
+# openai-agents>=0.0.7
 
 # Note: PyMuPDF, xhtml2pdf removed for Streamlit Cloud compatibility
 # PDF reading uses pypdf2 fallback
-# MCP features require Node.js (not available on Streamlit Cloud)
+# Agent features will run in limited mode without openai-agents
