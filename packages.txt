@@ -1,14 +1,6 @@
 # System dependencies for Streamlit Cloud (Debian/Ubuntu)
+# These are needed for Playwright browser automation
 
-# WeasyPrint dependencies
-libpango-1.0-0
-libpangocairo-1.0-0
-libcairo2
-libgdk-pixbuf2.0-0
-libffi-dev
-shared-mime-info
-
-# Playwright browser dependencies
 libnss3
 libnspr4
 libatk1.0-0
