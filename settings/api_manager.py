@@ -1,9 +1,9 @@
 """
 Dynamic API Key and Model Management
 
-This module handles dynamic storage and retrieval of API keys and custom LLM models.
+This module handles dynamic storage and retrieval of API keys and LLM models.
 - API keys are loaded from .streamlit/secrets.toml (or environment variables)
-- Custom model configurations are stored in SQLite database
+- All model configurations (built-in + custom) are stored in SQLite database
 
 Author: Wong Xin Ping
 Updated: 26 January 2026
@@ -17,11 +17,14 @@ from dotenv import load_dotenv
 
 # Import SQLite database operations
 from settings.api_database import (
+    get_all_models as db_get_all_models,
     get_all_custom_models as db_get_all_custom_models,
+    get_builtin_models as db_get_builtin_models,
     add_custom_model as db_add_custom_model,
     delete_custom_model as db_delete_custom_model,
     model_exists as db_model_exists,
     migrate_from_json,
+    migrate_from_old_schema,
     init_database
 )
 
@@ -116,7 +119,7 @@ def _migrate_json_to_sqlite():
 
 
 def load_custom_models() -> List[Dict[str, Any]]:
-    """Load custom LLM models from SQLite database"""
+    """Load custom (non-built-in) LLM models from SQLite database"""
     # Check for and perform migration if needed
     _migrate_json_to_sqlite()
 
@@ -126,6 +129,11 @@ def load_custom_models() -> List[Dict[str, Any]]:
     # Cache in session state
     st.session_state['custom_models'] = models
     return models
+
+
+def load_builtin_models() -> List[Dict[str, Any]]:
+    """Load built-in LLM models from SQLite database"""
+    return db_get_builtin_models()
 
 
 def save_custom_models(models: List[Dict[str, Any]]) -> bool:
@@ -167,6 +175,8 @@ def add_custom_model(
         # Clear session state cache to force reload
         if 'custom_models' in st.session_state:
             del st.session_state['custom_models']
+        if 'all_models' in st.session_state:
+            del st.session_state['all_models']
 
     return success
 
@@ -179,49 +189,22 @@ def remove_custom_model(name: str) -> bool:
         # Clear session state cache to force reload
         if 'custom_models' in st.session_state:
             del st.session_state['custom_models']
+        if 'all_models' in st.session_state:
+            del st.session_state['all_models']
 
     return success
 
 
 def get_all_available_models() -> Dict[str, Dict[str, Any]]:
-    """Get all available models (built-in + custom) with current API keys"""
-    from settings.model_configs import MODEL_CHOICES
-
+    """Get all available models (built-in + custom) with current API keys from SQLite"""
     # Get current API keys
     current_keys = load_api_keys()
 
-    # Update built-in models with current API keys
+    # Get all models from SQLite database
+    all_models = db_get_all_models(include_builtin=True)
+
     updated_models = {}
-    for name, config in MODEL_CHOICES.items():
-        # Create a copy to avoid modifying the original
-        updated_config = json.loads(json.dumps(config))
-
-        # Update API key based on model type and base_url
-        base_url = config["config"].get("base_url", "").lower()
-        model_name = config["config"]["model"].lower()
-
-        # Order matters - check more specific URLs first
-        if "generativelanguage.googleapis.com" in base_url or "gemini" in model_name:
-            updated_config["config"]["api_key"] = current_keys.get("GEMINI_API_KEY", "")
-        elif "openrouter" in base_url:
-            updated_config["config"]["api_key"] = current_keys.get("OPENROUTER_API_KEY", "")
-        elif "groq" in base_url:
-            updated_config["config"]["api_key"] = current_keys.get("GROQ_API_KEY", "")
-        elif "x.ai" in base_url or "grok" in model_name:
-            updated_config["config"]["api_key"] = current_keys.get("GROK_API_KEY", "")
-        elif "deepseek" in base_url or ("deepseek" in model_name and "openrouter" not in base_url):
-            updated_config["config"]["api_key"] = current_keys.get("DEEPSEEK_API_KEY", "")
-        elif "openai" in base_url or "gpt" in model_name or base_url == "":
-            updated_config["config"]["api_key"] = current_keys.get("OPENAI_API_KEY", "")
-        else:
-            # Default fallback
-            updated_config["config"]["api_key"] = current_keys.get("OPENAI_API_KEY", "")
-
-        updated_models[name] = updated_config
-
-    # Add custom models from SQLite with API keys resolved at runtime
-    custom_models = load_custom_models()
-    for model in custom_models:
+    for model in all_models:
         # Resolve API key based on api_provider
         api_provider = model.get("api_provider", "OPENROUTER")
         resolved_key = current_keys.get(f"{api_provider}_API_KEY", "")
@@ -235,7 +218,8 @@ def get_all_available_models() -> Dict[str, Dict[str, Any]]:
                 "temperature": model["config"]["temperature"],
                 "base_url": model["config"].get("base_url", "https://openrouter.ai/api/v1"),
                 "api_key": resolved_key
-            }
+            },
+            "is_builtin": model.get("is_builtin", False)
         }
         updated_models[model["name"]] = model_with_key
 
@@ -244,11 +228,14 @@ def get_all_available_models() -> Dict[str, Dict[str, Any]]:
 
 def initialize_api_system():
     """Initialize the API system on app startup"""
-    # Initialize SQLite database
+    # Initialize SQLite database (includes seeding built-in models)
     init_database()
+
+    # Migrate from old schema if needed
+    migrate_from_old_schema()
+
+    # Check for JSON migration
+    _migrate_json_to_sqlite()
 
     # Load API keys into session state
     load_api_keys()
-
-    # Load custom models into session state (triggers migration if needed)
-    load_custom_models()
