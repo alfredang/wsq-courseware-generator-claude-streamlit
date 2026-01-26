@@ -406,6 +406,68 @@ def backup_company_files(company: Dict) -> bool:
         st.error(f"Error backing up company files: {e}")
         return False
 
+def display_company_list(organizations: List[Dict]):
+    """Display searchable list of all companies"""
+
+    # Search box
+    search_query = st.text_input(
+        "🔍 Search Companies",
+        placeholder="Search by name, UEN, or address...",
+        key="company_search"
+    )
+
+    # Filter companies based on search
+    if search_query:
+        query_lower = search_query.lower()
+        filtered_orgs = [
+            org for org in organizations
+            if query_lower in org.get("name", "").lower()
+            or query_lower in org.get("uen", "").lower()
+            or query_lower in org.get("address", "").lower()
+        ]
+    else:
+        filtered_orgs = organizations
+
+    # Display count
+    st.caption(f"Showing {len(filtered_orgs)} of {len(organizations)} companies")
+
+    if not filtered_orgs:
+        st.info("No companies found matching your search.")
+        return
+
+    # Display as table/list
+    for idx, company in enumerate(filtered_orgs):
+        with st.container():
+            col1, col2, col3, col4 = st.columns([3, 2, 2, 1])
+
+            with col1:
+                st.markdown(f"**{company['name']}**")
+                st.caption(f"UEN: {company.get('uen', 'N/A')}")
+
+            with col2:
+                address = company.get('address', '')
+                if address:
+                    st.caption(address[:50] + "..." if len(address) > 50 else address)
+                else:
+                    st.caption("No address")
+
+            with col3:
+                # Show logo and template status
+                has_logo = "✅" if company.get('logo') else "❌"
+                templates = company.get('templates', {})
+                template_count = sum(1 for v in templates.values() if v)
+                st.caption(f"Logo: {has_logo} | Templates: {template_count}/4")
+
+            with col4:
+                # Find original index for editing
+                original_idx = organizations.index(company)
+                if st.button("✏️", key=f"edit_btn_{idx}", help="Edit company"):
+                    st.session_state['edit_company_idx'] = original_idx
+                    st.rerun()
+
+            st.divider()
+
+
 def manage_company_settings():
     """Manage Company Details"""
 
@@ -415,19 +477,28 @@ def manage_company_settings():
     except:
         organizations = []
 
-    # Create tabs for Edit and Add Company
-    edit_tab, add_tab = st.tabs(["✏️ Edit Company", "➕ Add New Company"])
+    # Create tabs for List, Edit and Add Company
+    list_tab, edit_tab, add_tab = st.tabs(["📋 Company List", "✏️ Edit Company", "➕ Add New Company"])
+
+    with list_tab:
+        display_company_list(organizations)
 
     with edit_tab:
         st.subheader("Select Company to Edit")
 
         if organizations:
             company_names = [org["name"] for org in organizations]
+
+            # Use session state index if set from list view
+            default_idx = st.session_state.get('edit_company_idx', 0)
+            if default_idx >= len(organizations):
+                default_idx = 0
+
             selected_company_idx = st.selectbox(
                 "Choose a company:",
                 range(len(company_names)),
                 format_func=lambda x: company_names[x],
-                index=0  # Always default to first company
+                index=default_idx
             )
 
             if selected_company_idx is not None and selected_company_idx < len(organizations):

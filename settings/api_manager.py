@@ -9,12 +9,21 @@ import streamlit as st
 import json
 import os
 from typing import Dict, Any, List
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # File to store persistent API keys (outside of session state)
 API_KEYS_FILE = "settings/config/api_keys.json"
 
 def _get_secret(key: str, default: str = "") -> str:
-    """Safely get a secret from st.secrets"""
+    """Safely get a secret from st.secrets or environment variables"""
+    # First try environment variables (from .env file)
+    env_value = os.environ.get(key, "")
+    if env_value:
+        return env_value
+    # Then try streamlit secrets
     try:
         return st.secrets.get(key, default)
     except Exception:

@@ -2,6 +2,8 @@
 import streamlit as st
 from streamlit_option_menu import option_menu
 from generate_ap_fg_lg_lp.utils.organizations import get_organizations, get_default_organization
+import asyncio
+import os
 
 # Lazy loading functions for better performance
 def lazy_import_assessment():
@@ -31,6 +33,166 @@ def lazy_import_docs():
 def lazy_import_settings():
     import settings.settings as settings
     return settings
+
+
+def display_homepage():
+    """Display homepage with navigation boxes and chatbot"""
+    st.title("Courseware AutoGen")
+    st.markdown("Welcome to the Courseware Generation System. Select a module below or use the chatbot for assistance.")
+
+    st.markdown("---")
+    st.subheader("Quick Access")
+
+    # Navigation boxes - 3 columns, 2 rows
+    col1, col2, col3 = st.columns(3)
+
+    modules = [
+        {"name": "Generate CP", "icon": "📄", "desc": "Create Course Proposals", "key": "nav_cp"},
+        {"name": "Generate AP/FG/LG/LP", "icon": "📚", "desc": "Generate Courseware Documents", "key": "nav_courseware"},
+        {"name": "Generate Assessment", "icon": "✅", "desc": "Create Assessment Materials", "key": "nav_assessment"},
+        {"name": "Generate Brochure", "icon": "📰", "desc": "Design Course Brochures", "key": "nav_brochure"},
+        {"name": "Add Assessment to AP", "icon": "📎", "desc": "Attach Assessments to AP", "key": "nav_annex"},
+        {"name": "Check Documents", "icon": "🔍", "desc": "Validate Supporting Documents", "key": "nav_docs"},
+    ]
+
+    # First row
+    with col1:
+        with st.container(border=True):
+            st.markdown(f"### {modules[0]['icon']} {modules[0]['name']}")
+            st.caption(modules[0]['desc'])
+            if st.button("Open", key=modules[0]['key'], use_container_width=True):
+                st.session_state['nav_to'] = "Generate CP"
+                st.rerun()
+
+    with col2:
+        with st.container(border=True):
+            st.markdown(f"### {modules[1]['icon']} {modules[1]['name']}")
+            st.caption(modules[1]['desc'])
+            if st.button("Open", key=modules[1]['key'], use_container_width=True):
+                st.session_state['nav_to'] = "Generate AP/FG/LG/LP"
+                st.rerun()
+
+    with col3:
+        with st.container(border=True):
+            st.markdown(f"### {modules[2]['icon']} {modules[2]['name']}")
+            st.caption(modules[2]['desc'])
+            if st.button("Open", key=modules[2]['key'], use_container_width=True):
+                st.session_state['nav_to'] = "Generate Assessment"
+                st.rerun()
+
+    # Second row
+    col4, col5, col6 = st.columns(3)
+
+    with col4:
+        with st.container(border=True):
+            st.markdown(f"### {modules[3]['icon']} {modules[3]['name']}")
+            st.caption(modules[3]['desc'])
+            if st.button("Open", key=modules[3]['key'], use_container_width=True):
+                st.session_state['nav_to'] = "Generate Brochure v2"
+                st.rerun()
+
+    with col5:
+        with st.container(border=True):
+            st.markdown(f"### {modules[4]['icon']} {modules[4]['name']}")
+            st.caption(modules[4]['desc'])
+            if st.button("Open", key=modules[4]['key'], use_container_width=True):
+                st.session_state['nav_to'] = "Add Assessment to AP"
+                st.rerun()
+
+    with col6:
+        with st.container(border=True):
+            st.markdown(f"### {modules[5]['icon']} {modules[5]['name']}")
+            st.caption(modules[5]['desc'])
+            if st.button("Open", key=modules[5]['key'], use_container_width=True):
+                st.session_state['nav_to'] = "Check Documents"
+                st.rerun()
+
+    # Chatbot section
+    st.markdown("---")
+    st.subheader("Courseware Assistant")
+    st.caption("Ask questions about courseware generation or get help with the system. This agent can search the web for information.")
+
+    # Initialize chat history
+    if "chat_messages" not in st.session_state:
+        st.session_state.chat_messages = []
+
+    # Display chat messages
+    chat_container = st.container(height=300)
+    with chat_container:
+        for message in st.session_state.chat_messages:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+    # Chat input
+    if prompt := st.chat_input("Ask about courseware generation..."):
+        # Add user message to history
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+
+        # Get response from AI using openai-agents
+        try:
+            from settings.api_manager import load_api_keys
+            from agents import Agent, Runner, WebSearchTool
+
+            api_keys = load_api_keys()
+            openai_key = api_keys.get("OPENAI_API_KEY", "")
+
+            if openai_key:
+                # Set API key for agents library
+                os.environ["OPENAI_API_KEY"] = openai_key
+
+                # Create the courseware assistant agent with tools
+                courseware_agent = Agent(
+                    name="Courseware Assistant",
+                    instructions="""You are a helpful assistant for the Courseware AutoGen system.
+                    This system helps create educational courseware documents including:
+                    - Course Proposals (CP)
+                    - Assessment Plans (AP), Facilitator Guides (FG), Learner Guides (LG), and Lesson Plans (LP)
+                    - Assessment materials
+                    - Course brochures
+                    - Document validation
+
+                    Help users understand how to use the system and answer questions about courseware development.
+                    You can use web search to find relevant information about educational content,
+                    training methodologies, and best practices in courseware development.""",
+                    tools=[WebSearchTool()],
+                    model="gpt-4o-mini"
+                )
+
+                # Build conversation context from history
+                conversation_history = ""
+                for msg in st.session_state.chat_messages[:-1]:  # Exclude the current message
+                    role = "User" if msg["role"] == "user" else "Assistant"
+                    conversation_history += f"{role}: {msg['content']}\n\n"
+
+                # Create the full prompt with context
+                full_prompt = f"{conversation_history}User: {prompt}" if conversation_history else prompt
+
+                # Run the agent asynchronously
+                async def run_agent():
+                    result = await Runner.run(courseware_agent, full_prompt)
+                    return result.final_output
+
+                # Execute async function
+                assistant_message = asyncio.run(run_agent())
+                st.session_state.chat_messages.append({"role": "assistant", "content": assistant_message})
+            else:
+                st.session_state.chat_messages.append({
+                    "role": "assistant",
+                    "content": "OpenAI API key not configured. Please set up your OpenAI API key in Settings > API & Models to use the agent features."
+                })
+        except Exception as e:
+            st.session_state.chat_messages.append({
+                "role": "assistant",
+                "content": f"Error connecting to AI service: {str(e)}"
+            })
+
+        st.rerun()
+
+    # Clear chat button
+    if st.session_state.chat_messages:
+        if st.button("Clear Chat", key="clear_chat"):
+            st.session_state.chat_messages = []
+            st.rerun()
 
 
 st.set_page_config(layout="wide")
@@ -145,6 +307,7 @@ with st.sidebar:
 
     # Main features menu
     menu_options = [
+        "Home",
         "Generate CP",
         "Generate AP/FG/LG/LP",
         "Generate Assessment",
@@ -154,6 +317,7 @@ with st.sidebar:
     ]
 
     menu_icons = [
+        "house",
         "filetype-doc",
         "file-earmark-richtext",
         "clipboard-check",
@@ -162,12 +326,20 @@ with st.sidebar:
         "search",
     ]
 
+    # Handle navigation from homepage boxes
+    nav_to = st.session_state.get('nav_to', None)
+    if nav_to and nav_to in menu_options:
+        default_idx = menu_options.index(nav_to)
+        st.session_state['nav_to'] = None  # Clear after use
+    else:
+        default_idx = 0
+
     selected = option_menu(
         "",  # Title of the sidebar
         menu_options,
         icons=menu_icons,
         menu_icon="boxes",  # Icon for the sidebar title
-        default_index=0,  # Default selected item
+        default_index=default_idx,  # Default selected item
     )
 
     # Separate Settings section using buttons
@@ -199,6 +371,10 @@ elif settings_page == "Company Management":
     # Clear settings page when main menu is clicked
     if selected:
         st.session_state['settings_page'] = None
+
+elif selected == "Home":
+    st.session_state['settings_page'] = None
+    display_homepage()
 
 elif selected == "Generate CP":
     st.session_state['settings_page'] = None
