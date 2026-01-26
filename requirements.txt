@@ -23,9 +23,5 @@ oauth2client
 streamlit-modal
 xhtml2pdf
 
-# AutoGen dependencies (pinned for stability)
-autogen-agentchat==0.4.0
-autogen-core==0.4.0
-
 # Playwright for web scraping (browsers installed at runtime)
 playwright
