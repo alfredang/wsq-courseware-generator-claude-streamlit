@@ -176,6 +176,57 @@ Each agent is equipped with specialized function tools:
 - `verify_company_uen` - UEN validation
 - `check_document_completeness` - Completeness check
 
+### MCP (Model Context Protocol) Support
+
+The system supports **MCP servers** for standardized tool integration, enabling agents to access external data sources and services through a unified protocol.
+
+#### Available MCP Servers
+
+| Server | Purpose | Use Case |
+|--------|---------|----------|
+| **Filesystem** | Document read/write operations | Reading TSC documents, writing generated courseware |
+| **PostgreSQL** | Company database access | Training records verification, company data |
+| **SQLite** | API configuration access | Model configuration, API key metadata |
+| **Fetch** | Web scraping operations | Course info scraping for brochures |
+| **Memory** | Persistent agent memory | Cross-session knowledge retention |
+
+#### Usage Example
+
+```python
+from courseware_agents import mcp_context, COURSEWARE_MCP_CONFIG
+from courseware_agents.orchestrator import create_orchestrator_with_mcp
+from agents import Runner
+
+async def run_with_mcp():
+    # Initialize MCP servers with context manager
+    async with mcp_context(**COURSEWARE_MCP_CONFIG) as servers:
+        # Create orchestrator with MCP support
+        orchestrator = create_orchestrator_with_mcp(mcp_servers=servers)
+
+        # Run the agent
+        result = await Runner.run(orchestrator, "Generate courseware")
+        print(result.final_output)
+```
+
+#### Predefined Configurations
+
+- **COURSEWARE_MCP_CONFIG**: General courseware generation (filesystem + fetch)
+- **DOCUMENT_AGENT_MCP_CONFIG**: Document verification (filesystem + postgres)
+- **BROCHURE_AGENT_MCP_CONFIG**: Brochure generation (filesystem + fetch)
+
+#### Requirements for MCP
+
+MCP servers require Node.js/npm for the official MCP server implementations:
+```bash
+# Install Node.js (required for MCP servers)
+# macOS
+brew install node
+
+# Or using nvm
+curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.0/install.sh | bash
+nvm install node
+```
+
 ## 📋 Prerequisites
 
 - Python 3.11+
@@ -245,6 +296,8 @@ courseware_openai_agents/
 ├── courseware_agents/          # 🤖 Multi-Agent System (OpenAI Agents SDK)
 │   ├── __init__.py            # Package exports
 │   ├── base.py                # Agent factory & OpenRouter configuration
+│   ├── schemas.py             # Pydantic schemas for structured outputs
+│   ├── mcp_config.py          # MCP server configurations
 │   ├── orchestrator.py        # Main orchestrator with handoffs to all agents
 │   ├── cp_agent.py            # Course Proposal generation agent
 │   ├── courseware_agent.py    # AP/FG/LG/LP generation agent

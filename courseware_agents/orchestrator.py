@@ -4,13 +4,16 @@ Orchestrator Agent
 This is the main coordinator agent that interacts with users and
 delegates tasks to specialized agents via handoffs.
 
+Supports MCP (Model Context Protocol) servers for enhanced tool integration
+including filesystem operations, database access, and web fetching.
+
 Author: Courseware Generator Team
 Date: 26 January 2026
 """
 
 from agents import Agent, handoff
 from courseware_agents.base import create_agent, setup_openrouter, get_model_for_agent
-from typing import Optional
+from typing import Optional, List, Any
 
 
 # System instructions for the Orchestrator
@@ -199,3 +202,133 @@ def get_document_agent():
     """Get the Document Agent instance"""
     from courseware_agents.document_agent import document_agent
     return document_agent
+
+
+def create_orchestrator_with_mcp(
+    model_name: str = "GPT-4o",
+    mcp_servers: Optional[List[Any]] = None
+) -> Agent:
+    """
+    Create the orchestrator with MCP server support.
+
+    MCP servers enable standardized access to:
+    - Filesystem: Document read/write operations
+    - PostgreSQL: Company database queries
+    - SQLite: API configuration access
+    - Fetch: Web scraping operations
+    - Memory: Persistent agent memory
+
+    Args:
+        model_name: Model to use for the orchestrator
+        mcp_servers: List of initialized MCP servers
+
+    Returns:
+        Orchestrator Agent with MCP servers attached
+
+    Example:
+        from courseware_agents import mcp_context, COURSEWARE_MCP_CONFIG
+        from agents import Runner
+
+        async def run_with_mcp():
+            async with mcp_context(**COURSEWARE_MCP_CONFIG) as servers:
+                orchestrator = create_orchestrator_with_mcp(mcp_servers=servers)
+                result = await Runner.run(orchestrator, "Generate courseware")
+                print(result.final_output)
+    """
+    # Ensure OpenRouter is configured
+    setup_openrouter()
+
+    # Import agents here to avoid circular imports
+    from courseware_agents.cp_agent import cp_agent
+    from courseware_agents.courseware_agent import courseware_agent
+    from courseware_agents.assessment_agent import assessment_agent
+    from courseware_agents.brochure_agent import brochure_agent
+    from courseware_agents.document_agent import document_agent
+
+    # Get model ID
+    model_id = get_model_for_agent(model_name)
+
+    # Build agent kwargs
+    agent_kwargs = {
+        "name": "Courseware Orchestrator",
+        "instructions": ORCHESTRATOR_INSTRUCTIONS,
+        "model": model_id,
+        "handoffs": [
+            handoff(
+                cp_agent,
+                tool_name_override="transfer_to_cp_agent",
+                tool_description_override="Transfer to CP Agent for Course Proposal generation from TSC documents"
+            ),
+            handoff(
+                courseware_agent,
+                tool_name_override="transfer_to_courseware_agent",
+                tool_description_override="Transfer to Courseware Agent for AP/FG/LG/LP document generation"
+            ),
+            handoff(
+                assessment_agent,
+                tool_name_override="transfer_to_assessment_agent",
+                tool_description_override="Transfer to Assessment Agent for SAQ/PP/CS assessment generation"
+            ),
+            handoff(
+                brochure_agent,
+                tool_name_override="transfer_to_brochure_agent",
+                tool_description_override="Transfer to Brochure Agent for course brochure creation"
+            ),
+            handoff(
+                document_agent,
+                tool_name_override="transfer_to_document_agent",
+                tool_description_override="Transfer to Document Agent for document verification and validation"
+            ),
+        ],
+    }
+
+    # Add MCP servers if provided
+    if mcp_servers:
+        agent_kwargs["mcp_servers"] = mcp_servers
+
+    return Agent(**agent_kwargs)
+
+
+async def run_orchestrator_with_mcp(
+    prompt: str,
+    model_name: str = "GPT-4o",
+    enable_filesystem: bool = True,
+    enable_postgres: bool = False,
+    enable_fetch: bool = True,
+):
+    """
+    Run the orchestrator with MCP servers in a managed context.
+
+    This is a convenience function that handles MCP server lifecycle automatically.
+
+    Args:
+        prompt: User prompt to process
+        model_name: Model to use for the orchestrator
+        enable_filesystem: Enable filesystem MCP server
+        enable_postgres: Enable PostgreSQL MCP server
+        enable_fetch: Enable web fetch MCP server
+
+    Returns:
+        Runner result with final output
+
+    Example:
+        result = await run_orchestrator_with_mcp(
+            "Generate a Course Proposal from my TSC document",
+            enable_postgres=True  # Enable if company data access needed
+        )
+        print(result.final_output)
+    """
+    from agents import Runner
+    from courseware_agents.mcp_config import mcp_context
+
+    async with mcp_context(
+        enable_filesystem=enable_filesystem,
+        enable_postgres=enable_postgres,
+        enable_fetch=enable_fetch,
+    ) as servers:
+        orchestrator = create_orchestrator_with_mcp(
+            model_name=model_name,
+            mcp_servers=servers
+        )
+        result = await Runner.run(orchestrator, prompt)
+        return result
