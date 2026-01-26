@@ -20,7 +20,14 @@ __pycache__/
 settings/config/api_config.db
 settings/config/api_keys.json
 settings/config/custom_models.json
-settings/config/custom_models.json.migrated
+settings/config/*.migrated
+
+# Credentials and service accounts (NEVER COMMIT)
+*-credentials.json
+*-service-account*.json
+ssg-api-calls*.json
+*.pem
+*.key
 
 # Data and cache (generated at runtime)
 data/

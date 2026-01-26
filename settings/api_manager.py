@@ -51,13 +51,10 @@ def _get_secret(key: str, default: str = "") -> str:
 def load_api_keys() -> Dict[str, str]:
     """Load API keys from secrets.toml or environment variables"""
     # Load from secrets.toml / environment variables only
+    # Only OpenRouter and OpenAI API keys are supported
     base_keys = {
-        "OPENAI_API_KEY": _get_secret("OPENAI_API_KEY", ""),
-        "DEEPSEEK_API_KEY": _get_secret("DEEPSEEK_API_KEY", ""),
-        "GEMINI_API_KEY": _get_secret("GEMINI_API_KEY", ""),
         "OPENROUTER_API_KEY": _get_secret("OPENROUTER_API_KEY", ""),
-        "GROQ_API_KEY": _get_secret("GROQ_API_KEY", ""),
-        "GROK_API_KEY": _get_secret("GROK_API_KEY", "")
+        "OPENAI_API_KEY": _get_secret("OPENAI_API_KEY", ""),
     }
 
     # Cache in session state for performance

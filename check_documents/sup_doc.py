@@ -21,12 +21,8 @@ try:
 except ImportError:
     pass
 
-GENAI_AVAILABLE = False
-try:
-    import google.generativeai as genai
-    GENAI_AVAILABLE = True
-except ImportError:
-    pass
+# Note: Entity extraction now uses OpenRouter via gemini_processor.py
+# The google.generativeai package is no longer required
 
 # ------------------------------
 # Helper Functions

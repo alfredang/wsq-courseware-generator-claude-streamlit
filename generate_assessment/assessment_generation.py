@@ -692,20 +692,13 @@ def app():
     # Get API key from config or load from Settings UI
     api_key = selected_config["config"].get("api_key")
     
-    # If no API key in config, try to get it from Settings UI
+    # If no API key in config, use OpenRouter (recommended) or OpenAI key
     if not api_key:
-        model_name = selected_config["config"]["model"]
-        # Map model to appropriate API key
-        if "gemini" in model_name.lower():
-            api_key = api_keys.get("GEMINI_API_KEY", "")
-        elif "gpt" in model_name.lower() or "openai" in model_name.lower():
+        # All models are accessed via OpenRouter - use OpenRouter API key
+        api_key = api_keys.get("OPENROUTER_API_KEY", "")
+        # Fallback to OpenAI API key for native OpenAI models
+        if not api_key:
             api_key = api_keys.get("OPENAI_API_KEY", "")
-        elif "deepseek" in model_name.lower():
-            api_key = api_keys.get("DEEPSEEK_API_KEY", "")
-        elif "groq" in model_name.lower():
-            api_key = api_keys.get("GROQ_API_KEY", "")
-        elif "grok" in model_name.lower():
-            api_key = api_keys.get("GROK_API_KEY", "")
     
     if not api_key:
         st.error(f"❌ API key for {st.session_state['selected_model']} is not provided.")
