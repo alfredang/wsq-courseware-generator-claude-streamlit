@@ -257,15 +257,11 @@ BUILTIN_MODELS = [
     {"name": "Gemini-Pro-1.5", "model_id": "google/gemini-pro-1.5", "api_provider": "OPENROUTER", "sort_order": 35},
 
     # === Google Gemini Models (Native API) ===
-    {"name": "Gemini 3.5-Pro", "model_id": "gemini-3.5-pro", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 130},
-    {"name": "Gemini 3.5-Flash", "model_id": "gemini-3.5-flash", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 131},
-    {"name": "Gemini 3-Pro", "model_id": "gemini-3-pro", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 132},
-    {"name": "Gemini 3-Flash", "model_id": "gemini-3-flash", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 133},
-    {"name": "Gemini 2.5-Pro", "model_id": "gemini-2.5-pro-preview-05-06", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 134},
-    {"name": "Gemini 2.5-Flash", "model_id": "gemini-2.5-flash-preview-05-20", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 135},
-    {"name": "Gemini 2.0-Flash", "model_id": "gemini-2.0-flash", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 136},
-    {"name": "Gemini 1.5-Pro", "model_id": "gemini-1.5-pro", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 137},
-    {"name": "Gemini 1.5-Flash", "model_id": "gemini-1.5-flash", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 138},
+    {"name": "Gemini 2.5-Flash", "model_id": "gemini-2.5-flash-preview-05-20", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 130},
+    {"name": "Gemini 2.5-Pro", "model_id": "gemini-2.5-pro-preview-05-06", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 131},
+    {"name": "Gemini 2.0-Flash", "model_id": "gemini-2.0-flash", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 132},
+    {"name": "Gemini 1.5-Pro", "model_id": "gemini-1.5-pro", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 133},
+    {"name": "Gemini 1.5-Flash", "model_id": "gemini-1.5-flash", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 134},
 
     # === DeepSeek Models (via OpenRouter) ===
     {"name": "DeepSeek-V3", "model_id": "deepseek/deepseek-chat", "api_provider": "OPENROUTER", "sort_order": 40},
