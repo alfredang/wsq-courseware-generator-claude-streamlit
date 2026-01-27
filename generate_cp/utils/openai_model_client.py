@@ -11,6 +11,7 @@ Date: 2026-01-20
 from openai import OpenAI
 from typing import Dict, Any
 from settings.model_configs import get_model_config
+from settings.api_manager import load_api_keys
 
 
 def create_openai_client(model_choice: str) -> tuple[OpenAI, Dict[str, Any]]:
@@ -44,6 +45,12 @@ def create_openai_client(model_choice: str) -> tuple[OpenAI, Dict[str, Any]]:
     api_key = config_dict.get("api_key", "")
     model = config_dict.get("model", "deepseek/deepseek-chat")
     temperature = config_dict.get("temperature", 0.2)
+
+    # Fallback: If no API key in config, get it dynamically based on api_provider
+    if not api_key:
+        api_provider = autogen_config.get("api_provider", "OPENROUTER")
+        api_keys = load_api_keys()
+        api_key = api_keys.get(f"{api_provider}_API_KEY", "")
 
     # Create OpenAI client with extracted configuration
     client = OpenAI(

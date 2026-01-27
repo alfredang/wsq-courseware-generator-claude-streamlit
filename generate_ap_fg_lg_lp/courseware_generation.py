@@ -140,8 +140,8 @@ if 'context' not in st.session_state:
     st.session_state['context'] = None
 if 'asr_output' not in st.session_state:
     st.session_state['asr_output'] = None
-if 'selected_model' not in st.session_state:
-    st.session_state['selected_model'] = "DeepSeek-Chat"
+# Note: selected_model is set in app.py sidebar based on user selection and database defaults
+# Do not set a hardcoded default here - let app.py handle model selection
 
 ############################################################
 # 1. Pydantic Models
@@ -317,6 +317,13 @@ def create_openai_client(model_choice: str = "GPT-4o-Mini"):
     api_key = config_dict.get("api_key", "")
     model = config_dict.get("model", "gpt-4o-mini")
     temperature = config_dict.get("temperature", 0.2)
+
+    # Fallback: If no API key in config, get it dynamically based on api_provider
+    if not api_key:
+        from settings.api_manager import load_api_keys
+        api_provider = autogen_config.get("api_provider", "OPENROUTER")
+        api_keys = load_api_keys()
+        api_key = api_keys.get(f"{api_provider}_API_KEY", "")
 
     client = OpenAI(
         base_url=base_url,
@@ -672,11 +679,27 @@ def app():
             st.session_state['lp_output'] = None
             st.session_state['fg_output'] = None
             # Use the selected model choice for all OpenAI SDK calls
+            if 'selected_model' not in st.session_state or not st.session_state['selected_model']:
+                st.error("❌ No model selected. Please select a model from the sidebar.")
+                return
+
             model_choice = st.session_state['selected_model']
             selected_config = get_model_config(model_choice)
+
+            # Get API key from config or load dynamically based on api_provider
             api_key = selected_config["config"].get("api_key")
+
+            # Fallback: If no API key in config, get it dynamically based on api_provider
             if not api_key:
-                st.error("API key for the selected model is not provided.")
+                from settings.api_manager import load_api_keys
+                api_provider = selected_config.get("api_provider", "OPENROUTER")
+                api_keys = load_api_keys()
+                api_key = api_keys.get(f"{api_provider}_API_KEY", "")
+
+            if not api_key:
+                api_provider = selected_config.get("api_provider", "OPENROUTER")
+                st.error(f"❌ API key for {model_choice} ({api_provider}) is not provided.")
+                st.info(f"💡 **Solution**: Go to Settings → API & Models to add {api_provider}_API_KEY")
                 return
             model_name = selected_config["config"]["model"]
             base_url = selected_config["config"].get("base_url", None)

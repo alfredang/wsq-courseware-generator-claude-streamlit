@@ -96,6 +96,7 @@ def create_openai_client(model_choice: str = "GPT-4o-Mini"):
         tuple: (OpenAI client instance, model configuration dict)
     """
     from settings.model_configs import get_model_config
+    from settings.api_manager import load_api_keys
 
     autogen_config = get_model_config(model_choice)
     config_dict = autogen_config.get("config", {})
@@ -104,6 +105,12 @@ def create_openai_client(model_choice: str = "GPT-4o-Mini"):
     api_key = config_dict.get("api_key", "")
     model = config_dict.get("model", "gpt-4o-mini")
     temperature = config_dict.get("temperature", 0.2)
+
+    # Fallback: If no API key in config, get it dynamically based on api_provider
+    if not api_key:
+        api_provider = autogen_config.get("api_provider", "OPENROUTER")
+        api_keys = load_api_keys()
+        api_key = api_keys.get(f"{api_provider}_API_KEY", "")
 
     client = OpenAI(
         base_url=base_url,
@@ -397,8 +404,11 @@ def generate_assessment_plan(context: dict, name_of_organisation, sfw_dataset_di
     if not is_evidence_extracted(context):
         print("Extracting missing assessment evidence...")
 
-        # Use default model choice for assessment generation
-        model_choice = "GPT-4o-Mini"
+        # Get model choice from session state (set by user in sidebar)
+        import streamlit as st
+        model_choice = st.session_state.get('selected_model')
+        if not model_choice:
+            raise ValueError("No model selected. Please select a model from the sidebar.")
 
         evidence = asyncio.run(extract_assessment_evidence(structured_data=context, model_choice=model_choice))
         context = combine_assessment_methods(context, evidence)

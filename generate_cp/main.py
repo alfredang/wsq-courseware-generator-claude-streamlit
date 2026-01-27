@@ -43,7 +43,10 @@ async def main(input_tsc) -> None:
     Args:
         input_tsc: Path to the TSC input document
     """
-    model_choice = st.session_state.get('selected_model', "GPT-4o-Mini")
+    model_choice = st.session_state.get('selected_model')
+    if not model_choice:
+        st.error("❌ No model selected. Please select a model from the sidebar.")
+        return
     cp_type = st.session_state.get('cp_type', "New CP")
 
     # Parse document

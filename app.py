@@ -158,14 +158,22 @@ def display_homepage():
             from agents import Runner
 
             api_keys = load_api_keys()
-            openrouter_key = api_keys.get("OPENROUTER_API_KEY", "")
 
-            if openrouter_key:
+            # Get selected model and API provider from session state
+            chat_model = st.session_state.get('selected_model')
+            api_provider = st.session_state.get('selected_api_provider', 'OPENROUTER')
+
+            # Get the API key for the selected provider
+            api_key = api_keys.get(f"{api_provider}_API_KEY", "")
+
+            if not chat_model:
+                st.session_state.chat_messages.append({
+                    "role": "assistant",
+                    "content": "No model selected. Please select a model from the sidebar."
+                })
+            elif api_key:
                 # Import and create the orchestrator
                 from courseware_agents.orchestrator import create_orchestrator
-
-                # Get selected model from session state (default to GPT-4o for orchestrator)
-                chat_model = st.session_state.get('selected_model', 'GPT-4o')
 
                 # Create orchestrator with handoffs to specialized agents
                 orchestrator = create_orchestrator(model_name=chat_model)
@@ -191,7 +199,7 @@ def display_homepage():
             else:
                 st.session_state.chat_messages.append({
                     "role": "assistant",
-                    "content": "OpenRouter API key not configured. Please set up your OPENROUTER_API_KEY in Settings > API & Models to use the orchestrator agent."
+                    "content": f"{api_provider}_API_KEY not configured. Please set up your API key in Settings > API & Models to use the chat feature."
                 })
         except ImportError as e:
             st.session_state.chat_messages.append({
@@ -377,26 +385,33 @@ with st.sidebar:
     else:
         model_names = [m["name"] for m in filtered_models]
 
-        # Find default model index from database, or use first available
-        default_model_idx = 0
+        # Get default model from database for this provider
         stored_default = get_default_model(selected_provider)
+
+        # Find default model index, or use first available
+        default_model_idx = 0
         if stored_default and stored_default in model_names:
             default_model_idx = model_names.index(stored_default)
 
-        # Reset model selection when provider changes
+        # Track provider changes to reset selection
         if 'last_api_provider' not in st.session_state:
             st.session_state['last_api_provider'] = selected_provider
-        if st.session_state['last_api_provider'] != selected_provider:
-            st.session_state['selected_model_idx'] = default_model_idx
+
+        # When provider changes, reset to that provider's default
+        provider_changed = st.session_state['last_api_provider'] != selected_provider
+        if provider_changed:
             st.session_state['last_api_provider'] = selected_provider
+            # Clear user's explicit selection for this provider
+            if 'user_selected_model' in st.session_state:
+                del st.session_state['user_selected_model']
 
-        # Use default on first load, then respect user selection
-        if 'selected_model_idx' not in st.session_state:
-            st.session_state['selected_model_idx'] = default_model_idx
-
-        # Validate stored index
-        if st.session_state['selected_model_idx'] >= len(model_names):
-            st.session_state['selected_model_idx'] = default_model_idx
+        # Determine which model to select:
+        # 1. If user explicitly selected a model this session, use it
+        # 2. Otherwise, use the default model from database
+        if 'user_selected_model' in st.session_state and st.session_state['user_selected_model'] in model_names:
+            current_idx = model_names.index(st.session_state['user_selected_model'])
+        else:
+            current_idx = default_model_idx
 
         # Model selector with Set Default button
         col_model, col_star = st.columns([5, 1])
@@ -405,7 +420,7 @@ with st.sidebar:
                 "Select Model:",
                 range(len(model_names)),
                 format_func=lambda x: model_names[x],
-                index=st.session_state['selected_model_idx']
+                index=current_idx
             )
         with col_star:
             st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)  # Spacing
@@ -415,10 +430,15 @@ with st.sidebar:
             if st.button(star_icon, key="set_default_btn", help="Set as default model for this provider"):
                 if not is_default:
                     set_default_model(selected_provider, current_model)
+                    # Update user selection to the new default
+                    st.session_state['user_selected_model'] = current_model
                     st.rerun()
 
+        # Track user's explicit model selection (only if different from what was shown)
+        if model_names[selected_model_idx] != model_names[current_idx]:
+            st.session_state['user_selected_model'] = model_names[selected_model_idx]
+
         # Store selection in session state
-        st.session_state['selected_model_idx'] = selected_model_idx
         st.session_state['selected_model'] = model_names[selected_model_idx]
 
         # Get full model config with API key

@@ -14,8 +14,8 @@ if 'output_docx' not in st.session_state:
     st.session_state['output_docx'] = None
 if 'cv_output_files' not in st.session_state:
     st.session_state['cv_output_files'] = []
-if 'selected_model' not in st.session_state:
-    st.session_state['selected_model'] = "GPT-4o-Mini"
+# Note: selected_model is set in app.py sidebar based on user selection and database defaults
+# Do not set a hardcoded default here - let app.py handle model selection
 
 def app():
     st.title("Course Proposal File Processor")

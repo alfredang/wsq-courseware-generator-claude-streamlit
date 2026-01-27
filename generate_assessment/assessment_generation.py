@@ -95,8 +95,8 @@ if 'cs_output' not in st.session_state:
     st.session_state['cs_output'] = None
 if 'assessment_generated_files' not in st.session_state:
     st.session_state['assessment_generated_files'] = {}
-if 'selected_model' not in st.session_state:
-    st.session_state['selected_model'] = "DeepSeek-Chat"
+# Note: selected_model is set in app.py sidebar based on user selection and database defaults
+# Do not set a hardcoded default here - let app.py handle model selection
 
 ################################################################################
 # Helper function for PDF text extraction
@@ -676,12 +676,17 @@ def app():
     # Load API keys from Settings UI with fallback to secrets
     api_keys = load_api_keys()
 
+    # Check if model is selected
+    if 'selected_model' not in st.session_state or not st.session_state['selected_model']:
+        st.error("❌ No model selected. Please select a model from the sidebar.")
+        return
+
     selected_config = get_model_config(st.session_state['selected_model'])
-    
+
     # Check if model configuration exists
     if not selected_config:
         st.error(f"❌ Model configuration not found for: {st.session_state['selected_model']}")
-        st.info("💡 **Solution**: Go to Model Selection and choose a different model (e.g., GPT-4o-Mini)")
+        st.info("💡 **Solution**: Go to Model Selection in the sidebar and choose a different model")
         return
     
     # Check if config section exists
