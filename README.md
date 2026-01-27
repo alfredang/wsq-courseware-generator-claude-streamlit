@@ -109,7 +109,7 @@ The application features a flexible model management system:
 - **Skill-Driven AI Assistant** - Chatbot that uses skill definitions to provide contextual guidance
 - **Auto-Navigation** - Type skill commands (e.g., `/generate_slides`) to navigate to modules
 - **Extensible Skills** - Add new skills by creating markdown files in `.skills/` folder
-- **Built-in Commands**: `/generate_course_proposal`, `/generate_ap_fg_lg_lp`, `/generate_assessment`, `/generate_slides`
+- **Built-in Commands**: `/generate_course_proposal`, `/generate_assessment_plan`, `/generate_facilitator_guide`, `/generate_learner_guide`, `/generate_lesson_plan`, `/generate_assessment`, `/generate_slides`
 
 ### Model Management System
 - **Multi-Provider Support** - OpenRouter (38+ models), OpenAI (native), and Gemini
@@ -325,7 +325,10 @@ courseware_openai_agents/
 ├── app.py                      # Main Streamlit application with AI assistant
 ├── .skills/                    # 🎯 Skill definitions (markdown files)
 │   ├── generate_course_proposal.md  # CP skill with instructions
-│   ├── generate_ap_fg_lg_lp.md      # Courseware skill
+│   ├── generate_assessment_plan.md  # Assessment Plan skill
+│   ├── generate_facilitator_guide.md # Facilitator Guide skill
+│   ├── generate_learner_guide.md    # Learner Guide skill
+│   ├── generate_lesson_plan.md      # Lesson Plan skill
 │   ├── generate_assessment.md       # Assessment skill
 │   ├── generate_slides.md           # Slides skill (NotebookLM MCP)
 │   └── branding.md                  # Branding guidelines
@@ -392,7 +395,10 @@ Type these commands in the AI Assistant to navigate and get help:
 | Command | Action |
 |---------|--------|
 | `/generate_course_proposal` | Navigate to Course Proposal generation |
-| `/generate_ap_fg_lg_lp` | Navigate to Courseware generation |
+| `/generate_assessment_plan` | Navigate to Assessment Plan generation |
+| `/generate_facilitator_guide` | Navigate to Facilitator Guide generation |
+| `/generate_learner_guide` | Navigate to Learner Guide generation |
+| `/generate_lesson_plan` | Navigate to Lesson Plan generation |
 | `/generate_assessment` | Navigate to Assessment generation |
 | `/generate_slides` | Navigate to Slides generation |
 

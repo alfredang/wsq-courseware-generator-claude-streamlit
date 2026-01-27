@@ -40,6 +40,9 @@ A skill-driven AI assistant available on every page:
 | Command | Description |
 |---------|-------------|
 | `/generate_course_proposal` | Navigate to Course Proposal generation |
-| `/generate_ap_fg_lg_lp` | Navigate to Courseware Suite generation |
+| `/generate_assessment_plan` | Navigate to Assessment Plan generation |
+| `/generate_facilitator_guide` | Navigate to Facilitator Guide generation |
+| `/generate_learner_guide` | Navigate to Learner Guide generation |
+| `/generate_lesson_plan` | Navigate to Lesson Plan generation |
 | `/generate_assessment` | Navigate to Assessment generation |
 | `/generate_slides` | Navigate to Slides generation |
