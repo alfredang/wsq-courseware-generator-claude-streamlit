@@ -31,7 +31,10 @@ from settings.api_manager import (
 )
 from settings.api_database import (
     refresh_builtin_models,
-    refresh_builtin_api_keys
+    refresh_builtin_api_keys,
+    set_model_enabled,
+    get_default_model,
+    set_default_model
 )
 from settings.admin_auth import is_authenticated, login_page, show_logout_button
 
@@ -248,38 +251,26 @@ def manage_api_keys():
 
 
 def display_all_models():
-    """Display all models from database (built-in + custom)"""
-    # Get all models from database
-    all_models = get_all_available_models()
+    """Display all models from database (built-in + custom) with selection and default controls"""
+    from settings.api_database import get_all_models as db_get_all_models
 
-    if not all_models:
+    # Get all models from database (including is_enabled status)
+    all_db_models = db_get_all_models(include_builtin=True)
+
+    if not all_db_models:
         st.info("No models available. Go to **Update Models** tab to fetch and add models from API providers.")
         return
 
     # Group models by API provider
     models_by_provider = {}
-
-    for model_name, model in all_models.items():
+    for model in all_db_models:
         api_provider = model.get("api_provider", "OPENROUTER")
-        temp_value = model["config"].get("temperature", "N/A")
-        is_builtin = model.get("is_builtin", False)
-        model_info = {
-            "Model": model_name,
-            "ID": model["config"].get("model", "N/A"),
-            "Temperature": str(temp_value) if temp_value != "N/A" else "N/A",
-            "Available": "✓",
-            "_is_builtin": is_builtin,  # Hidden field for filtering
-            "_name": model_name  # Hidden field for removal
-        }
-
         if api_provider not in models_by_provider:
             models_by_provider[api_provider] = []
-        models_by_provider[api_provider].append(model_info)
+        models_by_provider[api_provider].append(model)
 
     # Define provider display order
     provider_order = ["OPENROUTER", "OPENAI", "ANTHROPIC", "GEMINI", "DEEPSEEK", "GROQ", "GROK"]
-
-    # Sort providers that have models by defined order
     sorted_providers = sorted(models_by_provider.keys(), key=lambda x: provider_order.index(x) if x in provider_order else 999)
 
     # Filter by API Provider dropdown
@@ -306,13 +297,56 @@ def display_all_models():
     for provider in providers_to_show:
         models = models_by_provider.get(provider, [])
         if models:
-            # Prepare display data (without hidden fields)
-            display_models = [
-                {k: v for k, v in m.items() if not k.startswith("_")}
-                for m in models
-            ]
+            # Get current default model for this provider
+            default_model = get_default_model(provider)
+
             with st.expander(f"{provider} ({len(models)} models)", expanded=(len(providers_to_show) == 1)):
-                st.dataframe(display_models, use_container_width=True, hide_index=True)
+                # Header row
+                hcol1, hcol2, hcol3, hcol4, hcol5 = st.columns([3, 3, 1.5, 1, 1])
+                with hcol1:
+                    st.markdown("**Model**")
+                with hcol2:
+                    st.markdown("**ID**")
+                with hcol3:
+                    st.markdown("**Temp**")
+                with hcol4:
+                    st.markdown("**Selected**")
+                with hcol5:
+                    st.markdown("**Default**")
+
+                # Model rows
+                for idx, model in enumerate(models):
+                    model_name = model["name"]
+                    model_id = model["config"].get("model", "N/A")
+                    temp = model["config"].get("temperature", 0.2)
+                    is_enabled = model.get("is_enabled", True)
+                    is_default = default_model == model_name
+
+                    col1, col2, col3, col4, col5 = st.columns([3, 3, 1.5, 1, 1])
+
+                    with col1:
+                        st.markdown(f"{model_name}")
+                    with col2:
+                        st.markdown(f"`{model_id}`")
+                    with col3:
+                        st.markdown(f"{temp}")
+                    with col4:
+                        # Selected checkbox
+                        new_enabled = st.checkbox(
+                            "",
+                            value=is_enabled,
+                            key=f"sel_{provider}_{idx}",
+                            label_visibility="collapsed"
+                        )
+                        if new_enabled != is_enabled:
+                            set_model_enabled(model_name, new_enabled)
+                            st.rerun()
+                    with col5:
+                        # Default radio button
+                        if st.button("◉" if is_default else "○", key=f"def_{provider}_{idx}", help="Set as default"):
+                            if not is_default:
+                                set_default_model(provider, model_name)
+                                st.rerun()
 
     # Remove custom models section
     custom_models = load_custom_models()

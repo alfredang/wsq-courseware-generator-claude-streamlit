@@ -362,9 +362,11 @@ with st.sidebar:
     selected_provider = provider_names[selected_provider_idx]
     st.session_state['selected_api_provider'] = selected_provider
 
-    # Get all models and filter by selected provider
+    # Get all models and filter by selected provider (only show enabled models)
     all_db_models = db_get_all_models(include_builtin=True)
-    filtered_models = [m for m in all_db_models if m.get("api_provider", "OPENROUTER") == selected_provider]
+    filtered_models = [m for m in all_db_models
+                       if m.get("api_provider", "OPENROUTER") == selected_provider
+                       and m.get("is_enabled", True)]
 
     # If no models for this provider, show message
     if not filtered_models:

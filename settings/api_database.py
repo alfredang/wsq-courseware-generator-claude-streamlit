@@ -113,11 +113,27 @@ def init_database():
 
         conn.commit()
 
+    # Run migrations for new columns
+    _run_migrations(conn)
+
     # Seed built-in API key configurations
     _seed_builtin_api_keys()
 
     # Seed built-in models if not already present
     _seed_builtin_models()
+
+
+def _run_migrations(conn):
+    """Run database migrations to add new columns"""
+    cursor = conn.cursor()
+
+    # Check if is_enabled column exists in llm_models
+    cursor.execute("PRAGMA table_info(llm_models)")
+    columns = [col[1] for col in cursor.fetchall()]
+
+    if 'is_enabled' not in columns:
+        cursor.execute("ALTER TABLE llm_models ADD COLUMN is_enabled INTEGER DEFAULT 1")
+        conn.commit()
 
 
 # ============ Built-in API Keys Seed Data ============
@@ -377,6 +393,12 @@ def get_all_models(include_builtin: bool = True) -> List[Dict[str, Any]]:
 
         models = []
         for row in rows:
+            # Handle case where is_enabled column might not exist yet
+            try:
+                is_enabled = bool(row["is_enabled"])
+            except (IndexError, KeyError):
+                is_enabled = True
+
             models.append({
                 "id": row["id"],
                 "name": row["name"],
@@ -387,7 +409,8 @@ def get_all_models(include_builtin: bool = True) -> List[Dict[str, Any]]:
                     "base_url": row["base_url"]
                 },
                 "api_provider": row["api_provider"],
-                "is_builtin": bool(row["is_builtin"])
+                "is_builtin": bool(row["is_builtin"]),
+                "is_enabled": is_enabled
             })
         return models
 
@@ -799,3 +822,61 @@ def get_all_default_models() -> Dict[str, str]:
         cursor.execute("SELECT api_provider, model_name FROM default_models")
         rows = cursor.fetchall()
         return {row["api_provider"]: row["model_name"] for row in rows}
+
+
+# ============ Model Enabled/Selected Status ============
+
+def is_model_enabled(model_name: str) -> bool:
+    """Check if a model is enabled (selected for display in sidebar)"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT is_enabled FROM llm_models WHERE name = ?", (model_name,))
+        row = cursor.fetchone()
+        return bool(row["is_enabled"]) if row else True
+
+
+def set_model_enabled(model_name: str, enabled: bool) -> bool:
+    """Set the enabled status for a model"""
+    init_database()
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                UPDATE llm_models SET is_enabled = ?, updated_at = CURRENT_TIMESTAMP
+                WHERE name = ?
+            """, (1 if enabled else 0, model_name))
+            return cursor.rowcount > 0
+    except Exception as e:
+        print(f"Error setting model enabled status: {e}")
+        return False
+
+
+def get_enabled_models_by_provider(api_provider: str) -> List[Dict[str, Any]]:
+    """Get only enabled models for a specific API provider"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM llm_models
+            WHERE api_provider = ? AND is_enabled = 1
+            ORDER BY sort_order, name
+        """, (api_provider,))
+        rows = cursor.fetchall()
+
+        models = []
+        for row in rows:
+            models.append({
+                "id": row["id"],
+                "name": row["name"],
+                "provider": row["provider"],
+                "config": {
+                    "model": row["model_id"],
+                    "temperature": row["temperature"],
+                    "base_url": row["base_url"]
+                },
+                "api_provider": row["api_provider"],
+                "is_builtin": bool(row["is_builtin"]),
+                "is_enabled": bool(row["is_enabled"])
+            })
+        return models
