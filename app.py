@@ -126,99 +126,123 @@ def display_homepage():
                 st.session_state['nav_to'] = "Check Documents"
                 st.rerun()
 
-    # Chat section header
-    st.markdown("<div style='font-size: 1.1rem; font-weight: 600; margin-top: 1rem;'>Chat with Courseware Assistant</div>", unsafe_allow_html=True)
-    st.caption("Ask questions or request help with courseware generation")
+    # Homepage cards end here
+    pass
 
-    # Initialize chat history
+def handle_chat_logic(prompt):
+    """Process chat message and get response from AI"""
+    if not prompt or not prompt.strip():
+        return
+
+    # Add user message to history
+    st.session_state.chat_messages.append({"role": "user", "content": prompt})
+
+    try:
+        from settings.api_manager import load_api_keys
+        from agents import Runner
+
+        api_keys = load_api_keys()
+
+        # Get selected model and API provider from session state
+        chat_model = st.session_state.get('selected_model')
+        api_provider = st.session_state.get('selected_api_provider', 'OPENROUTER')
+        api_key = api_keys.get(f"{api_provider}_API_KEY", "")
+
+        if not chat_model:
+            st.session_state.chat_messages.append({
+                "role": "assistant",
+                "content": "No model selected. Please select a model from the sidebar."
+            })
+        elif api_key:
+            # Import and create the orchestrator
+            from courseware_agents.orchestrator import create_orchestrator
+            orchestrator = create_orchestrator(model_name=chat_model)
+
+            # Build conversation context from history
+            conversation_history = ""
+            for msg in st.session_state.chat_messages[:-1]:
+                role = "User" if msg["role"] == "user" else "Assistant"
+                conversation_history += f"{role}: {msg['content']}\n\n"
+
+            # Create the full prompt with context
+            full_prompt = f"{conversation_history}User: {prompt}" if conversation_history else prompt
+
+            # Run the orchestrator asynchronously
+            async def run_orchestrator():
+                result = await Runner.run(orchestrator, full_prompt)
+                return result.final_output
+
+            # Execute async function
+            with st.spinner("Thinking..."):
+                assistant_message = asyncio.run(run_orchestrator())
+            st.session_state.chat_messages.append({"role": "assistant", "content": assistant_message})
+        else:
+            st.session_state.chat_messages.append({
+                "role": "assistant",
+                "content": f"{api_provider}_API_KEY not configured. Please set up your API key in Settings > API & Models to use the chat feature."
+            })
+    except Exception as e:
+        st.session_state.chat_messages.append({
+            "role": "assistant",
+            "content": f"Error: {str(e)}"
+        })
+    st.rerun()
+
+def display_floating_chat():
+    """Display the floating chat bubble and window"""
+    # Initialize session state
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
+    if "chat_expanded" not in st.session_state:
+        st.session_state.chat_expanded = False
 
-    # Chat input directly below header using form to capture Enter key
-    with st.form(key="chat_form", clear_on_submit=True):
-        col_input, col_btn = st.columns([6, 1])
-        with col_input:
-            prompt = st.text_area("", placeholder="Ask about courseware generation or request help...", label_visibility="collapsed", height=100)
-        with col_btn:
-            submitted = st.form_submit_button("Submit", use_container_width=True, type="primary")
-
-    # Display chat messages below input
-    for message in st.session_state.chat_messages:
-        with st.chat_message(message["role"]):
-            st.markdown(message["content"])
-
-    # Process message on form submission
-    if submitted and prompt and prompt.strip():
-        # Add user message to history
-        st.session_state.chat_messages.append({"role": "user", "content": prompt})
-
-        # Get response from AI using the Orchestrator agent
-        try:
-            from settings.api_manager import load_api_keys
-            from agents import Runner
-
-            api_keys = load_api_keys()
-
-            # Get selected model and API provider from session state
-            chat_model = st.session_state.get('selected_model')
-            api_provider = st.session_state.get('selected_api_provider', 'OPENROUTER')
-
-            # Get the API key for the selected provider
-            api_key = api_keys.get(f"{api_provider}_API_KEY", "")
-
-            if not chat_model:
-                st.session_state.chat_messages.append({
-                    "role": "assistant",
-                    "content": "No model selected. Please select a model from the sidebar."
-                })
-            elif api_key:
-                # Import and create the orchestrator
-                from courseware_agents.orchestrator import create_orchestrator
-
-                # Create orchestrator with handoffs to specialized agents
-                orchestrator = create_orchestrator(model_name=chat_model)
-
-                # Build conversation context from history
-                conversation_history = ""
-                for msg in st.session_state.chat_messages[:-1]:  # Exclude the current message
-                    role = "User" if msg["role"] == "user" else "Assistant"
-                    conversation_history += f"{role}: {msg['content']}\n\n"
-
-                # Create the full prompt with context
-                full_prompt = f"{conversation_history}User: {prompt}" if conversation_history else prompt
-
-                # Run the orchestrator asynchronously
-                async def run_orchestrator():
-                    result = await Runner.run(orchestrator, full_prompt)
-                    return result.final_output
-
-                # Execute async function
-                with st.spinner("Thinking..."):
-                    assistant_message = asyncio.run(run_orchestrator())
-                st.session_state.chat_messages.append({"role": "assistant", "content": assistant_message})
-            else:
-                st.session_state.chat_messages.append({
-                    "role": "assistant",
-                    "content": f"{api_provider}_API_KEY not configured. Please set up your API key in Settings > API & Models to use the chat feature."
-                })
-        except ImportError as e:
-            st.session_state.chat_messages.append({
-                "role": "assistant",
-                "content": f"Agent module not found. Please ensure the courseware_agents package is properly installed. Error: {str(e)}"
-            })
-        except Exception as e:
-            st.session_state.chat_messages.append({
-                "role": "assistant",
-                "content": f"Error connecting to AI service: {str(e)}"
-            })
-
-        st.rerun()
-
-    # Clear chat button
-    if st.session_state.chat_messages:
-        if st.button("Clear Chat", key="clear_chat"):
-            st.session_state.chat_messages = []
+    # Floating Bubble (Bottom Right)
+    if not st.session_state.chat_expanded:
+        st.button("💬", key="chat_bubble_btn")
+        if st.session_state.get("chat_bubble_btn"):
+            st.session_state.chat_expanded = True
             st.rerun()
+    else:
+        # Floating Chat Window
+        with st.container():
+            st.markdown('<div class="chat-window-wrapper">', unsafe_allow_html=True)
+            
+            # Header in HTML for better control
+            st.markdown("""
+                <div class="chat-window-header">
+                    <span style="font-size: 1.1rem; font-weight: 600;">🤖 Assistant</span>
+                </div>
+            """, unsafe_allow_html=True)
+            
+            # Close button (Streamlit)
+            col_space, col_close = st.columns([5, 1])
+            with col_close:
+                if st.button("✖️", key="close_chat_btn"):
+                    st.session_state.chat_expanded = False
+                    st.rerun()
+            
+            # Chat messages container
+            chat_container = st.container(height=400)
+            with chat_container:
+                for message in st.session_state.chat_messages:
+                    with st.chat_message(message["role"]):
+                        st.markdown(message["content"])
+            
+            # Chat input
+            with st.form(key="floating_chat_form", clear_on_submit=True):
+                prompt = st.text_input("Ask a question...", label_visibility="collapsed", placeholder="How can I help you?")
+                c1, c2 = st.columns([4, 1])
+                with c1:
+                    submitted = st.form_submit_button("Send", use_container_width=True, type="primary")
+                with c2:
+                    if st.form_submit_button("🗑️", use_container_width=True, help="Clear History"):
+                        st.session_state.chat_messages = []
+                        st.rerun()
+                
+                if submitted and prompt:
+                    handle_chat_logic(prompt)
+            
+            st.markdown('</div>', unsafe_allow_html=True)
 
 
 st.set_page_config(layout="wide")
@@ -260,6 +284,132 @@ st.markdown("""
     /* Compact divider above settings */
     [data-testid="stSidebar"] hr {
         margin: 0.5rem 0 !important;
+    }
+
+    /* Floating Chat Styles */
+    .floating-chat-container {
+        position: fixed;
+        bottom: 20px;
+        right: 20px;
+        z-index: 9999;
+    }
+    
+    .chat-bubble {
+        width: 60px;
+        height: 60px;
+        background-color: #007bff;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: white;
+        font-size: 30px;
+        cursor: pointer;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+        transition: transform 0.3s;
+    }
+    .chat-bubble:hover {
+        transform: scale(1.1);
+    }
+    
+    .chat-window {
+        position: fixed;
+        bottom: 90px;
+        right: 20px;
+        width: 400px;
+        height: 600px;
+        background-color: white;
+        border-radius: 15px;
+        box-shadow: 0 5px 40px rgba(0,0,0,0.2);
+        z-index: 10000;
+        display: flex;
+        flex-direction: column;
+        overflow: hidden;
+        border: 1px solid #eee;
+        animation: slideInChat 0.3s ease-out;
+    }
+    
+    @keyframes slideInChat {
+        from { transform: translateY(30px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+    
+    .chat-header {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        color: white;
+        padding: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        font-weight: 600;
+    }
+
+    /* Target the chat window container in Streamlit */
+    div[data-testid="stVerticalBlock"] > div:has(.chat-window-content) {
+        position: fixed;
+        bottom: 90px;
+        right: 20px;
+        width: 400px;
+        max-height: 600px;
+        background-color: white;
+        border-radius: 15px;
+        box-shadow: 0 5px 40px rgba(0,0,0,0.3);
+        z-index: 10000;
+        display: flex;
+        flex-direction: column;
+        border: 1px solid #eee;
+        padding: 0;
+    }
+
+    /* Make the floating button fixed */
+    div.stButton > button:has(div p:contains("💬")) {
+        position: fixed !important;
+        bottom: 20px !important;
+        right: 20px !important;
+        width: 60px !important;
+        height: 60px !important;
+        border-radius: 50% !important;
+        background-color: #007bff !important;
+        color: white !important;
+        font-size: 24px !important;
+        border: none !important;
+        box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
+        z-index: 9999 !important;
+        padding: 0 !important;
+        display: flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+    }
+    
+    /* Target the chat window container more broadly */
+    [data-testid="stVerticalBlock"] > div:has(.chat-window-wrapper) {
+        position: fixed !important;
+        bottom: 90px !important;
+        right: 20px !important;
+        width: 380px !important;
+        background-color: white !important;
+        border-radius: 15px !important;
+        box-shadow: 0 10px 40px rgba(0,0,0,0.2) !important;
+        z-index: 10000 !important;
+        padding: 0px !important;
+        border: 1px solid #eee !important;
+    }
+
+    .chat-window-wrapper {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+    }
+
+    .chat-window-header {
+        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
+        color: white;
+        padding: 12px 15px;
+        border-top-left-radius: 15px;
+        border-top-right-radius: 15px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -563,3 +713,6 @@ elif selected == "Add Assessment to AP":
     st.session_state['settings_page'] = None
     annex_assessment_v2 = lazy_import_annex_v2()
     annex_assessment_v2.app()
+
+# Always display the floating chat bubble/window
+display_floating_chat()
