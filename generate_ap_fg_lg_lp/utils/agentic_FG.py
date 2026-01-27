@@ -111,6 +111,67 @@ def generate_facilitators_guide(context: dict, name_of_organisation: str, sfw_da
     context['Reviewed_By'] = ""
     context['Approved_By'] = ""
 
+    # Prepare Assessment Summary with full LO descriptions and abbreviated assessment methods
+    assessment_summary = []
+    learning_units = context.get("Learning_Units", [])
+
+    # Map full assessment method names to abbreviations
+    method_abbreviations = {
+        "Written Assessment - Short Answer Questions": "WA-SAQ",
+        "Written Assessment": "WA",
+        "Written Exam": "WA-SAQ",
+        "Practical Performance": "PP",
+        "Practical Exam": "PP",
+        "Case Study": "CS",
+        "Oral Questioning": "OQ",
+        "Role Play": "RP",
+        "Project": "PJ",
+        "Portfolio": "PF",
+        "Observation": "OB",
+    }
+
+    for lu in learning_units:
+        # Get full LO description
+        lo_full = lu.get("LO", "")
+
+        # Get assessment methods and convert to abbreviations
+        assessment_methods = lu.get("Assessment_Methods", [])
+        abbreviated_methods = []
+        for method in assessment_methods:
+            # Check if it's already an abbreviation
+            if method in ["WA-SAQ", "WA", "PP", "CS", "OQ", "RP", "PJ", "PF", "OB"]:
+                abbreviated_methods.append(method)
+            else:
+                # Look up abbreviation
+                abbr = method_abbreviations.get(method, method)
+                # If not found, try to create abbreviation from first letters
+                if abbr == method and len(method) > 5:
+                    words = method.split()
+                    abbr = "-".join([w[0].upper() for w in words if w[0].isupper() or w == words[0]])
+                abbreviated_methods.append(abbr)
+
+        assessment_summary.append({
+            "LO": lo_full,
+            "Assessment_Methods": ", ".join(abbreviated_methods)
+        })
+
+    context['Assessment_Summary'] = assessment_summary
+
+    # Also update Learning_Units to have abbreviated assessment methods
+    for i, lu in enumerate(learning_units):
+        assessment_methods = lu.get("Assessment_Methods", [])
+        abbreviated_methods = []
+        for method in assessment_methods:
+            if method in ["WA-SAQ", "WA", "PP", "CS", "OQ", "RP", "PJ", "PF", "OB"]:
+                abbreviated_methods.append(method)
+            else:
+                abbr = method_abbreviations.get(method, method)
+                if abbr == method and len(method) > 5:
+                    words = method.split()
+                    abbr = "-".join([w[0].upper() for w in words if w[0].isupper() or w == words[0]])
+                abbreviated_methods.append(abbr)
+        context['Learning_Units'][i]['Assessment_Methods_Abbr'] = ", ".join(abbreviated_methods)
+
     doc.render(context, autoescape=True)
     # Use a temporary file to save the document
     with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_file:
