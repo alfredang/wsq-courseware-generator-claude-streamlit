@@ -3,6 +3,7 @@
 A comprehensive AI-powered courseware generation platform built with **OpenAI Agents SDK** and Streamlit. This system uses an **orchestrator-based multi-agent architecture** to automate the creation of educational documents including Course Proposals, Assessment Plans, Learning Guides, and more for workforce skills qualification (WSQ) training programs.
 
 ### 🔴 [Live Demo](https://courseware-generator-openai.streamlit.app/)
+### 📖 [Official Documentation](https://alfredang.github.io/courseware_openai_agents/)
 
 ## 🚀 Quick Start for New Users
 
