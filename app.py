@@ -5,6 +5,9 @@ from generate_ap_fg_lg_lp.utils.organizations import get_organizations, get_defa
 import asyncio
 import os
 
+# Import skills loader
+from skills import get_skill_response, get_skill_action, get_skills_system_message, list_skill_commands
+
 # Lazy loading functions for better performance
 def lazy_import_assessment():
     import generate_assessment.assessment_generation as assessment_generation
@@ -38,6 +41,10 @@ def lazy_import_company_settings():
     import company.company_settings as company_settings
     return company_settings
 
+def lazy_import_slides():
+    import generate_slides.slides_generation as slides_generation
+    return slides_generation
+
 
 def display_homepage():
     """Display homepage with navigation boxes and chatbot"""
@@ -62,76 +69,85 @@ def display_homepage():
         """, unsafe_allow_html=True)
     st.markdown("<h2 style='text-align: center; font-size: 1.75rem;'>WSQ Courseware Assistant with OpenAI Multi Agents</h2>", unsafe_allow_html=True)
 
-    # Navigation boxes - 3 columns, 2 rows
-    col1, col2, col3 = st.columns(3)
-
+    # Navigation boxes - 2 columns, 3 rows
     modules = [
-        {"name": "Generate CP", "icon": "📄", "desc": "Create Course Proposals", "key": "nav_cp"},
-        {"name": "Generate AP/FG/LG/LP", "icon": "📚", "desc": "Generate Courseware Documents", "key": "nav_courseware"},
-        {"name": "Generate Assessment", "icon": "✅", "desc": "Create Assessment Materials", "key": "nav_assessment"},
-        {"name": "Generate Brochure", "icon": "📰", "desc": "Design Course Brochures", "key": "nav_brochure"},
-        {"name": "Add Assessment to AP", "icon": "📎", "desc": "Attach Assessments to AP", "key": "nav_annex"},
-        {"name": "Check Documents", "icon": "🔍", "desc": "Validate Supporting Documents", "key": "nav_docs"},
+        {"name": "Generate CP", "icon": "📄", "desc": "Create Course Proposals", "menu": "Generate CP"},
+        {"name": "Generate AP/FG/LG/LP", "icon": "📚", "desc": "Generate Courseware Documents", "menu": "Generate AP/FG/LG/LP"},
+        {"name": "Generate Assessment", "icon": "✅", "desc": "Create Assessment Materials", "menu": "Generate Assessment"},
+        {"name": "Generate Slides", "icon": "🎯", "desc": "Create Presentation Slides", "menu": "Generate Slides"},
+        {"name": "Generate Brochure", "icon": "📰", "desc": "Design Course Brochures", "menu": "Generate Brochure"},
+        {"name": "Add Assessment to AP", "icon": "📎", "desc": "Attach Assessments to AP", "menu": "Add Assessment to AP"},
+        {"name": "Check Documents", "icon": "🔍", "desc": "Validate Supporting Documents", "menu": "Check Documents"},
     ]
 
-    # First row
-    with col1:
-        with st.container(border=True):
-            st.markdown(f"<div class='card-header'>{modules[0]['icon']} {modules[0]['name']}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='card-desc'>{modules[0]['desc']}</div>", unsafe_allow_html=True)
-            if st.button("Open", key=modules[0]['key'], use_container_width=True):
-                st.session_state['nav_to'] = "Generate CP"
-                st.rerun()
+    # Display modules in 2 columns, 3 rows
+    for i in range(0, len(modules), 2):
+        col1, col2 = st.columns(2)
 
-    with col2:
-        with st.container(border=True):
-            st.markdown(f"<div class='card-header'>{modules[1]['icon']} {modules[1]['name']}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='card-desc'>{modules[1]['desc']}</div>", unsafe_allow_html=True)
-            if st.button("Open", key=modules[1]['key'], use_container_width=True):
-                st.session_state['nav_to'] = "Generate AP/FG/LG/LP"
-                st.rerun()
+        with col1:
+            m = modules[i]
+            with st.container(border=True):
+                st.markdown(f"<div class='card-header'>{m['icon']} {m['name']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='card-desc'>{m['desc']}</div>", unsafe_allow_html=True)
+                if st.button("Open", key=f"nav_{i}", use_container_width=True):
+                    st.session_state['nav_to'] = m['menu']
+                    st.rerun()
 
-    with col3:
-        with st.container(border=True):
-            st.markdown(f"<div class='card-header'>{modules[2]['icon']} {modules[2]['name']}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='card-desc'>{modules[2]['desc']}</div>", unsafe_allow_html=True)
-            if st.button("Open", key=modules[2]['key'], use_container_width=True):
-                st.session_state['nav_to'] = "Generate Assessment"
-                st.rerun()
+        with col2:
+            if i + 1 < len(modules):
+                m = modules[i + 1]
+                with st.container(border=True):
+                    st.markdown(f"<div class='card-header'>{m['icon']} {m['name']}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='card-desc'>{m['desc']}</div>", unsafe_allow_html=True)
+                    if st.button("Open", key=f"nav_{i+1}", use_container_width=True):
+                        st.session_state['nav_to'] = m['menu']
+                        st.rerun()
 
-    # Second row
-    col4, col5, col6 = st.columns(3)
 
-    with col4:
-        with st.container(border=True):
-            st.markdown(f"<div class='card-header'>{modules[3]['icon']} {modules[3]['name']}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='card-desc'>{modules[3]['desc']}</div>", unsafe_allow_html=True)
-            if st.button("Open", key=modules[3]['key'], use_container_width=True):
-                st.session_state['nav_to'] = "Generate Brochure"
-                st.rerun()
 
-    with col5:
-        with st.container(border=True):
-            st.markdown(f"<div class='card-header'>{modules[4]['icon']} {modules[4]['name']}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='card-desc'>{modules[4]['desc']}</div>", unsafe_allow_html=True)
-            if st.button("Open", key=modules[4]['key'], use_container_width=True):
-                st.session_state['nav_to'] = "Add Assessment to AP"
-                st.rerun()
+def get_chatbot_system_message():
+    """Generate the chatbot system message with dynamically loaded skills."""
+    base_message = """You are an AI assistant for WSQ (Workforce Skills Qualifications) courseware generation. You help users create training materials for Singapore's national credential system.
 
-    with col6:
-        with st.container(border=True):
-            st.markdown(f"<div class='card-header'>{modules[5]['icon']} {modules[5]['name']}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='card-desc'>{modules[5]['desc']}</div>", unsafe_allow_html=True)
-            if st.button("Open", key=modules[5]['key'], use_container_width=True):
-                st.session_state['nav_to'] = "Check Documents"
-                st.rerun()
+**IMPORTANT**: You are a skill-driven assistant. When users ask questions, ALWAYS check if their request relates to one of your skills. Use the skill's detailed instructions and knowledge to provide accurate, specific guidance.
 
-    # Homepage cards end here
-    pass
+"""
+    # Add skills from .skills folder
+    skills_message = get_skills_system_message()
+
+    response_guide = """
+## How to Respond
+
+1. **Identify the relevant skill** - Match user requests to your skills, even without exact commands
+2. **Use skill knowledge** - Reference the Instructions section of relevant skills for detailed guidance
+3. **Provide specific answers** - Use the process steps, tips, and requirements from skills
+4. **Offer to navigate** - Tell users you can take them to the relevant module
+5. **Be concise but thorough** - Users are busy training professionals
+
+## Navigation
+
+Users can access modules from the sidebar, or type skill commands:
+- `/generate_course_proposal` - Create Course Proposals
+- `/generate_ap_fg_lg_lp` - Generate courseware documents
+- `/generate_assessment` - Create assessment materials
+"""
+    return base_message + skills_message + response_guide
+
 
 def handle_chat_logic(prompt):
     """Process chat message and get response from AI"""
     if not prompt or not prompt.strip():
+        return
+
+    # Check for skill commands using the skills loader
+    skill_action = get_skill_action(prompt.strip())
+    if skill_action:
+        st.session_state.chat_messages.append({"role": "user", "content": prompt})
+        st.session_state.chat_messages.append({"role": "assistant", "content": skill_action['response']})
+        # Auto-navigate if skill has a navigate target
+        if skill_action.get('navigate'):
+            st.session_state['nav_to'] = skill_action['navigate']
+        st.rerun()
         return
 
     # Add user message to history
@@ -139,13 +155,21 @@ def handle_chat_logic(prompt):
 
     try:
         from settings.api_manager import load_api_keys
-        from agents import Runner
+        from settings.api_database import get_task_model_assignment, get_model_by_name
 
         api_keys = load_api_keys()
 
-        # Get selected model and API provider from session state
-        chat_model = st.session_state.get('selected_model')
-        api_provider = st.session_state.get('selected_api_provider', 'OPENROUTER')
+        # Check for specific Chatbot assignment first
+        chatbot_assignment = get_task_model_assignment("chatbot")
+
+        if chatbot_assignment:
+            chat_model = chatbot_assignment.get("model_name")
+            api_provider = chatbot_assignment.get("api_provider", "OPENROUTER")
+        else:
+            # Fallback to selected model (which handles page-specific or global defaults)
+            chat_model = st.session_state.get('selected_model')
+            api_provider = st.session_state.get('selected_api_provider', 'OPENROUTER')
+
         api_key = api_keys.get(f"{api_provider}_API_KEY", "")
 
         if not chat_model:
@@ -154,27 +178,31 @@ def handle_chat_logic(prompt):
                 "content": "No model selected. Please select a model from the sidebar."
             })
         elif api_key:
-            # Import and create the orchestrator
-            from courseware_agents.orchestrator import create_orchestrator
-            orchestrator = create_orchestrator(model_name=chat_model)
+            # Get the model ID from database
+            model_info = get_model_by_name(chat_model)
+            # model_id is in config.model, not at top level
+            if model_info and model_info.get("config"):
+                model_id = model_info["config"].get("model", chat_model)
+            else:
+                model_id = chat_model
 
-            # Build conversation context from history
-            conversation_history = ""
-            for msg in st.session_state.chat_messages[:-1]:
-                role = "User" if msg["role"] == "user" else "Assistant"
-                conversation_history += f"{role}: {msg['content']}\n\n"
+            # Build messages list for chat
+            messages = []
+            for msg in st.session_state.chat_messages:
+                messages.append({"role": msg["role"], "content": msg["content"]})
 
-            # Create the full prompt with context
-            full_prompt = f"{conversation_history}User: {prompt}" if conversation_history else prompt
-
-            # Run the orchestrator asynchronously
-            async def run_orchestrator():
-                result = await Runner.run(orchestrator, full_prompt)
-                return result.final_output
-
-            # Execute async function
+            # Use appropriate SDK based on provider
             with st.spinner("Thinking..."):
-                assistant_message = asyncio.run(run_orchestrator())
+                if api_provider == "ANTHROPIC":
+                    # Use Anthropic's native SDK
+                    assistant_message = _call_anthropic_chat(api_key, model_id, messages)
+                elif api_provider == "GEMINI":
+                    # Use Google's native Generative AI SDK
+                    assistant_message = _call_gemini_chat(api_key, model_id, messages)
+                else:
+                    # Use OpenAI-compatible SDK for other providers (OpenRouter, OpenAI, Groq, Grok, DeepSeek)
+                    assistant_message = _call_openai_compatible_chat(api_key, api_provider, model_id, messages)
+
             st.session_state.chat_messages.append({"role": "assistant", "content": assistant_message})
         else:
             st.session_state.chat_messages.append({
@@ -188,228 +216,178 @@ def handle_chat_logic(prompt):
         })
     st.rerun()
 
-def display_floating_chat():
-    """Display the floating chat bubble and window"""
+
+def _call_anthropic_chat(api_key: str, model_id: str, messages: list) -> str:
+    """Call Anthropic's native API for chat"""
+    try:
+        from anthropic import Anthropic
+
+        client = Anthropic(api_key=api_key)
+
+        # Anthropic expects system message separately
+        system_message = get_chatbot_system_message()
+
+        # Convert messages format (Anthropic doesn't use 'system' role in messages)
+        anthropic_messages = []
+        for msg in messages:
+            if msg["role"] in ["user", "assistant"]:
+                anthropic_messages.append({
+                    "role": msg["role"],
+                    "content": msg["content"]
+                })
+
+        response = client.messages.create(
+            model=model_id,
+            max_tokens=4096,
+            system=system_message,
+            messages=anthropic_messages
+        )
+
+        return response.content[0].text
+    except Exception as e:
+        raise Exception(f"Anthropic API error: {str(e)}")
+
+
+def _call_gemini_chat(api_key: str, model_id: str, messages: list) -> str:
+    """Call Google's Gemini API for chat"""
+    try:
+        import google.generativeai as genai
+
+        genai.configure(api_key=api_key)
+
+        # Create the model - handle model_id format (might have 'google/' prefix)
+        if model_id.startswith("google/"):
+            model_id = model_id.replace("google/", "")
+
+        model = genai.GenerativeModel(
+            model_name=model_id,
+            system_instruction=get_chatbot_system_message()
+        )
+
+        # Convert messages to Gemini format
+        gemini_history = []
+        current_message = None
+
+        for msg in messages[:-1]:  # All messages except the last one go into history
+            if msg["role"] == "user":
+                gemini_history.append({"role": "user", "parts": [msg["content"]]})
+            elif msg["role"] == "assistant":
+                gemini_history.append({"role": "model", "parts": [msg["content"]]})
+
+        # Get the last user message
+        if messages and messages[-1]["role"] == "user":
+            current_message = messages[-1]["content"]
+        else:
+            current_message = messages[-1]["content"] if messages else ""
+
+        # Start chat with history
+        chat = model.start_chat(history=gemini_history)
+        response = chat.send_message(current_message)
+
+        return response.text
+    except Exception as e:
+        raise Exception(f"Gemini API error: {str(e)}")
+
+
+def _call_openai_compatible_chat(api_key: str, api_provider: str, model_id: str, messages: list) -> str:
+    """Call OpenAI-compatible API for chat (OpenRouter, OpenAI, Groq, Grok, DeepSeek)"""
+    try:
+        from openai import OpenAI
+
+        # Provider base URLs (all OpenAI-compatible)
+        base_urls = {
+            "OPENROUTER": "https://openrouter.ai/api/v1",
+            "OPENAI": "https://api.openai.com/v1",
+            "GROQ": "https://api.groq.com/openai/v1",
+            "GROK": "https://api.x.ai/v1",
+            "DEEPSEEK": "https://api.deepseek.com/v1",
+        }
+
+        base_url = base_urls.get(api_provider, "https://openrouter.ai/api/v1")
+
+        client = OpenAI(api_key=api_key, base_url=base_url)
+
+        # Add system message if not present
+        chat_messages = [{"role": "system", "content": get_chatbot_system_message()}]
+        chat_messages.extend(messages)
+
+        response = client.chat.completions.create(
+            model=model_id,
+            messages=chat_messages,
+            max_tokens=4096
+        )
+
+        return response.choices[0].message.content
+    except Exception as e:
+        raise Exception(f"{api_provider} API error: {str(e)}")
+
+def display_bottom_chatbot():
+    """Display a permanent chatbot at the bottom of the page"""
     # Initialize session state
     if "chat_messages" not in st.session_state:
         st.session_state.chat_messages = []
-    if "chat_expanded" not in st.session_state:
-        st.session_state.chat_expanded = False
 
-    # Floating Bubble (Bottom Right)
-    if not st.session_state.chat_expanded:
-        st.button("💬", key="chat_bubble_btn")
-        if st.session_state.get("chat_bubble_btn"):
-            st.session_state.chat_expanded = True
-            st.rerun()
-    else:
-        # Floating Chat Window
-        with st.container():
-            st.markdown('<div class="chat-window-wrapper">', unsafe_allow_html=True)
-            
-            # Header in HTML for better control
-            st.markdown("""
-                <div class="chat-window-header">
-                    <span style="font-size: 1.1rem; font-weight: 600;">🤖 Assistant</span>
-                </div>
-            """, unsafe_allow_html=True)
-            
-            # Close button (Streamlit)
-            col_space, col_close = st.columns([5, 1])
-            with col_close:
-                if st.button("✖️", key="close_chat_btn"):
-                    st.session_state.chat_expanded = False
-                    st.rerun()
-            
-            # Chat messages container
-            chat_container = st.container(height=400)
-            with chat_container:
-                for message in st.session_state.chat_messages:
-                    with st.chat_message(message["role"]):
-                        st.markdown(message["content"])
-            
-            # Chat input
-            with st.form(key="floating_chat_form", clear_on_submit=True):
-                prompt = st.text_input("Ask a question...", label_visibility="collapsed", placeholder="How can I help you?")
-                c1, c2 = st.columns([4, 1])
-                with c1:
-                    submitted = st.form_submit_button("Send", use_container_width=True, type="primary")
-                with c2:
-                    if st.form_submit_button("🗑️", use_container_width=True, help="Clear History"):
-                        st.session_state.chat_messages = []
-                        st.rerun()
-                
-                if submitted and prompt:
-                    handle_chat_logic(prompt)
-            
-            st.markdown('</div>', unsafe_allow_html=True)
+    # Collapsible expander for chatbot
+    with st.expander("💬 AI Assistant - Ask me anything about WSQ courseware", expanded=False):
+        # Chat messages display (scrollable container)
+        messages_container = st.container(height=300)
+        with messages_container:
+            if not st.session_state.chat_messages:
+                # Build welcome message with dynamic skills list
+                skill_commands = list_skill_commands()
+                skills_list = ", ".join([f"`{cmd}`" for cmd in skill_commands]) if skill_commands else "No skills configured"
+                welcome_msg = f"""Hi! I can help you with WSQ courseware. Try these commands: {skills_list}
+
+Or just ask me anything!"""
+                st.chat_message("assistant").markdown(welcome_msg)
+            for msg in st.session_state.chat_messages:
+                st.chat_message(msg["role"]).markdown(msg["content"])
+
+        # Input row with text input and clear button
+        col1, col2 = st.columns([6, 1])
+
+        with col1:
+            # Input using callback
+            def send_message():
+                user_input = st.session_state.get("chat_user_input", "")
+                if user_input and user_input.strip():
+                    handle_chat_logic(user_input)
+                    st.session_state.chat_user_input = ""
+
+            st.text_input(
+                "Message",
+                placeholder="Type your message and press Enter...",
+                key="chat_user_input",
+                on_change=send_message,
+                label_visibility="collapsed"
+            )
+
+        with col2:
+            if st.button("Clear", key="clear_chat_btn", use_container_width=True):
+                st.session_state.chat_messages = []
+                st.rerun()
 
 
 st.set_page_config(layout="wide")
 
-# Custom CSS to increase sidebar width and reduce padding
+# Global CSS
 st.markdown("""
 <style>
-    [data-testid="stSidebar"] {
-        min-width: 350px;
-        max-width: 350px;
-    }
-    [data-testid="stSidebar"] > div:first-child {
-        width: 350px;
-    }
-    /* Compact sidebar layout */
-    [data-testid="stSidebar"] .stSelectbox {
-        margin-bottom: 0.3rem;
-    }
-    [data-testid="stSidebar"] .stSelectbox label {
-        margin-bottom: 0.1rem;
-        font-size: 0.85rem;
-    }
-    /* Compact the option menu items */
-    [data-testid="stSidebar"] .nav-link {
-        padding: 0.4rem 0.8rem !important;
-        font-size: 0.9rem !important;
-    }
-    /* Reduce option menu container padding */
-    [data-testid="stSidebar"] .nav {
-        gap: 0.1rem !important;
-    }
-    /* Reduce vertical spacing in sidebar */
-    [data-testid="stSidebar"] .block-container {
-        padding-top: 0.5rem;
-    }
-    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] > div {
-        gap: 0.3rem;
-    }
-    /* Compact divider above settings */
-    [data-testid="stSidebar"] hr {
-        margin: 0.5rem 0 !important;
+    /* Sidebar styling - wider width */
+    [data-testid="stSidebar"] { min-width: 350px; max-width: 350px; }
+    [data-testid="stSidebar"] > div:first-child { width: 350px; }
+    [data-testid="stSidebar"] hr { margin: 0.5rem 0 !important; }
+
+    /* Disabled selectbox styling - keep text white */
+    [data-testid="stSidebar"] [data-baseweb="select"] [aria-disabled="true"] {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        opacity: 1 !important;
     }
 
-    /* Floating Chat Styles */
-    .floating-chat-container {
-        position: fixed;
-        bottom: 20px;
-        right: 20px;
-        z-index: 9999;
-    }
-    
-    .chat-bubble {
-        width: 60px;
-        height: 60px;
-        background-color: #007bff;
-        border-radius: 50%;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        color: white;
-        font-size: 30px;
-        cursor: pointer;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3);
-        transition: transform 0.3s;
-    }
-    .chat-bubble:hover {
-        transform: scale(1.1);
-    }
-    
-    .chat-window {
-        position: fixed;
-        bottom: 90px;
-        right: 20px;
-        width: 400px;
-        height: 600px;
-        background-color: white;
-        border-radius: 15px;
-        box-shadow: 0 5px 40px rgba(0,0,0,0.2);
-        z-index: 10000;
-        display: flex;
-        flex-direction: column;
-        overflow: hidden;
-        border: 1px solid #eee;
-        animation: slideInChat 0.3s ease-out;
-    }
-    
-    @keyframes slideInChat {
-        from { transform: translateY(30px); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
-    }
-    
-    .chat-header {
-        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-        color: white;
-        padding: 15px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-weight: 600;
-    }
-
-    /* Target the chat window container in Streamlit */
-    div[data-testid="stVerticalBlock"] > div:has(.chat-window-content) {
-        position: fixed;
-        bottom: 90px;
-        right: 20px;
-        width: 400px;
-        max-height: 600px;
-        background-color: white;
-        border-radius: 15px;
-        box-shadow: 0 5px 40px rgba(0,0,0,0.3);
-        z-index: 10000;
-        display: flex;
-        flex-direction: column;
-        border: 1px solid #eee;
-        padding: 0;
-    }
-
-    /* Make the floating button fixed */
-    div.stButton > button:has(div p:contains("💬")) {
-        position: fixed !important;
-        bottom: 20px !important;
-        right: 20px !important;
-        width: 60px !important;
-        height: 60px !important;
-        border-radius: 50% !important;
-        background-color: #007bff !important;
-        color: white !important;
-        font-size: 24px !important;
-        border: none !important;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.3) !important;
-        z-index: 9999 !important;
-        padding: 0 !important;
-        display: flex !important;
-        align-items: center !important;
-        justify-content: center !important;
-    }
-    
-    /* Target the chat window container more broadly */
-    [data-testid="stVerticalBlock"] > div:has(.chat-window-wrapper) {
-        position: fixed !important;
-        bottom: 90px !important;
-        right: 20px !important;
-        width: 380px !important;
-        background-color: white !important;
-        border-radius: 15px !important;
-        box-shadow: 0 10px 40px rgba(0,0,0,0.2) !important;
-        z-index: 10000 !important;
-        padding: 0px !important;
-        border: 1px solid #eee !important;
-    }
-
-    .chat-window-wrapper {
-        display: flex;
-        flex-direction: column;
-        width: 100%;
-    }
-
-    .chat-window-header {
-        background: linear-gradient(135deg, #007bff 0%, #0056b3 100%);
-        color: white;
-        padding: 12px 15px;
-        border-top-left-radius: 15px;
-        border-top-right-radius: 15px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+    [data-testid="stSidebar"] [data-baseweb="select"] [aria-disabled="true"] div {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -424,6 +402,15 @@ def initialize_apis():
         pass
 
 initialize_apis()
+
+# Ensure built-in models are always up to date (runs on each session start)
+if 'models_refreshed' not in st.session_state:
+    try:
+        from settings.api_database import refresh_builtin_models
+        refresh_builtin_models()
+        st.session_state['models_refreshed'] = True
+    except Exception:
+        pass
 
 # Get organizations and setup company selection - cached
 @st.cache_data
@@ -476,7 +463,19 @@ with st.sidebar:
 
     # Model Selection (no divider for compact layout)
     from settings.api_manager import get_all_available_models, get_all_api_key_configs, load_api_keys
-    from settings.api_database import get_all_models as db_get_all_models, get_default_model, set_default_model
+    from settings.api_database import get_all_models as db_get_all_models, get_task_model_assignment
+
+    # Mapping from menu names to task IDs
+    MENU_TO_TASK_ID = {
+        "Home": "chatbot",
+        "Generate CP": "generate_cp",
+        "Generate AP/FG/LG/LP": "generate_courseware",
+        "Generate Assessment": "generate_assessment",
+        "Generate Slides": "generate_slides",
+        "Generate Brochure": "generate_brochure",
+        "Add Assessment to AP": "add_assessment_ap",
+        "Check Documents": "check_documents",
+    }
 
     # Get all API key configurations and current keys
     api_key_configs = get_all_api_key_configs()
@@ -499,9 +498,29 @@ with st.sidebar:
     provider_names = [p[0] for p in all_providers]
     provider_display = [p[1] for p in all_providers]
 
-    # Default to OPENROUTER
-    if 'selected_api_provider' not in st.session_state:
-        st.session_state['selected_api_provider'] = "OPENROUTER"
+    # Check if current menu has a model assignment
+    current_menu = st.session_state.get('previous_menu_selection', 'Home')
+    task_id = MENU_TO_TASK_ID.get(current_menu, None)
+    task_assignment = get_task_model_assignment(task_id) if task_id else None
+
+    # Fallback to Global Default if no specific task assignment
+    if not task_assignment:
+        task_assignment = get_task_model_assignment("global")
+
+    # If task has an assignment, use it; otherwise use session state or default
+    if task_assignment:
+        assigned_provider = task_assignment.get("api_provider", "OPENROUTER")
+        assigned_model = task_assignment.get("model_name", "")
+        # Update session state to reflect the assignment
+        st.session_state['selected_api_provider'] = assigned_provider
+        st.session_state['assigned_model_for_task'] = assigned_model
+    else:
+        # Default to OPENROUTER if no assignment and no previous selection
+        if 'selected_api_provider' not in st.session_state:
+            st.session_state['selected_api_provider'] = "OPENROUTER"
+        # Clear any task-specific model assignment
+        if 'assigned_model_for_task' in st.session_state:
+            del st.session_state['assigned_model_for_task']
 
     # Find index of current provider
     try:
@@ -509,83 +528,54 @@ with st.sidebar:
     except ValueError:
         default_provider_idx = 0
 
-    # API Provider selector
+    # API Provider selector (disabled if task has assignment)
     selected_provider_idx = st.selectbox(
         "API Provider:",
         range(len(provider_names)),
         format_func=lambda x: provider_display[x],
         index=default_provider_idx,
-        help="Select which API key to use for models"
+        help="Select which API key to use for models" + (" (Set by Model Assignment)" if task_assignment else ""),
+        disabled=bool(task_assignment)
     )
     selected_provider = provider_names[selected_provider_idx]
-    st.session_state['selected_api_provider'] = selected_provider
+    if not task_assignment:
+        st.session_state['selected_api_provider'] = selected_provider
 
     # Get all models and filter by selected provider (only show enabled models)
     all_db_models = db_get_all_models(include_builtin=True)
     filtered_models = [m for m in all_db_models
-                       if m.get("api_provider", "OPENROUTER") == selected_provider
+                       if m.get("api_provider", "OPENROUTER") == st.session_state['selected_api_provider']
                        and m.get("is_enabled", True)]
 
     # If no models for this provider, show message
     if not filtered_models:
-        st.warning(f"No models configured for {selected_provider}. Add models in Settings → Add Custom Model.")
+        st.warning(f"No models configured for {st.session_state['selected_api_provider']}. Add models in Settings → Add Custom Model.")
         model_names = []
         st.session_state['selected_model'] = None
         st.session_state['selected_model_config'] = None
     else:
         model_names = [m["name"] for m in filtered_models]
 
-        # Get default model from database for this provider
-        stored_default = get_default_model(selected_provider)
-
-        # Find default model index, or use first available
-        default_model_idx = 0
-        if stored_default and stored_default in model_names:
-            default_model_idx = model_names.index(stored_default)
-
-        # Track provider changes to reset selection
-        if 'last_api_provider' not in st.session_state:
-            st.session_state['last_api_provider'] = selected_provider
-
-        # When provider changes, reset to that provider's default
-        provider_changed = st.session_state['last_api_provider'] != selected_provider
-        if provider_changed:
-            st.session_state['last_api_provider'] = selected_provider
-            # Clear user's explicit selection for this provider
-            if 'user_selected_model' in st.session_state:
-                del st.session_state['user_selected_model']
-
-        # Determine which model to select:
-        # 1. If user explicitly selected a model this session, use it
-        # 2. Otherwise, use the default model from database
-        if 'user_selected_model' in st.session_state and st.session_state['user_selected_model'] in model_names:
+        # Determine which model to select
+        # If task has an assignment, use assigned model
+        if task_assignment and st.session_state.get('assigned_model_for_task') in model_names:
+            current_idx = model_names.index(st.session_state['assigned_model_for_task'])
+        elif 'user_selected_model' in st.session_state and st.session_state['user_selected_model'] in model_names:
             current_idx = model_names.index(st.session_state['user_selected_model'])
         else:
-            current_idx = default_model_idx
+            current_idx = 0
 
-        # Model selector with Set Default button
-        col_model, col_star = st.columns([5, 1])
-        with col_model:
-            selected_model_idx = st.selectbox(
-                "Select Model:",
-                range(len(model_names)),
-                format_func=lambda x: model_names[x],
-                index=current_idx
-            )
-        with col_star:
-            st.markdown("<div style='height: 28px;'></div>", unsafe_allow_html=True)  # Spacing
-            current_model = model_names[selected_model_idx]
-            is_default = stored_default == current_model
-            star_icon = "⭐" if is_default else "☆"
-            if st.button(star_icon, key="set_default_btn", help="Set as default model for this provider"):
-                if not is_default:
-                    set_default_model(selected_provider, current_model)
-                    # Update user selection to the new default
-                    st.session_state['user_selected_model'] = current_model
-                    st.rerun()
+        # Model selector (disabled if task has assignment)
+        selected_model_idx = st.selectbox(
+            "Select Model:",
+            range(len(model_names)),
+            format_func=lambda x: model_names[x],
+            index=current_idx,
+            disabled=bool(task_assignment)
+        )
 
-        # Track user's explicit model selection (only if different from what was shown)
-        if model_names[selected_model_idx] != model_names[current_idx]:
+        # Track user's explicit model selection (only if no task assignment)
+        if not task_assignment and model_names[selected_model_idx] != model_names[current_idx]:
             st.session_state['user_selected_model'] = model_names[selected_model_idx]
 
         # Store selection in session state
@@ -598,12 +588,17 @@ with st.sidebar:
         else:
             st.session_state['selected_model_config'] = None
 
+    # Show indicator if using model assignment
+    if task_assignment:
+        st.caption(f"📌 Using assigned model for {current_menu}")
+
     # Main features menu (no divider for compact layout)
     menu_options = [
         "Home",
         "Generate CP",
         "Generate AP/FG/LG/LP",
         "Generate Assessment",
+        "Generate Slides",
         "Generate Brochure",
         "Add Assessment to AP",
         "Check Documents",
@@ -614,6 +609,7 @@ with st.sidebar:
         "filetype-doc",
         "file-earmark-richtext",
         "clipboard-check",
+        "easel",
         "file-earmark-pdf",
         "folder-symlink",
         "search",
@@ -663,6 +659,11 @@ previous_menu = st.session_state.get('previous_menu_selection', None)
 menu_changed = previous_menu is not None and previous_menu != selected
 st.session_state['previous_menu_selection'] = selected
 
+# If menu changed, rerun once to update sidebar assignments immediately
+if menu_changed:
+    st.rerun()
+
+# Main content area (full width)
 # Display the selected app - using lazy loading for performance
 if settings_page == "API & LLM Models":
     settings = lazy_import_settings()
@@ -699,6 +700,11 @@ elif selected == "Generate Assessment":
     assessment_generation = lazy_import_assessment()
     assessment_generation.app()
 
+elif selected == "Generate Slides":
+    st.session_state['settings_page'] = None
+    slides_generation = lazy_import_slides()
+    slides_generation.app()
+
 elif selected == "Check Documents":
     st.session_state['settings_page'] = None
     sup_doc = lazy_import_docs()
@@ -714,5 +720,7 @@ elif selected == "Add Assessment to AP":
     annex_assessment_v2 = lazy_import_annex_v2()
     annex_assessment_v2.app()
 
-# Always display the floating chat bubble/window
-display_floating_chat()
+# Permanent chatbot at the bottom
+st.divider()
+display_bottom_chatbot()
+
