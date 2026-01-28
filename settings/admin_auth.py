@@ -2,7 +2,8 @@
 Admin Authentication Module
 
 Simple authentication for protecting Settings pages.
-Admin credentials are stored in .streamlit/secrets.toml
+Admin credentials are stored in SQLite database.
+Initial setup requires ADMIN_USERNAME and ADMIN_PASSWORD in .streamlit/secrets.toml or environment variables.
 
 Author: Wong Xin Ping
 Date: 26 January 2026
@@ -12,22 +13,12 @@ import streamlit as st
 import hashlib
 import os
 
-
-def get_admin_credentials():
-    """Get admin credentials from secrets.toml or environment variables"""
-    # Default credentials (should be changed in production)
-    default_username = "admin"
-    default_password = "Tertiary@888"
-
-    # Try to get from secrets.toml or environment
-    try:
-        username = st.secrets.get("ADMIN_USERNAME", os.environ.get("ADMIN_USERNAME", default_username))
-        password = st.secrets.get("ADMIN_PASSWORD", os.environ.get("ADMIN_PASSWORD", default_password))
-    except Exception:
-        username = os.environ.get("ADMIN_USERNAME", default_username)
-        password = os.environ.get("ADMIN_PASSWORD", default_password)
-
-    return username, password
+from settings.api_database import (
+    verify_admin_password,
+    admin_credentials_exist,
+    set_admin_credentials,
+    get_admin_credentials_from_db,
+)
 
 
 def hash_password(password: str) -> str:
@@ -46,8 +37,55 @@ def logout():
     st.session_state['admin_username'] = None
 
 
+def _get_initial_credentials():
+    """Get initial credentials from secrets/env for first-time setup"""
+    try:
+        username = st.secrets.get("ADMIN_USERNAME", os.environ.get("ADMIN_USERNAME", ""))
+        password = st.secrets.get("ADMIN_PASSWORD", os.environ.get("ADMIN_PASSWORD", ""))
+    except Exception:
+        username = os.environ.get("ADMIN_USERNAME", "")
+        password = os.environ.get("ADMIN_PASSWORD", "")
+    return username, password
+
+
 def login_page():
     """Display login page and handle authentication"""
+    # Check if admin credentials exist in database
+    if not admin_credentials_exist():
+        # First-time setup - try to get from secrets/env
+        username, password = _get_initial_credentials()
+        if username and password:
+            set_admin_credentials(username, password)
+            st.info("Admin credentials initialized from configuration.")
+        else:
+            # Show setup form
+            st.markdown("### Initial Admin Setup")
+            st.warning("No admin credentials found. Please set up admin account.")
+            st.caption("You can also set ADMIN_USERNAME and ADMIN_PASSWORD in .streamlit/secrets.toml or environment variables.")
+
+            with st.form("admin_setup_form"):
+                new_username = st.text_input("Username", placeholder="Enter admin username")
+                new_password = st.text_input("Password", type="password", placeholder="Enter admin password")
+                confirm_password = st.text_input("Confirm Password", type="password", placeholder="Confirm password")
+
+                submitted = st.form_submit_button("Create Admin Account", type="primary")
+
+                if submitted:
+                    if not new_username or not new_password:
+                        st.error("Username and password are required")
+                    elif new_password != confirm_password:
+                        st.error("Passwords do not match")
+                    elif len(new_password) < 8:
+                        st.error("Password must be at least 8 characters")
+                    else:
+                        if set_admin_credentials(new_username, new_password):
+                            st.success("Admin account created successfully!")
+                            st.rerun()
+                        else:
+                            st.error("Failed to create admin account")
+            return
+
+    # Normal login flow
     st.markdown("### Admin Login")
     st.caption("Enter admin credentials to access settings")
 
@@ -60,19 +98,13 @@ def login_page():
             submitted = st.form_submit_button("Login", type="primary", use_container_width=True)
 
         if submitted:
-            admin_username, admin_password = get_admin_credentials()
-
-            if username == admin_username and password == admin_password:
+            if verify_admin_password(username, password):
                 st.session_state['admin_authenticated'] = True
                 st.session_state['admin_username'] = username
                 st.success("Login successful!")
                 st.rerun()
             else:
                 st.error("Invalid username or password")
-
-    st.markdown("---")
-    st.caption("Default credentials: admin / Tertiary@888")
-    st.caption("To change credentials, add ADMIN_USERNAME and ADMIN_PASSWORD to .streamlit/secrets.toml")
 
 
 def require_auth(page_function):
@@ -96,3 +128,32 @@ def show_logout_button():
             if st.button("Logout", key="logout_btn", use_container_width=True):
                 logout()
                 st.rerun()
+
+
+def change_password_form():
+    """Display form to change admin password"""
+    if not is_authenticated():
+        return
+
+    st.markdown("### Change Password")
+
+    with st.form("change_password_form"):
+        current_password = st.text_input("Current Password", type="password")
+        new_password = st.text_input("New Password", type="password")
+        confirm_password = st.text_input("Confirm New Password", type="password")
+
+        submitted = st.form_submit_button("Change Password", type="primary")
+
+        if submitted:
+            username = st.session_state.get('admin_username', '')
+            if not verify_admin_password(username, current_password):
+                st.error("Current password is incorrect")
+            elif new_password != confirm_password:
+                st.error("New passwords do not match")
+            elif len(new_password) < 8:
+                st.error("Password must be at least 8 characters")
+            else:
+                if set_admin_credentials(username, new_password):
+                    st.success("Password changed successfully!")
+                else:
+                    st.error("Failed to change password")

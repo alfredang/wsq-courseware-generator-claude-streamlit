@@ -41,9 +41,24 @@ except ImportError as e:
         pass
 
 
-def setup_openrouter() -> bool:
+# Provider base URLs mapping
+PROVIDER_BASE_URLS = {
+    "OPENROUTER": "https://openrouter.ai/api/v1",
+    "OPENAI": "https://api.openai.com/v1",
+    "ANTHROPIC": "https://api.anthropic.com/v1",
+    "GEMINI": "https://generativelanguage.googleapis.com/v1beta",
+    "GROQ": "https://api.groq.com/openai/v1",
+    "GROK": "https://api.x.ai/v1",
+    "DEEPSEEK": "https://api.deepseek.com/v1",
+}
+
+
+def setup_api_provider(api_provider: str = "OPENROUTER") -> bool:
     """
-    Configure the agents library to use OpenRouter as the API endpoint.
+    Configure the agents library to use the specified API provider.
+
+    Args:
+        api_provider: The API provider to use (OPENROUTER, OPENAI, ANTHROPIC, etc.)
 
     Returns:
         True if configuration successful, False otherwise
@@ -54,32 +69,47 @@ def setup_openrouter() -> bool:
         from agents import set_default_openai_client
 
         api_keys = load_api_keys()
-        openrouter_key = api_keys.get("OPENROUTER_API_KEY", "")
+        api_key_name = f"{api_provider}_API_KEY"
+        api_key = api_keys.get(api_key_name, "")
 
-        if not openrouter_key:
-            print("Warning: OPENROUTER_API_KEY not found in secrets")
+        if not api_key:
+            print(f"Warning: {api_key_name} not found in secrets")
             return False
 
-        # Create AsyncOpenAI client configured for OpenRouter
+        # Get base URL for the provider
+        base_url = PROVIDER_BASE_URLS.get(api_provider, "https://openrouter.ai/api/v1")
+
+        # Create AsyncOpenAI client configured for the provider
         client = AsyncOpenAI(
-            api_key=openrouter_key,
-            base_url="https://openrouter.ai/api/v1"
+            api_key=api_key,
+            base_url=base_url
         )
 
         # Set the custom client for the agents library
         set_default_openai_client(client, use_for_tracing=False)
 
-        # Use chat completions API (required for OpenRouter)
+        # Use chat completions API
         set_default_openai_api("chat_completions")
 
         # Also set environment variables as fallback
-        os.environ["OPENAI_API_KEY"] = openrouter_key
-        os.environ["OPENAI_BASE_URL"] = "https://openrouter.ai/api/v1"
+        os.environ["OPENAI_API_KEY"] = api_key
+        os.environ["OPENAI_BASE_URL"] = base_url
 
         return True
     except Exception as e:
-        print(f"Error setting up OpenRouter: {e}")
+        print(f"Error setting up {api_provider}: {e}")
         return False
+
+
+def setup_openrouter() -> bool:
+    """
+    Configure the agents library to use OpenRouter as the API endpoint.
+    This is a convenience wrapper around setup_api_provider for backward compatibility.
+
+    Returns:
+        True if configuration successful, False otherwise
+    """
+    return setup_api_provider("OPENROUTER")
 
 
 def get_model_for_agent(model_name: str = "GPT-4o-Mini") -> str:
@@ -125,9 +155,10 @@ def create_agent(
     output_type: Optional[type] = None,
     handoff_description: Optional[str] = None,
     mcp_servers: Optional[List[Any]] = None,
+    api_provider: str = "OPENROUTER",
 ) -> Agent:
     """
-    Factory function to create agents with OpenRouter configuration.
+    Factory function to create agents with dynamic API provider configuration.
 
     Args:
         name: Name of the agent
@@ -138,12 +169,13 @@ def create_agent(
         output_type: Optional Pydantic model for structured output
         handoff_description: Description shown when this agent is a handoff target
         mcp_servers: Optional list of MCP servers the agent can use
+        api_provider: API provider to use (OPENROUTER, OPENAI, ANTHROPIC, etc.)
 
     Returns:
         Configured Agent instance
     """
-    # Ensure OpenRouter is configured
-    setup_openrouter()
+    # Configure the API provider
+    setup_api_provider(api_provider)
 
     # Get the model ID from database
     model_id = get_model_for_agent(model_name)

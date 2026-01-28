@@ -2,14 +2,14 @@
 Prompt Loading Utility
 
 This module provides centralized prompt management for the courseware generation system.
-All prompt templates are stored as markdown files in the prompt_templates/ folder and can be loaded with variable substitution.
+Prompts are loaded from the SQLite database first (if available), with fallback to markdown files.
 
 Usage:
     from utils.prompt_loader import load_prompt
-    
+
     # Load a basic prompt
     prompt = load_prompt("assessment/saq_generation")
-    
+
     # Load with variable substitution
     prompt = load_prompt("courseware/cp_interpretation", schema=course_schema)
     prompt = load_prompt("courseware/timetable_generation", num_of_days=3, list_of_im=methods)
@@ -24,57 +24,98 @@ from typing import Dict, Any, Optional
 _prompt_cache = {}
 _cache_enabled = True
 
+# Flag to control whether to load from database
+_use_database = True
+
+
+def _load_from_database(category: str, name: str) -> Optional[str]:
+    """Try to load prompt content from database"""
+    if not _use_database:
+        return None
+
+    try:
+        from settings.api_database import get_prompt_template
+        template = get_prompt_template(category, name)
+        if template and template.get("is_active", True):
+            return template.get("content")
+    except Exception as e:
+        # Database might not be available, fall back to files
+        pass
+
+    return None
+
 
 def load_prompt(prompt_path: str, **kwargs) -> str:
     """
-    Load a prompt from the prompt_templates folder with optional variable substitution.
+    Load a prompt from database (preferred) or prompt_templates folder with optional variable substitution.
     Supports caching and hot-reloading for development.
-    
+
     Args:
         prompt_path (str): Path to the prompt file relative to prompt_templates/ folder.
                           Example: "assessment/saq_generation" or "courseware/cp_interpretation"
         **kwargs: Variables to substitute in the prompt using string formatting.
-    
+
     Returns:
         str: The loaded prompt with variables substituted.
-        
+
     Raises:
-        FileNotFoundError: If the prompt file doesn't exist.
+        FileNotFoundError: If the prompt file doesn't exist in database or files.
         KeyError: If required variables are missing for substitution.
-        
+
     Examples:
         >>> load_prompt("assessment/saq_generation")
         "You are an expert question-answer crafter..."
-        
+
         >>> load_prompt("courseware/timetable_generation", num_of_days=2, list_of_im=["Lecture"])
         "You are a timetable generator for WSQ courses..."
     """
-    # Get the directory containing this script
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-    project_root = os.path.dirname(current_dir)
-    
-    # Construct full path to prompt file
-    prompt_file_path = os.path.join(project_root, "prompt_templates", f"{prompt_path}.md")
-    
-    # Check if file exists
-    if not os.path.exists(prompt_file_path):
-        raise FileNotFoundError(f"Prompt file not found: {prompt_file_path}")
-    
-    # Check cache and file modification time
-    file_mtime = os.path.getmtime(prompt_file_path)
+    # Parse category and name from path
+    parts = prompt_path.split("/")
+    if len(parts) == 2:
+        category, name = parts
+    else:
+        category = "shared"
+        name = prompt_path
+
+    # Check cache first
     cache_key = f"{prompt_path}_{hash(str(sorted(kwargs.items())))}"
-    
-    if (_cache_enabled and 
-        cache_key in _prompt_cache and 
-        _prompt_cache[cache_key]['mtime'] >= file_mtime):
-        return _prompt_cache[cache_key]['content']
-    
-    # Load the prompt content
-    try:
-        with open(prompt_file_path, 'r', encoding='utf-8') as f:
-            prompt_content = f.read()
-    except Exception as e:
-        raise IOError(f"Error reading prompt file {prompt_file_path}: {e}")
+
+    if _cache_enabled and cache_key in _prompt_cache:
+        cached = _prompt_cache[cache_key]
+        # For database-loaded prompts, check if still valid (1 minute cache)
+        if cached.get('source') == 'database':
+            if time.time() - cached.get('loaded_at', 0) < 60:
+                return cached['content']
+        # For file-loaded prompts, check file modification time
+        elif cached.get('mtime'):
+            file_path = cached.get('file_path')
+            if file_path and os.path.exists(file_path):
+                if cached['mtime'] >= os.path.getmtime(file_path):
+                    return cached['content']
+
+    # Try to load from database first
+    prompt_content = _load_from_database(category, name)
+    source = 'database' if prompt_content else 'file'
+
+    # Fall back to file if not in database
+    if not prompt_content:
+        # Get the directory containing this script
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        project_root = os.path.dirname(current_dir)
+
+        # Construct full path to prompt file
+        prompt_file_path = os.path.join(project_root, "prompt_templates", f"{prompt_path}.md")
+
+        # Check if file exists
+        if not os.path.exists(prompt_file_path):
+            raise FileNotFoundError(f"Prompt not found in database or file: {prompt_path}")
+
+        # Load the prompt content from file
+        try:
+            with open(prompt_file_path, 'r', encoding='utf-8') as f:
+                prompt_content = f.read()
+        except Exception as e:
+            raise IOError(f"Error reading prompt file {prompt_file_path}: {e}")
     
     # Substitute variables if provided
     if kwargs:
@@ -90,21 +131,30 @@ def load_prompt(prompt_path: str, **kwargs) -> str:
                     formatted_kwargs[key] = json.dumps(value, indent=2)
                 else:
                     formatted_kwargs[key] = str(value)
-            
+
             prompt_content = prompt_content.format(**formatted_kwargs)
         except KeyError as e:
             raise KeyError(f"Missing required variable for prompt substitution: {e}")
         except Exception as e:
             raise ValueError(f"Error substituting variables in prompt: {e}")
-    
+
     # Cache the result
     if _cache_enabled:
-        _prompt_cache[cache_key] = {
+        cache_entry = {
             'content': prompt_content,
-            'mtime': file_mtime,
-            'loaded_at': time.time()
+            'loaded_at': time.time(),
+            'source': source
         }
-    
+        if source == 'file':
+            # Get the directory containing this script
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(current_dir)
+            prompt_file_path = os.path.join(project_root, "prompt_templates", f"{prompt_path}.md")
+            if os.path.exists(prompt_file_path):
+                cache_entry['mtime'] = os.path.getmtime(prompt_file_path)
+                cache_entry['file_path'] = prompt_file_path
+        _prompt_cache[cache_key] = cache_entry
+
     return prompt_content
 
 

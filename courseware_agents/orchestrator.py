@@ -12,7 +12,7 @@ Date: 26 January 2026
 """
 
 from agents import Agent, handoff
-from courseware_agents.base import create_agent, setup_openrouter, get_model_for_agent
+from courseware_agents.base import create_agent, setup_openrouter, setup_api_provider, get_model_for_agent
 from typing import Optional, List, Any
 
 
@@ -111,7 +111,7 @@ Do you have a Facilitator Guide I can use as source material? And which assessme
 """
 
 
-def create_orchestrator(model_name: str = "GPT-4o") -> Agent:
+def create_orchestrator(model_name: str = "GPT-4o", api_provider: str = "OPENROUTER") -> Agent:
     """
     Create the main orchestrator agent with handoffs to all specialized agents.
 
@@ -119,12 +119,13 @@ def create_orchestrator(model_name: str = "GPT-4o") -> Agent:
 
     Args:
         model_name: Model to use for the orchestrator (default: GPT-4o)
+        api_provider: API provider to use (OPENROUTER, OPENAI, ANTHROPIC, etc.)
 
     Returns:
         Configured orchestrator Agent with handoffs
     """
-    # Ensure OpenRouter is configured
-    setup_openrouter()
+    # Configure the API provider
+    setup_api_provider(api_provider)
 
     # Import agents here to avoid circular imports
     from courseware_agents.cp_agent import cp_agent

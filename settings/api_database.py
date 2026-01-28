@@ -111,6 +111,48 @@ def init_database():
             )
         """)
 
+        # Task model assignments table - assigns specific API provider and model to each task
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS task_model_assignments (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_id TEXT UNIQUE NOT NULL,
+                task_name TEXT NOT NULL,
+                api_provider TEXT NOT NULL,
+                model_name TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Admin credentials table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS admin_credentials (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                username TEXT UNIQUE NOT NULL,
+                password_hash TEXT NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+
+        # Prompt templates table
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS prompt_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                category TEXT NOT NULL,
+                name TEXT NOT NULL,
+                display_name TEXT NOT NULL,
+                description TEXT,
+                content TEXT NOT NULL,
+                variables TEXT,
+                is_builtin INTEGER DEFAULT 0,
+                is_active INTEGER DEFAULT 1,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                UNIQUE(category, name)
+            )
+        """)
+
         conn.commit()
 
         # Run migrations for new columns (inside the connection context)
@@ -121,6 +163,12 @@ def init_database():
 
     # Seed built-in models if not already present
     _seed_builtin_models()
+
+    # Seed default admin credentials if not exists
+    _seed_admin_credentials()
+
+    # Seed built-in prompt templates if not exists
+    _seed_builtin_prompt_templates()
 
 
 def _run_migrations(conn):
@@ -267,8 +315,8 @@ BUILTIN_MODELS = [
     {"name": "Claude-3.5-Sonnet", "model_id": "anthropic/claude-3.5-sonnet", "api_provider": "OPENROUTER", "sort_order": 25},
 
     # === Anthropic Claude Models (Native API) ===
-    {"name": "Anthropic Claude-Opus-4.5", "model_id": "claude-opus-4-5-20250514", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 118},
-    {"name": "Anthropic Claude-Sonnet-4.5", "model_id": "claude-sonnet-4-5-20250514", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 119},
+    {"name": "Anthropic Claude-Opus-4.5", "model_id": "claude-opus-4-5-20251101", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 118},
+    {"name": "Anthropic Claude-Sonnet-4.5", "model_id": "claude-sonnet-4-5-20251101", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 119},
     {"name": "Anthropic Claude-Opus-4", "model_id": "claude-opus-4-20250514", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 120},
     {"name": "Anthropic Claude-Sonnet-4", "model_id": "claude-sonnet-4-20250514", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 121},
     {"name": "Anthropic Claude-3.5-Sonnet", "model_id": "claude-3-5-sonnet-20241022", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 122},
@@ -331,17 +379,25 @@ BUILTIN_MODELS = [
 
 
 def _seed_builtin_models():
-    """Seed the database with built-in models if they don't exist"""
+    """Seed the database with built-in models, updating existing ones with correct model_id"""
     with get_connection() as conn:
         cursor = conn.cursor()
 
         for model in BUILTIN_MODELS:
             try:
                 base_url = model.get("base_url", "https://openrouter.ai/api/v1")
+                # Use ON CONFLICT to update existing built-in models with correct model_id
                 cursor.execute("""
-                    INSERT OR IGNORE INTO llm_models
+                    INSERT INTO llm_models
                     (name, provider, model_id, base_url, temperature, api_provider, is_builtin, sort_order)
                     VALUES (?, 'OpenAIChatCompletionClient', ?, ?, 0.2, ?, 1, ?)
+                    ON CONFLICT(name) DO UPDATE SET
+                        model_id = excluded.model_id,
+                        base_url = excluded.base_url,
+                        api_provider = excluded.api_provider,
+                        sort_order = excluded.sort_order,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE is_builtin = 1
                 """, (model["name"], model["model_id"], base_url, model["api_provider"], model["sort_order"]))
             except Exception as e:
                 print(f"Error seeding model {model['name']}: {e}")
@@ -880,3 +936,521 @@ def get_enabled_models_by_provider(api_provider: str) -> List[Dict[str, Any]]:
                 "is_enabled": bool(row["is_enabled"])
             })
         return models
+
+
+# ============ Task Model Assignments ============
+
+# Define available tasks
+AVAILABLE_TASKS = [
+    {"task_id": "global", "task_name": "Global Default", "icon": "🌐"},
+    {"task_id": "chatbot", "task_name": "Chatbot", "icon": "💬"},
+    {"task_id": "generate_cp", "task_name": "Generate CP", "icon": "📄"},
+    {"task_id": "generate_courseware", "task_name": "Generate AP/FG/LG/LP", "icon": "📚"},
+    {"task_id": "generate_assessment", "task_name": "Generate Assessment", "icon": "✅"},
+    {"task_id": "generate_brochure", "task_name": "Generate Brochure", "icon": "📰"},
+    {"task_id": "add_assessment_ap", "task_name": "Add Assessment to AP", "icon": "📎"},
+    {"task_id": "check_documents", "task_name": "Check Documents", "icon": "🔍"},
+]
+
+
+def get_task_model_assignment(task_id: str) -> Optional[Dict[str, Any]]:
+    """Get the model assignment for a specific task"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM task_model_assignments WHERE task_id = ?
+        """, (task_id,))
+        row = cursor.fetchone()
+
+        if row:
+            return {
+                "task_id": row["task_id"],
+                "task_name": row["task_name"],
+                "api_provider": row["api_provider"],
+                "model_name": row["model_name"]
+            }
+        return None
+
+
+def set_task_model_assignment(task_id: str, task_name: str, api_provider: str, model_name: str) -> bool:
+    """Set or update the model assignment for a task"""
+    init_database()
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO task_model_assignments (task_id, task_name, api_provider, model_name)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(task_id) DO UPDATE SET
+                    task_name = excluded.task_name,
+                    api_provider = excluded.api_provider,
+                    model_name = excluded.model_name,
+                    updated_at = CURRENT_TIMESTAMP
+            """, (task_id, task_name, api_provider, model_name))
+            return True
+    except Exception as e:
+        print(f"Error setting task model assignment: {e}")
+        return False
+
+
+def get_all_task_model_assignments() -> Dict[str, Dict[str, Any]]:
+    """Get all task model assignments as a dictionary {task_id: assignment}"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM task_model_assignments")
+        rows = cursor.fetchall()
+        return {
+            row["task_id"]: {
+                "task_id": row["task_id"],
+                "task_name": row["task_name"],
+                "api_provider": row["api_provider"],
+                "model_name": row["model_name"]
+            }
+            for row in rows
+        }
+
+
+def delete_task_model_assignment(task_id: str) -> bool:
+    """Delete a task model assignment"""
+    init_database()
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM task_model_assignments WHERE task_id = ?", (task_id,))
+            return cursor.rowcount > 0
+    except Exception as e:
+        print(f"Error deleting task model assignment: {e}")
+        return False
+
+
+# ============ Admin Credentials Operations ============
+
+import hashlib
+
+
+def _hash_password(password: str) -> str:
+    """Hash password using SHA-256"""
+    return hashlib.sha256(password.encode()).hexdigest()
+
+
+def _seed_admin_credentials():
+    """Seed default admin credentials if not exists (only on first run)"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM admin_credentials")
+        count = cursor.fetchone()[0]
+
+        if count == 0:
+            # Only seed if no admin exists - get from env/secrets first
+            import os
+            try:
+                import streamlit as st
+                username = st.secrets.get("ADMIN_USERNAME", os.environ.get("ADMIN_USERNAME", "admin"))
+                password = st.secrets.get("ADMIN_PASSWORD", os.environ.get("ADMIN_PASSWORD", ""))
+            except Exception:
+                username = os.environ.get("ADMIN_USERNAME", "admin")
+                password = os.environ.get("ADMIN_PASSWORD", "")
+
+            # Only create default admin if password is provided via env/secrets
+            if password:
+                password_hash = _hash_password(password)
+                cursor.execute("""
+                    INSERT INTO admin_credentials (username, password_hash)
+                    VALUES (?, ?)
+                """, (username, password_hash))
+                conn.commit()
+
+
+def get_admin_credentials_from_db() -> Optional[Dict[str, str]]:
+    """Get admin credentials from database"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT username, password_hash FROM admin_credentials LIMIT 1")
+        row = cursor.fetchone()
+
+        if row:
+            return {
+                "username": row["username"],
+                "password_hash": row["password_hash"]
+            }
+        return None
+
+
+def set_admin_credentials(username: str, password: str) -> bool:
+    """Set or update admin credentials in database"""
+    init_database()
+    try:
+        password_hash = _hash_password(password)
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            # Delete existing and insert new
+            cursor.execute("DELETE FROM admin_credentials")
+            cursor.execute("""
+                INSERT INTO admin_credentials (username, password_hash)
+                VALUES (?, ?)
+            """, (username, password_hash))
+            return True
+    except Exception as e:
+        print(f"Error setting admin credentials: {e}")
+        return False
+
+
+def verify_admin_password(username: str, password: str) -> bool:
+    """Verify admin credentials against database"""
+    creds = get_admin_credentials_from_db()
+    if not creds:
+        return False
+
+    password_hash = _hash_password(password)
+    return creds["username"] == username and creds["password_hash"] == password_hash
+
+
+def admin_credentials_exist() -> bool:
+    """Check if admin credentials have been set up"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT COUNT(*) FROM admin_credentials")
+        count = cursor.fetchone()[0]
+        return count > 0
+
+
+# ============ Prompt Templates Operations ============
+
+# Built-in prompt templates metadata (content loaded from files)
+BUILTIN_PROMPT_TEMPLATES = [
+    {
+        "category": "courseware",
+        "name": "cp_interpretation",
+        "display_name": "CP Interpretation",
+        "description": "Extract and structure Course Proposal data for document generation",
+        "variables": "schema"
+    },
+    {
+        "category": "courseware",
+        "name": "assessment_plan",
+        "display_name": "Assessment Plan Generation",
+        "description": "Generate structured justifications for assessment methods (CS, PP, OQ, RP)",
+        "variables": "course_title, learning_outcomes, extracted_content, assessment_methods"
+    },
+    {
+        "category": "courseware",
+        "name": "timetable_generation",
+        "display_name": "Timetable/Lesson Plan Generation",
+        "description": "Generate WSQ-compliant lesson plan timetables",
+        "variables": "num_of_days, list_of_im"
+    },
+    {
+        "category": "course_proposal",
+        "name": "tsc_agent",
+        "display_name": "TSC Agent",
+        "description": "Parse and correct TSC (Training Standards and Competencies) data",
+        "variables": "tsc_data"
+    },
+    {
+        "category": "assessment",
+        "name": "saq_generation",
+        "display_name": "SAQ Generation",
+        "description": "Generate Short Answer Questions for assessments",
+        "variables": ""
+    },
+    {
+        "category": "assessment",
+        "name": "practical_performance",
+        "display_name": "Practical Performance",
+        "description": "Generate Practical Performance assessment tasks",
+        "variables": ""
+    },
+    {
+        "category": "assessment",
+        "name": "case_study",
+        "display_name": "Case Study",
+        "description": "Generate Case Study assessment scenarios",
+        "variables": ""
+    },
+]
+
+
+def _load_prompt_file_content(category: str, name: str) -> str:
+    """Load prompt content from markdown file"""
+    import os
+    # Get the project root directory
+    current_file = os.path.abspath(__file__)
+    settings_dir = os.path.dirname(current_file)
+    project_root = os.path.dirname(settings_dir)
+
+    # Try different possible locations
+    possible_paths = [
+        os.path.join(project_root, "utils", "prompt_templates", category, f"{name}.md"),
+        os.path.join(project_root, "prompt_templates", category, f"{name}.md"),
+    ]
+
+    for prompt_path in possible_paths:
+        if os.path.exists(prompt_path):
+            try:
+                with open(prompt_path, 'r', encoding='utf-8') as f:
+                    return f.read()
+            except Exception as e:
+                print(f"Error reading prompt file {prompt_path}: {e}")
+
+    return ""
+
+
+def _seed_builtin_prompt_templates():
+    """Seed built-in prompt templates from markdown files"""
+    with get_connection() as conn:
+        cursor = conn.cursor()
+
+        for template in BUILTIN_PROMPT_TEMPLATES:
+            try:
+                # Check if template already exists
+                cursor.execute(
+                    "SELECT id FROM prompt_templates WHERE category = ? AND name = ?",
+                    (template["category"], template["name"])
+                )
+                if cursor.fetchone():
+                    continue  # Already exists, skip
+
+                # Load content from file
+                content = _load_prompt_file_content(template["category"], template["name"])
+                if not content:
+                    print(f"Warning: No content found for prompt {template['category']}/{template['name']}")
+                    continue
+
+                cursor.execute("""
+                    INSERT INTO prompt_templates
+                    (category, name, display_name, description, content, variables, is_builtin)
+                    VALUES (?, ?, ?, ?, ?, ?, 1)
+                """, (
+                    template["category"],
+                    template["name"],
+                    template["display_name"],
+                    template["description"],
+                    content,
+                    template["variables"]
+                ))
+            except Exception as e:
+                print(f"Error seeding prompt template {template['name']}: {e}")
+
+        conn.commit()
+
+
+def get_all_prompt_templates() -> List[Dict[str, Any]]:
+    """Get all prompt templates from database"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM prompt_templates
+            ORDER BY category, display_name
+        """)
+        rows = cursor.fetchall()
+
+        return [
+            {
+                "id": row["id"],
+                "category": row["category"],
+                "name": row["name"],
+                "display_name": row["display_name"],
+                "description": row["description"],
+                "content": row["content"],
+                "variables": row["variables"],
+                "is_builtin": bool(row["is_builtin"]),
+                "is_active": bool(row["is_active"]),
+            }
+            for row in rows
+        ]
+
+
+def get_prompt_templates_by_category(category: str) -> List[Dict[str, Any]]:
+    """Get prompt templates for a specific category"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM prompt_templates
+            WHERE category = ? AND is_active = 1
+            ORDER BY display_name
+        """, (category,))
+        rows = cursor.fetchall()
+
+        return [
+            {
+                "id": row["id"],
+                "category": row["category"],
+                "name": row["name"],
+                "display_name": row["display_name"],
+                "description": row["description"],
+                "content": row["content"],
+                "variables": row["variables"],
+                "is_builtin": bool(row["is_builtin"]),
+                "is_active": bool(row["is_active"]),
+            }
+            for row in rows
+        ]
+
+
+def get_prompt_template(category: str, name: str) -> Optional[Dict[str, Any]]:
+    """Get a specific prompt template by category and name"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT * FROM prompt_templates
+            WHERE category = ? AND name = ?
+        """, (category, name))
+        row = cursor.fetchone()
+
+        if row:
+            return {
+                "id": row["id"],
+                "category": row["category"],
+                "name": row["name"],
+                "display_name": row["display_name"],
+                "description": row["description"],
+                "content": row["content"],
+                "variables": row["variables"],
+                "is_builtin": bool(row["is_builtin"]),
+                "is_active": bool(row["is_active"]),
+            }
+        return None
+
+
+def get_prompt_template_by_id(template_id: int) -> Optional[Dict[str, Any]]:
+    """Get a specific prompt template by ID"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT * FROM prompt_templates WHERE id = ?", (template_id,))
+        row = cursor.fetchone()
+
+        if row:
+            return {
+                "id": row["id"],
+                "category": row["category"],
+                "name": row["name"],
+                "display_name": row["display_name"],
+                "description": row["description"],
+                "content": row["content"],
+                "variables": row["variables"],
+                "is_builtin": bool(row["is_builtin"]),
+                "is_active": bool(row["is_active"]),
+            }
+        return None
+
+
+def update_prompt_template(
+    template_id: int,
+    content: Optional[str] = None,
+    display_name: Optional[str] = None,
+    description: Optional[str] = None,
+    variables: Optional[str] = None,
+    is_active: Optional[bool] = None
+) -> bool:
+    """Update a prompt template"""
+    init_database()
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+
+            updates = []
+            params = []
+
+            if content is not None:
+                updates.append("content = ?")
+                params.append(content)
+            if display_name is not None:
+                updates.append("display_name = ?")
+                params.append(display_name)
+            if description is not None:
+                updates.append("description = ?")
+                params.append(description)
+            if variables is not None:
+                updates.append("variables = ?")
+                params.append(variables)
+            if is_active is not None:
+                updates.append("is_active = ?")
+                params.append(1 if is_active else 0)
+
+            if not updates:
+                return True
+
+            updates.append("updated_at = CURRENT_TIMESTAMP")
+            params.append(template_id)
+
+            query = f"UPDATE prompt_templates SET {', '.join(updates)} WHERE id = ?"
+            cursor.execute(query, params)
+            return cursor.rowcount > 0
+    except Exception as e:
+        print(f"Error updating prompt template: {e}")
+        return False
+
+
+def add_prompt_template(
+    category: str,
+    name: str,
+    display_name: str,
+    content: str,
+    description: str = "",
+    variables: str = ""
+) -> bool:
+    """Add a new custom prompt template"""
+    init_database()
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO prompt_templates
+                (category, name, display_name, description, content, variables, is_builtin)
+                VALUES (?, ?, ?, ?, ?, ?, 0)
+            """, (category, name, display_name, description, content, variables))
+            return True
+    except sqlite3.IntegrityError:
+        return False
+    except Exception as e:
+        print(f"Error adding prompt template: {e}")
+        return False
+
+
+def delete_prompt_template(template_id: int) -> bool:
+    """Delete a custom prompt template (cannot delete built-in)"""
+    init_database()
+    try:
+        with get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "DELETE FROM prompt_templates WHERE id = ? AND is_builtin = 0",
+                (template_id,)
+            )
+            return cursor.rowcount > 0
+    except Exception as e:
+        print(f"Error deleting prompt template: {e}")
+        return False
+
+
+def reset_prompt_template_to_default(template_id: int) -> bool:
+    """Reset a built-in prompt template to its default content from file"""
+    init_database()
+    template = get_prompt_template_by_id(template_id)
+    if not template or not template["is_builtin"]:
+        return False
+
+    # Load original content from file
+    content = _load_prompt_file_content(template["category"], template["name"])
+    if not content:
+        return False
+
+    return update_prompt_template(template_id, content=content)
+
+
+def get_prompt_template_categories() -> List[str]:
+    """Get list of unique prompt template categories"""
+    init_database()
+    with get_connection() as conn:
+        cursor = conn.cursor()
+        cursor.execute("SELECT DISTINCT category FROM prompt_templates ORDER BY category")
+        rows = cursor.fetchall()
+        return [row["category"] for row in rows]

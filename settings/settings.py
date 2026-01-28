@@ -33,8 +33,21 @@ from settings.api_database import (
     refresh_builtin_models,
     refresh_builtin_api_keys,
     set_model_enabled,
-    get_default_model,
-    set_default_model
+    get_all_models as db_get_all_models,
+    get_enabled_models_by_provider,
+    AVAILABLE_TASKS,
+    get_all_task_model_assignments,
+    set_task_model_assignment,
+    # Prompt template functions
+    get_all_prompt_templates,
+    get_prompt_templates_by_category,
+    get_prompt_template,
+    get_prompt_template_by_id,
+    update_prompt_template,
+    add_prompt_template,
+    delete_prompt_template,
+    reset_prompt_template_to_default,
+    get_prompt_template_categories,
 )
 from settings.admin_auth import is_authenticated, login_page, show_logout_button
 
@@ -94,7 +107,7 @@ def manage_llm_settings():
         st.session_state['llm_settings_view'] = 'api_keys'
 
     # View selector using columns with buttons (like Company Management)
-    col1, col2, col3 = st.columns(3)
+    col1, col2, col3, col4 = st.columns(4)
     with col1:
         if st.button("🔑 API Keys", use_container_width=True,
                      type="primary" if st.session_state['llm_settings_view'] == 'api_keys' else "secondary"):
@@ -106,9 +119,14 @@ def manage_llm_settings():
             st.session_state['llm_settings_view'] = 'all_models'
             st.rerun()
     with col3:
-        if st.button("🔄 Update Models", use_container_width=True,
+        if st.button("⚙️ Model Assignments", use_container_width=True,
                      type="primary" if st.session_state['llm_settings_view'] == 'update_models' else "secondary"):
             st.session_state['llm_settings_view'] = 'update_models'
+            st.rerun()
+    with col4:
+        if st.button("📝 Prompt Templates", use_container_width=True,
+                     type="primary" if st.session_state['llm_settings_view'] == 'prompt_templates' else "secondary"):
+            st.session_state['llm_settings_view'] = 'prompt_templates'
             st.rerun()
 
     st.markdown("---")
@@ -120,6 +138,8 @@ def manage_llm_settings():
         display_all_models()
     elif st.session_state['llm_settings_view'] == 'update_models':
         update_models_from_provider()
+    elif st.session_state['llm_settings_view'] == 'prompt_templates':
+        manage_prompt_templates()
 
 
 def update_secrets_toml(key_name: str, key_value: str) -> bool:
@@ -297,12 +317,9 @@ def display_all_models():
     for provider in providers_to_show:
         models = models_by_provider.get(provider, [])
         if models:
-            # Get current default model for this provider
-            default_model = get_default_model(provider)
-
             with st.expander(f"{provider} ({len(models)} models)", expanded=(len(providers_to_show) == 1)):
                 # Header row
-                hcol1, hcol2, hcol3, hcol4, hcol5 = st.columns([3, 3, 1.5, 1, 1])
+                hcol1, hcol2, hcol3, hcol4 = st.columns([3, 3, 1.5, 1])
                 with hcol1:
                     st.markdown("**Model**")
                 with hcol2:
@@ -311,8 +328,6 @@ def display_all_models():
                     st.markdown("**Temp**")
                 with hcol4:
                     st.markdown("**Selected**")
-                with hcol5:
-                    st.markdown("**Default**")
 
                 # Model rows
                 for idx, model in enumerate(models):
@@ -320,9 +335,8 @@ def display_all_models():
                     model_id = model["config"].get("model", "N/A")
                     temp = model["config"].get("temperature", 0.2)
                     is_enabled = model.get("is_enabled", True)
-                    is_default = default_model == model_name
 
-                    col1, col2, col3, col4, col5 = st.columns([3, 3, 1.5, 1, 1])
+                    col1, col2, col3, col4 = st.columns([3, 3, 1.5, 1])
 
                     with col1:
                         st.markdown(f"{model_name}")
@@ -341,12 +355,6 @@ def display_all_models():
                         if new_enabled != is_enabled:
                             set_model_enabled(model_name, new_enabled)
                             st.rerun()
-                    with col5:
-                        # Default radio button
-                        if st.button("◉" if is_default else "○", key=f"def_{provider}_{idx}", help="Set as default"):
-                            if not is_default:
-                                set_default_model(provider, model_name)
-                                st.rerun()
 
     # Remove custom models section
     custom_models = load_custom_models()
@@ -508,157 +516,364 @@ def fetch_models_from_provider(provider: str, api_key: str = "") -> List[Dict]:
 
 
 def update_models_from_provider():
-    """Update models by fetching from API providers"""
-    st.caption("Fetch and add latest models from API providers")
+    """Task Model Assignments - Assign specific API provider and model to each task"""
+    st.markdown("### Model Assignments")
+    st.caption("Assign a specific API Provider and Model to each task. If not assigned, the global sidebar selection will be used.")
+
+    # Get current assignments
+    current_assignments = get_all_task_model_assignments()
 
     # Get available API providers
     api_providers = get_api_providers_for_dropdown()
-    provider_options = {p["display_name"]: p for p in api_providers}
+    provider_names = [p["key_name"].replace("_API_KEY", "") for p in api_providers]
+    provider_display_names = [p["display_name"] for p in api_providers]
 
-    # Provider selection
-    selected_provider_name = st.selectbox(
-        "Select API Provider",
-        options=list(provider_options.keys()),
-        index=0,
-        help="Choose provider to fetch models from"
-    )
-
-    selected_provider = provider_options.get(selected_provider_name, {})
-    provider_key = selected_provider.get("key_name", "OPENROUTER_API_KEY").replace("_API_KEY", "")
-    base_url = selected_provider.get("base_url", "https://openrouter.ai/api/v1")
-
-    # Get API key for this provider
+    # Load API keys to check which providers are configured
     api_keys = load_api_keys()
-    api_key = api_keys.get(f"{provider_key}_API_KEY", "")
 
-    # Initialize session state for fetched models
-    if 'fetched_models' not in st.session_state:
-        st.session_state['fetched_models'] = []
-    if 'fetched_provider' not in st.session_state:
-        st.session_state['fetched_provider'] = ""
-    if 'selected_models' not in st.session_state:
-        st.session_state['selected_models'] = set()
+    # Track changes for batch save
+    if 'task_assignment_changes' not in st.session_state:
+        st.session_state['task_assignment_changes'] = {}
 
-    # Fetch models button
-    fetch_clicked = st.button("🔍 Fetch Models", type="primary")
+    st.markdown("---")
 
-    if fetch_clicked:
-        if provider_key not in ["OPENROUTER"] and not api_key:
-            st.warning(f"API key required for {provider_key}. Add it in the API Keys tab.")
-        else:
-            with st.spinner(f"Fetching models from {provider_key}..."):
-                models = fetch_models_from_provider(provider_key, api_key)
-                if models:
-                    st.session_state['fetched_models'] = models
-                    st.session_state['fetched_provider'] = provider_key
-                    # Reset preselection and selection for new fetch
-                    st.session_state['selected_models'] = set()
-                    if 'existing_preselected' in st.session_state:
-                        del st.session_state['existing_preselected']
-                    st.success(f"Found {len(models)} models")
-                    st.rerun()  # Rerun to apply preselection
-                else:
-                    st.warning("No models found or API not accessible")
-                    st.session_state['fetched_models'] = []
+    # Header row
+    hcol1, hcol2, hcol3 = st.columns([2, 2, 3])
+    with hcol1:
+        st.markdown("**Task**")
+    with hcol2:
+        st.markdown("**API Provider**")
+    with hcol3:
+        st.markdown("**Model**")
 
-    # Display fetched models with checkboxes
-    if st.session_state['fetched_models'] and st.session_state['fetched_provider'] == provider_key:
-        models = st.session_state['fetched_models']
+    # Display each task with dropdowns
+    for task in AVAILABLE_TASKS:
+        task_id = task["task_id"]
+        task_name = task["task_name"]
+        task_icon = task["icon"]
 
-        st.markdown("---")
-        st.caption(f"{len(models)} models available from {provider_key}")
+        # Get current assignment for this task
+        current = current_assignments.get(task_id, {})
+        current_provider = current.get("api_provider", "")
+        current_model = current.get("model_name", "")
 
-        # Search/filter
-        search = st.text_input("🔍 Filter models", placeholder="Type to filter...")
+        col1, col2, col3 = st.columns([2, 2, 3])
 
-        # Filter models
-        if search:
-            filtered_models = [m for m in models if search.lower() in m["id"].lower() or search.lower() in m["name"].lower()]
-        else:
-            filtered_models = models
-
-        # Get existing model IDs to check for duplicates
-        existing_models = get_all_available_models()
-        existing_ids = {config["config"].get("model", "") for config in existing_models.values()}
-
-        # Auto-select existing models on first load (so they appear checked)
-        if 'existing_preselected' not in st.session_state:
-            for m in filtered_models:
-                if m["id"] in existing_ids:
-                    st.session_state['selected_models'].add(m["id"])
-            st.session_state['existing_preselected'] = True
-
-        # Select all / Deselect all / Add Selected
-        col1, col2, col3 = st.columns([1, 1, 2])
         with col1:
-            if st.button("Select All", use_container_width=True):
-                st.session_state['selected_models'] = {m["id"] for m in filtered_models}
-                st.rerun()
+            st.markdown(f"**{task_icon} {task_name}**")
+
         with col2:
-            if st.button("Deselect All", use_container_width=True):
-                st.session_state['selected_models'] = set()
-                st.rerun()
+            # API Provider dropdown
+            try:
+                default_provider_idx = provider_names.index(current_provider) if current_provider else 0
+            except ValueError:
+                default_provider_idx = 0
+
+            # Add a "Use Global" option at the beginning
+            provider_options = ["(Use Global)"] + provider_display_names
+            selected_provider_idx = st.selectbox(
+                f"Provider for {task_name}",
+                range(len(provider_options)),
+                format_func=lambda x: provider_options[x],
+                index=0 if not current_provider else default_provider_idx + 1,
+                key=f"provider_{task_id}",
+                label_visibility="collapsed"
+            )
+
+            # Map back to provider key
+            if selected_provider_idx == 0:
+                selected_provider_key = ""  # Use Global
+            else:
+                selected_provider_key = provider_names[selected_provider_idx - 1]
+
         with col3:
-            # Count new models to add (not already in database)
-            new_models_to_add = [m for m in filtered_models
-                                 if m["id"] in st.session_state['selected_models']
-                                 and m["id"] not in existing_ids]
-            add_count = len(new_models_to_add)
+            # Model dropdown - depends on selected provider
+            if selected_provider_key:
+                # Get enabled models for this provider
+                provider_models = get_enabled_models_by_provider(selected_provider_key)
+                model_names = [m["name"] for m in provider_models]
 
-            if st.button(f"➕ Add {add_count} Selected", type="primary", use_container_width=True, disabled=(add_count == 0)):
-                added = 0
-                for model in new_models_to_add:
-                    model_id = model["id"]
-                    # Create display name from model ID
-                    display_name = model_id.replace("/", " - ").replace("-", " ").title()
+                if model_names:
+                    try:
+                        default_model_idx = model_names.index(current_model) if current_model in model_names else 0
+                    except ValueError:
+                        default_model_idx = 0
 
-                    success = add_custom_model(
-                        name=display_name,
-                        provider=provider_key,
-                        model_id=model_id,
-                        base_url=base_url,
-                        temperature=0.2,
-                        api_provider=provider_key
+                    selected_model_idx = st.selectbox(
+                        f"Model for {task_name}",
+                        range(len(model_names)),
+                        format_func=lambda x: model_names[x],
+                        index=default_model_idx,
+                        key=f"model_{task_id}",
+                        label_visibility="collapsed"
                     )
-                    if success:
-                        added += 1
+                    selected_model = model_names[selected_model_idx]
+                else:
+                    st.caption("No models available")
+                    selected_model = ""
+            else:
+                st.caption("Using global selection")
+                selected_model = ""
 
-                if added > 0:
-                    st.success(f"Added {added} models!")
-                    # Clear caches
-                    if 'custom_models' in st.session_state:
-                        del st.session_state['custom_models']
-                    if 'all_models' in st.session_state:
-                        del st.session_state['all_models']
+        # Track changes
+        if selected_provider_key:
+            st.session_state['task_assignment_changes'][task_id] = {
+                "task_name": task_name,
+                "api_provider": selected_provider_key,
+                "model_name": selected_model
+            }
+        elif task_id in st.session_state['task_assignment_changes']:
+            # Mark for removal if switched to "Use Global"
+            st.session_state['task_assignment_changes'][task_id] = None
+
+    st.markdown("---")
+
+    # Save button
+    col1, col2 = st.columns([1, 3])
+    with col1:
+        if st.button("💾 Save Assignments", type="primary", use_container_width=True):
+            saved = 0
+            removed = 0
+            for task_id, assignment in st.session_state['task_assignment_changes'].items():
+                if assignment is None:
+                    # Remove assignment (use global)
+                    from settings.api_database import delete_task_model_assignment
+                    if delete_task_model_assignment(task_id):
+                        removed += 1
+                elif assignment.get("api_provider") and assignment.get("model_name"):
+                    if set_task_model_assignment(
+                        task_id,
+                        assignment["task_name"],
+                        assignment["api_provider"],
+                        assignment["model_name"]
+                    ):
+                        saved += 1
+
+            if saved > 0 or removed > 0:
+                st.success(f"Saved {saved} assignment(s), removed {removed} assignment(s)!")
+                st.session_state['task_assignment_changes'] = {}
+                st.rerun()
+            else:
+                st.info("No changes to save")
+
+    with col2:
+        st.caption("Tasks without an assignment will use the global model selected in the sidebar.")
+
+
+def manage_prompt_templates():
+    """Manage Prompt Templates section"""
+    st.markdown("### Prompt Templates")
+    st.caption("Customize the AI prompts used for generating CP, AP, FG, LG, LP, and assessments.")
+
+    # Get all templates
+    all_templates = get_all_prompt_templates()
+
+    if not all_templates:
+        st.info("No prompt templates found. Templates will be loaded on first use.")
+        return
+
+    # Group templates by category
+    templates_by_category = {}
+    for template in all_templates:
+        category = template["category"]
+        if category not in templates_by_category:
+            templates_by_category[category] = []
+        templates_by_category[category].append(template)
+
+    # Category icons
+    category_icons = {
+        "courseware": "📚",
+        "course_proposal": "📄",
+        "assessment": "✅",
+    }
+
+    # Category display names
+    category_display_names = {
+        "courseware": "Courseware (AP, FG, LG, LP)",
+        "course_proposal": "Course Proposal (CP)",
+        "assessment": "Assessment (SAQ, PP, CS)",
+    }
+
+    # Initialize edit state
+    if 'editing_template_id' not in st.session_state:
+        st.session_state['editing_template_id'] = None
+
+    # Display templates by category
+    for category, templates in sorted(templates_by_category.items()):
+        icon = category_icons.get(category, "📋")
+        display_name = category_display_names.get(category, category.title())
+
+        with st.expander(f"{icon} {display_name} ({len(templates)} templates)", expanded=True):
+            for template in templates:
+                template_id = template["id"]
+                is_editing = st.session_state['editing_template_id'] == template_id
+
+                # Template header
+                col1, col2, col3 = st.columns([3, 1, 1])
+
+                with col1:
+                    st.markdown(f"**{template['display_name']}**")
+                    if template['description']:
+                        st.caption(template['description'])
+
+                with col2:
+                    if template['is_builtin']:
+                        st.caption("Built-in")
+                    else:
+                        st.caption("Custom")
+
+                with col3:
+                    if is_editing:
+                        if st.button("Cancel", key=f"cancel_{template_id}", use_container_width=True):
+                            st.session_state['editing_template_id'] = None
+                            st.rerun()
+                    else:
+                        if st.button("Edit", key=f"edit_{template_id}", use_container_width=True):
+                            st.session_state['editing_template_id'] = template_id
+                            st.rerun()
+
+                # Edit form (shown when editing)
+                if is_editing:
+                    st.markdown("---")
+
+                    # Display name
+                    new_display_name = st.text_input(
+                        "Display Name",
+                        value=template['display_name'],
+                        key=f"name_{template_id}"
+                    )
+
+                    # Description
+                    new_description = st.text_input(
+                        "Description",
+                        value=template['description'] or "",
+                        key=f"desc_{template_id}"
+                    )
+
+                    # Variables (comma-separated)
+                    new_variables = st.text_input(
+                        "Variables (comma-separated)",
+                        value=template['variables'] or "",
+                        key=f"vars_{template_id}",
+                        help="Template variables like: schema, course_title, learning_outcomes"
+                    )
+
+                    # Content (large text area)
+                    new_content = st.text_area(
+                        "Prompt Content",
+                        value=template['content'],
+                        height=400,
+                        key=f"content_{template_id}"
+                    )
+
+                    # Action buttons
+                    btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 2])
+
+                    with btn_col1:
+                        if st.button("💾 Save Changes", key=f"save_{template_id}", type="primary", use_container_width=True):
+                            if update_prompt_template(
+                                template_id,
+                                content=new_content,
+                                display_name=new_display_name,
+                                description=new_description,
+                                variables=new_variables
+                            ):
+                                st.success("Template saved!")
+                                st.session_state['editing_template_id'] = None
+                                st.rerun()
+                            else:
+                                st.error("Failed to save template")
+
+                    with btn_col2:
+                        if template['is_builtin']:
+                            if st.button("🔄 Reset to Default", key=f"reset_{template_id}", use_container_width=True):
+                                if reset_prompt_template_to_default(template_id):
+                                    st.success("Template reset to default!")
+                                    st.session_state['editing_template_id'] = None
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to reset template")
+                        else:
+                            if st.button("🗑️ Delete", key=f"delete_{template_id}", use_container_width=True):
+                                if delete_prompt_template(template_id):
+                                    st.success("Template deleted!")
+                                    st.session_state['editing_template_id'] = None
+                                    st.rerun()
+                                else:
+                                    st.error("Failed to delete template")
+
+                    st.markdown("---")
+
+                else:
+                    # Show preview when not editing
+                    preview_length = 150
+                    content_preview = template['content'][:preview_length]
+                    if len(template['content']) > preview_length:
+                        content_preview += "..."
+                    st.code(content_preview, language="markdown")
+
+    st.markdown("---")
+
+    # Add new template section
+    with st.expander("➕ Add New Prompt Template", expanded=False):
+        st.markdown("Create a custom prompt template")
+
+        new_category = st.selectbox(
+            "Category",
+            options=["courseware", "course_proposal", "assessment"],
+            format_func=lambda x: category_display_names.get(x, x.title()),
+            key="new_template_category"
+        )
+
+        new_name = st.text_input(
+            "Template Name (lowercase, no spaces)",
+            placeholder="e.g., custom_generation",
+            key="new_template_name"
+        )
+
+        new_display = st.text_input(
+            "Display Name",
+            placeholder="e.g., Custom Generation",
+            key="new_template_display"
+        )
+
+        new_desc = st.text_input(
+            "Description",
+            placeholder="Brief description of what this template does",
+            key="new_template_desc"
+        )
+
+        new_vars = st.text_input(
+            "Variables (comma-separated)",
+            placeholder="e.g., schema, course_title",
+            key="new_template_vars"
+        )
+
+        new_template_content = st.text_area(
+            "Prompt Content",
+            height=200,
+            placeholder="Enter your prompt template here...",
+            key="new_template_content"
+        )
+
+        if st.button("➕ Add Template", type="primary"):
+            if not new_name or not new_display or not new_template_content:
+                st.error("Name, Display Name, and Content are required")
+            elif not new_name.replace("_", "").isalnum():
+                st.error("Template name must be alphanumeric with underscores only")
+            else:
+                if add_prompt_template(
+                    category=new_category,
+                    name=new_name.lower().replace(" ", "_"),
+                    display_name=new_display,
+                    content=new_template_content,
+                    description=new_desc,
+                    variables=new_vars
+                ):
+                    st.success(f"Template '{new_display}' added successfully!")
                     st.rerun()
                 else:
-                    st.warning("No new models were added")
-
-        # Display models in a scrollable container
-        st.markdown(f"**Showing {len(filtered_models)} models:**")
-
-        # Create checkboxes for each model
-        for model in filtered_models[:100]:  # Limit to 100 for performance
-            model_id = model["id"]
-            is_existing = model_id in existing_ids
-
-            col1, col2 = st.columns([1, 5])
-            with col1:
-                checked = st.checkbox(
-                    "",
-                    value=model_id in st.session_state['selected_models'],
-                    key=f"chk_{model_id}"
-                )
-                if checked and model_id not in st.session_state['selected_models']:
-                    st.session_state['selected_models'].add(model_id)
-                elif not checked and model_id in st.session_state['selected_models']:
-                    st.session_state['selected_models'].discard(model_id)
-
-            with col2:
-                st.markdown(f"<span style='color:#ffffff; font-size:1.1rem;'>{model_id}</span>", unsafe_allow_html=True)
-
-        if len(filtered_models) > 100:
-            st.caption(f"Showing first 100 of {len(filtered_models)} models. Use filter to narrow down.")
+                    st.error("Failed to add template. Name might already exist.")
 
 
 if __name__ == "__main__":

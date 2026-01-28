@@ -18,7 +18,7 @@ if 'cv_output_files' not in st.session_state:
 # Do not set a hardcoded default here - let app.py handle model selection
 
 def app():
-    st.title("Course Proposal File Processor")
+    st.title("Generate CP")
 
     # Show current company info
     show_company_info()

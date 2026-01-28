@@ -1845,7 +1845,7 @@ def app():
     """
     Streamlit web interface for Brochure Generation v2.
     """
-    st.title("📄 Generate Brochure v2")
+    st.title("Generate Brochure")
     st.markdown("Generate WSQ Course Brochures by web scraping course information from URLs")
     
     st.divider()

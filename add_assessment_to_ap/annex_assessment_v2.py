@@ -178,7 +178,7 @@ def app():
     Streamlit application to merge assessment Q&A documents into the annex of
     an Assessment Plan using locally uploaded files.
     """
-    st.title("📄 Add Assessment to AP (Local Upload)")
+    st.title("Add Assessment to AP")
 
     st.markdown("""
     ### Instructions:

@@ -215,7 +215,7 @@ def app():
     # ------------------------------
     # STREAMLIT UI & PROCESSING
     # ------------------------------
-    st.title("📄 Check Documents")
+    st.title("Check Documents")
 
     custom_instructions = st.text_area(
         "✍️ Enter your custom instructions for entity extraction:",
