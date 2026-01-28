@@ -3,6 +3,7 @@
 A comprehensive AI-powered courseware generation platform built with **OpenAI Agents SDK** and Streamlit. This system uses an **orchestrator-based multi-agent architecture** to automate the creation of educational documents including Course Proposals, Assessment Plans, Learning Guides, and more for workforce skills qualification (WSQ) training programs.
 
 ### 🔴 [Live Demo](https://courseware-generator-openai.streamlit.app/)
+### 📖 [Official Documentation](https://alfredang.github.io/courseware_openai_agents/)
 
 ## 🚀 Quick Start for New Users
 
@@ -99,9 +100,16 @@ The application features a flexible model management system:
 - **Course Proposal (CP)** - Automated course proposal generation with multi-agent validation
 - **Assessment Documents** - Question & Answer papers (SAQ, CS, PP formats)
 - **Courseware Suite** - Assessment Plan, Learning Guide, Lesson Plan, Facilitator Guide
+- **Presentation Slides** - AI-powered slide generation using NotebookLM MCP
 - **Course Brochures** - Marketing materials with web scraping automation
 - **Document Integration** - Assessment integration into AP annexes
 - **Document Verification** - Supporting document validation and entity extraction
+
+### Skills System
+- **Skill-Driven AI Assistant** - Chatbot that uses skill definitions to provide contextual guidance
+- **Auto-Navigation** - Type skill commands (e.g., `/generate_slides`) to navigate to modules
+- **Extensible Skills** - Add new skills by creating markdown files in `.skills/` folder
+- **Built-in Commands**: `/generate_course_proposal`, `/generate_assessment_plan`, `/generate_facilitator_guide`, `/generate_learner_guide`, `/generate_lesson_plan`, `/generate_assessment`, `/generate_slides`
 
 ### Model Management System
 - **Multi-Provider Support** - OpenRouter (38+ models), OpenAI (native), and Gemini
@@ -314,7 +322,18 @@ streamlit run app.py
 
 ```
 courseware_openai_agents/
-├── app.py                      # Main Streamlit application with orchestrator chat
+├── app.py                      # Main Streamlit application with AI assistant
+├── .skills/                    # 🎯 Skill definitions (markdown files)
+│   ├── generate_course_proposal.md  # CP skill with instructions
+│   ├── generate_assessment_plan.md  # Assessment Plan skill
+│   ├── generate_facilitator_guide.md # Facilitator Guide skill
+│   ├── generate_learner_guide.md    # Learner Guide skill
+│   ├── generate_lesson_plan.md      # Lesson Plan skill
+│   ├── generate_assessment.md       # Assessment skill
+│   ├── generate_slides.md           # Slides skill (NotebookLM MCP)
+│   └── branding.md                  # Branding guidelines
+├── skills/                     # Skills loader module
+│   └── __init__.py            # Parse skill files, extract commands
 ├── courseware_agents/          # 🤖 Multi-Agent System (OpenAI Agents SDK)
 │   ├── __init__.py            # Package exports
 │   ├── base.py                # Agent factory & OpenRouter configuration
@@ -350,6 +369,8 @@ courseware_openai_agents/
 ├── generate_ap_fg_lg_lp/      # Courseware document generation
 │   ├── courseware_generation.py  # AP, FG, LG, LP generation
 │   └── utils/                 # Document generators, templates & organizations
+├── generate_slides/           # 🆕 Presentation slide generation
+│   └── slides_generation.py   # NotebookLM MCP integration
 ├── generate_brochure/         # Marketing brochure generation
 │   ├── brochure_generation.py
 │   └── brochure_template/     # HTML brochure templates
@@ -358,6 +379,53 @@ courseware_openai_agents/
 ├── check_documents/           # Supporting document tools
 │   └── sup_doc.py            # Document verification & extraction
 └── requirements.txt           # Python dependencies
+```
+
+## 💬 AI Assistant & Skills System
+
+### AI Assistant
+Every page includes an **AI Assistant** at the bottom that provides contextual help for WSQ courseware tasks. The assistant is skill-driven and can:
+- Answer questions about document generation
+- Navigate you to the right module
+- Provide step-by-step guidance based on skill instructions
+
+### Skill Commands
+Type these commands in the AI Assistant to navigate and get help:
+
+| Command | Action |
+|---------|--------|
+| `/generate_course_proposal` | Navigate to Course Proposal generation |
+| `/generate_assessment_plan` | Navigate to Assessment Plan generation |
+| `/generate_facilitator_guide` | Navigate to Facilitator Guide generation |
+| `/generate_learner_guide` | Navigate to Learner Guide generation |
+| `/generate_lesson_plan` | Navigate to Lesson Plan generation |
+| `/generate_assessment` | Navigate to Assessment generation |
+| `/generate_slides` | Navigate to Slides generation |
+
+### Adding New Skills
+Create a markdown file in `.skills/` folder with this structure:
+
+```markdown
+# Skill Name
+
+## Command
+`/skill_command` or `skill_command`
+
+## Navigate
+Page Name (must match sidebar menu)
+
+## Description
+Brief description of what this skill does.
+
+## Response
+Message shown when skill command is invoked.
+
+## Instructions
+Detailed instructions for the AI to follow...
+
+## Capabilities
+- Capability 1
+- Capability 2
 ```
 
 ## 💡 Usage Guide
@@ -391,7 +459,15 @@ The orchestrator will automatically route your request to the appropriate specia
 3. Configure organization details
 4. Generate complete courseware package
 
-### 4. Additional Features
+### 4. Generate Presentation Slides
+1. Upload course materials (FG, LG, or CP)
+2. Configure slide options (slides per topic, speaker notes)
+3. Generate slides using NotebookLM MCP
+4. Download in PowerPoint, PDF, or Google Slides format
+
+**Note**: Requires NotebookLM MCP server configuration. See [notebooklm-mcp](https://github.com/alfredang/notebooklm-mcp) for setup.
+
+### 5. Additional Features
 - **Brochure Generation**: Automated marketing material creation
 - **Document Verification**: Entity extraction and validation
 - **Assessment Integration**: Merge assessments into AP documents
