@@ -63,6 +63,9 @@ async def main(input_tsc) -> None:
         model_choice=model_choice,
         stream_to_console=True
     )
+    if not tsc_parsed_data:
+        st.error("TSC Agent failed to return data. This may be due to an API rate limit. Please try again later or switch to a different model.")
+        return
     with open("generate_cp/json_output/output_TSC.json", "w", encoding="utf-8") as out:
         json.dump(tsc_parsed_data, out, indent=2)
 
@@ -76,6 +79,9 @@ async def main(input_tsc) -> None:
         model_choice=model_choice,
         stream_to_console=True
     )
+    if not aggregator_data:
+        st.error("Extraction Team failed to return data. This may be due to an API rate limit. Please try again later or switch to a different model.")
+        return
     with open("generate_cp/json_output/ensemble_output.json", "w", encoding="utf-8") as out:
         json.dump(aggregator_data, out, indent=2)
 
@@ -96,6 +102,9 @@ async def main(input_tsc) -> None:
         model_choice=model_choice,
         stream_to_console=True
     )
+    if not editor_data:
+        st.error("Research Team failed to return data. This may be due to an API rate limit. Please try again later or switch to a different model.")
+        return
     with open("generate_cp/json_output/research_output.json", "w", encoding="utf-8") as out:
         json.dump(editor_data, out, indent=2)
 
@@ -132,10 +141,6 @@ async def main(input_tsc) -> None:
     if cp_type == "New CP":
         with open('generate_cp/json_output/research_output.json', 'r', encoding='utf-8') as f:
             research_output = json.load(f)
-
-    # Load CP Template with placeholders
-    with open('generate_cp/json_output/output_CP.json', 'r', encoding='utf-8') as file:
-        output_CP = json.load(file)
 
     # Load mapping template with key:empty list pair
     with open('generate_cp/json_output/mapping_source.json', 'r', encoding='utf-8') as file:

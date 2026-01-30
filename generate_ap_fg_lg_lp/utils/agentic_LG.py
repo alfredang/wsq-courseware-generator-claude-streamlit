@@ -207,10 +207,68 @@ def generate_learning_guide(context: dict, name_of_organisation: str, model_choi
         IOError:
             If there are issues with reading/writing the document.
     """
+    # Debug: Log incoming context for LG generation
+    print("=" * 60)
+    print("LG GENERATION - CONTEXT DEBUG")
+    print("=" * 60)
+    print(f"LG DEBUG: Course_Title = {context.get('Course_Title')}")
+    print(f"LG DEBUG: Learning_Units count = {len(context.get('Learning_Units', []))}")
+    print("=" * 60)
+
+    # ================================================================
+    # Validate and normalize Learning_Units structure for template
+    # ================================================================
+    learning_units = context.get("Learning_Units", [])
+
+    if not isinstance(learning_units, list):
+        print(f"LG DEBUG: WARNING - Learning_Units is not a list")
+        learning_units = []
+
+    validated_learning_units = []
+    for i, lu in enumerate(learning_units):
+        if not isinstance(lu, dict):
+            continue
+
+        validated_lu = {
+            "LU_Title": lu.get("LU_Title", f"Learning Unit {i+1}"),
+            "LO": lu.get("LO", ""),
+            "Topics": lu.get("Topics", []),
+            "K_numbering_description": lu.get("K_numbering_description", []),
+            "A_numbering_description": lu.get("A_numbering_description", []),
+            "Assessment_Methods": lu.get("Assessment_Methods", []),
+            "Instructional_Methods": lu.get("Instructional_Methods", []),
+        }
+
+        # Validate nested structures
+        validated_topics = []
+        for topic in validated_lu["Topics"]:
+            if isinstance(topic, dict):
+                validated_topics.append({
+                    "Topic_Title": topic.get("Topic_Title", ""),
+                    "Bullet_Points": topic.get("Bullet_Points", [])
+                })
+        validated_lu["Topics"] = validated_topics
+
+        validated_k = []
+        for k in validated_lu["K_numbering_description"]:
+            if isinstance(k, dict):
+                validated_k.append({"K_number": k.get("K_number", ""), "Description": k.get("Description", "")})
+        validated_lu["K_numbering_description"] = validated_k
+
+        validated_a = []
+        for a in validated_lu["A_numbering_description"]:
+            if isinstance(a, dict):
+                validated_a.append({"A_number": a.get("A_number", ""), "Description": a.get("Description", "")})
+        validated_lu["A_numbering_description"] = validated_a
+
+        validated_learning_units.append(validated_lu)
+
+    context["Learning_Units"] = validated_learning_units
+    print(f"LG DEBUG: Total validated Learning_Units = {len(validated_learning_units)}")
 
     content_response = asyncio.run(generate_content(context, model_choice))
     context["Course_Overview"] = content_response.get("Course_Overview")
-    context["LO_Description"] = content_response.get("LO_Description") 
+    context["LO_Description"] = content_response.get("LO_Description")
 
     doc = DocxTemplate(LG_TEMPLATE_DIR)
 

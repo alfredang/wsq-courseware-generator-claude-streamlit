@@ -684,14 +684,16 @@ def manage_prompt_templates():
     category_icons = {
         "courseware": "📚",
         "course_proposal": "📄",
+        "brochure": "📰",
         "assessment": "✅",
     }
 
     # Category display names
     category_display_names = {
-        "courseware": "Courseware (AP, FG, LG, LP)",
+        "courseware": "Courseware (LG, LP, FG, AP - includes Assessment Record & Summary)",
         "course_proposal": "Course Proposal (CP)",
-        "assessment": "Assessment (SAQ, PP, CS)",
+        "brochure": "Brochure",
+        "assessment": "Assessment (SAQ, PP, CS, PRJ, ASGN, OI, DEM, RP, OQ)",
     }
 
     # Initialize edit state
@@ -820,7 +822,7 @@ def manage_prompt_templates():
 
         new_category = st.selectbox(
             "Category",
-            options=["courseware", "course_proposal", "assessment"],
+            options=["courseware", "course_proposal", "brochure", "assessment"],
             format_func=lambda x: category_display_names.get(x, x.title()),
             key="new_template_category"
         )

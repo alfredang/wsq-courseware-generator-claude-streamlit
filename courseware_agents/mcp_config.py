@@ -141,6 +141,67 @@ async def create_fetch_server(name: str = "Web Fetch Server"):
     )
 
 
+async def create_notebooklm_server(
+    server_path: Optional[str] = None,
+    name: str = "NotebookLM Server"
+):
+    """
+    Create a NotebookLM MCP server for AI-powered content processing.
+
+    Provides tools for creating notebooks, adding sources, and generating
+    slide decks, summaries, quizzes, and more via Google NotebookLM.
+
+    Available tools:
+        - list_notebooks: List all notebooks
+        - create_notebook: Create a new notebook
+        - add_source_url: Add a URL as source
+        - add_source_text: Add raw text as source
+        - ask_notebook: Query notebook content
+        - get_notebook_summary: Get summary and insights
+        - generate_slide_deck: Generate PowerPoint-style slides
+        - generate_quiz: Generate quiz questions
+        - generate_summary_report: Generate a briefing document
+
+    Args:
+        server_path: Path to the notebooklm-mcp server directory.
+                     Defaults to sibling directory of project root.
+        name: Server name for identification.
+
+    Returns:
+        MCPServerStdio instance configured for NotebookLM access.
+    """
+    from agents.mcp import MCPServerStdio
+
+    if server_path is None:
+        # Try common locations
+        project_root = Path(__file__).resolve().parent.parent
+        possible_paths = [
+            project_root / "notebooklm-mcp",
+            project_root.parent / "notebooklm-mcp",
+            Path.home() / "notebooklm-mcp",
+        ]
+        for p in possible_paths:
+            if (p / "server.py").exists():
+                server_path = str(p)
+                break
+
+    if not server_path:
+        raise ValueError(
+            "NotebookLM MCP server not found. Clone it from "
+            "https://github.com/alfredang/notebooklm-mcp and set the path."
+        )
+
+    return MCPServerStdio(
+        name=name,
+        params={
+            "command": "uv",
+            "args": ["run", "python", "server.py"],
+            "cwd": server_path,
+        },
+        cache_tools_list=True,
+    )
+
+
 async def create_memory_server(name: str = "Memory Server"):
     """
     Create a Memory MCP server for persistent knowledge storage.
@@ -185,7 +246,9 @@ class MCPServerConfig:
         enable_sqlite: bool = False,
         enable_fetch: bool = True,
         enable_memory: bool = False,
+        enable_notebooklm: bool = False,
         custom_paths: Optional[List[str]] = None,
+        notebooklm_path: Optional[str] = None,
     ):
         """
         Initialize MCP servers based on configuration.
@@ -196,7 +259,9 @@ class MCPServerConfig:
             enable_sqlite: Enable SQLite MCP server.
             enable_fetch: Enable web fetch MCP server.
             enable_memory: Enable memory MCP server.
+            enable_notebooklm: Enable NotebookLM MCP server.
             custom_paths: Custom paths for filesystem server.
+            notebooklm_path: Path to notebooklm-mcp server directory.
         """
         if enable_filesystem:
             self._servers["filesystem"] = await create_filesystem_server(custom_paths)
@@ -215,6 +280,12 @@ class MCPServerConfig:
 
         if enable_memory:
             self._servers["memory"] = await create_memory_server()
+
+        if enable_notebooklm:
+            try:
+                self._servers["notebooklm"] = await create_notebooklm_server(notebooklm_path)
+            except ValueError as e:
+                print(f"Warning: NotebookLM MCP not available: {e}")
 
     async def start_all(self):
         """Start all configured MCP servers."""
@@ -259,15 +330,17 @@ async def mcp_context(
     enable_sqlite: bool = False,
     enable_fetch: bool = True,
     enable_memory: bool = False,
+    enable_notebooklm: bool = False,
     custom_paths: Optional[List[str]] = None,
+    notebooklm_path: Optional[str] = None,
 ):
     """
     Context manager for MCP server lifecycle.
 
     Usage:
-        async with mcp_context(enable_postgres=True) as servers:
-            agent = Agent(name="Assistant", mcp_servers=servers)
-            result = await Runner.run(agent, "Query the database")
+        async with mcp_context(enable_notebooklm=True) as servers:
+            agent = Agent(name="Slides Agent", mcp_servers=servers)
+            result = await Runner.run(agent, "Generate slides")
 
     Args:
         enable_filesystem: Enable filesystem MCP server.
@@ -275,7 +348,9 @@ async def mcp_context(
         enable_sqlite: Enable SQLite MCP server.
         enable_fetch: Enable web fetch MCP server.
         enable_memory: Enable memory MCP server.
+        enable_notebooklm: Enable NotebookLM MCP server.
         custom_paths: Custom paths for filesystem server.
+        notebooklm_path: Path to notebooklm-mcp server directory.
 
     Yields:
         List of active MCP servers.
@@ -287,7 +362,9 @@ async def mcp_context(
         enable_sqlite=enable_sqlite,
         enable_fetch=enable_fetch,
         enable_memory=enable_memory,
+        enable_notebooklm=enable_notebooklm,
         custom_paths=custom_paths,
+        notebooklm_path=notebooklm_path,
     )
     await config.start_all()
 
@@ -320,6 +397,16 @@ BROCHURE_AGENT_MCP_CONFIG = {
     "enable_sqlite": False,
     "enable_fetch": True,      # For course info scraping
     "enable_memory": False,
+    "enable_notebooklm": False,
+}
+
+SLIDES_AGENT_MCP_CONFIG = {
+    "enable_filesystem": False,
+    "enable_postgres": False,
+    "enable_sqlite": False,
+    "enable_fetch": False,
+    "enable_memory": False,
+    "enable_notebooklm": True,  # NotebookLM for slide generation
 }
 
 
@@ -329,9 +416,11 @@ __all__ = [
     "create_sqlite_server",
     "create_fetch_server",
     "create_memory_server",
+    "create_notebooklm_server",
     "MCPServerConfig",
     "mcp_context",
     "COURSEWARE_MCP_CONFIG",
     "DOCUMENT_AGENT_MCP_CONFIG",
     "BROCHURE_AGENT_MCP_CONFIG",
+    "SLIDES_AGENT_MCP_CONFIG",
 ]

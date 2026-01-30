@@ -232,27 +232,40 @@ async def run_tsc_agent(
         print("TSC AGENT - Parsing and Correcting TSC Data")
         print("=" * 80)
 
-    try:
-        completion = client.chat.completions.create(
-            model=config["model"],
-            temperature=config["temperature"],
-            messages=[
-                {"role": "system", "content": system_message},
-                {"role": "user", "content": user_task}
-            ],
-            response_format={"type": "json_object"}
-        )
+    # Retry logic for rate limits
+    max_retries = 3
+    retry_delay = 10  # Start with 10 seconds
 
-        content = completion.choices[0].message.content
-        parsed_json = extract_json_from_response(content)
+    for attempt in range(max_retries):
+        try:
+            completion = client.chat.completions.create(
+                model=config["model"],
+                temperature=config["temperature"],
+                max_tokens=8000,  # Limit tokens to stay within OpenRouter credit limits
+                messages=[
+                    {"role": "system", "content": system_message},
+                    {"role": "user", "content": user_task}
+                ],
+                response_format={"type": "json_object"}
+            )
 
-        if stream_to_console:
-            print("\n[TSC Agent Response]")
-            print(json.dumps(parsed_json, indent=2))
-            print("=" * 80 + "\n")
+            content = completion.choices[0].message.content
+            parsed_json = extract_json_from_response(content)
 
-        return parsed_json
+            if stream_to_console:
+                print("\n[TSC Agent Response]")
+                print(json.dumps(parsed_json, indent=2))
+                print("=" * 80 + "\n")
 
-    except Exception as e:
-        print(f"Error in TSC agent: {e}", file=sys.stderr)
-        raise
+            return parsed_json
+
+        except Exception as e:
+            error_str = str(e).lower()
+            if ("429" in str(e) or "rate" in error_str or "quota" in error_str) and attempt < max_retries - 1:
+                wait_time = retry_delay * (attempt + 1)
+                print(f"Rate limit hit. Waiting {wait_time} seconds before retry {attempt + 2}/{max_retries}...")
+                import time
+                time.sleep(wait_time)
+                continue
+            print(f"Error in TSC agent: {e}", file=sys.stderr)
+            raise

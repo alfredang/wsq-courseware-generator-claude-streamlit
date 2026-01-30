@@ -6,11 +6,24 @@
 ## Navigate
 Generate Slides
 
+## Keywords
+slides, presentation, powerpoint, ppt, create slides, generate slides, make slides, slide deck, training slides, course slides, i need slides, want slides, need slides, make a presentation, create presentation, i need a powerpoint, pptx, slids
+
 ## Description
 Help users create PowerPoint presentation slides from course materials using NotebookLM MCP.
 
 ## Response
-Taking you to **Generate Slides**. Upload your course materials and I'll generate professional presentation slides using NotebookLM.
+I'll take you to **Generate Slides** now.
+
+Here's what you'll need:
+- **Upload** your course materials (Facilitator Guide, Learner Guide, or Course Proposal)
+
+The system uses NotebookLM to generate professional presentation slides with:
+- Clear learning objectives per section
+- Key points and summaries
+- Speaker notes for facilitators
+
+**Tip:** Use your Facilitator Guide for the most comprehensive slides.
 
 ## Instructions
 When users ask about creating slides, presentations, PPT, or PowerPoint:
@@ -55,3 +68,8 @@ NotebookLM MCP server provides:
 - Include facilitator notes
 - Support multiple input formats (FG, LG, CP)
 - Uses NotebookLM MCP for AI-powered slide generation
+
+## Next Steps
+After generating your slides:
+- **Create a brochure** for marketing — say *"brochure"*
+- **Check all documents** before submission — say *"check documents"*

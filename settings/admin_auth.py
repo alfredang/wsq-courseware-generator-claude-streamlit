@@ -38,13 +38,9 @@ def logout():
 
 
 def _get_initial_credentials():
-    """Get initial credentials from secrets/env for first-time setup"""
-    try:
-        username = st.secrets.get("ADMIN_USERNAME", os.environ.get("ADMIN_USERNAME", ""))
-        password = st.secrets.get("ADMIN_PASSWORD", os.environ.get("ADMIN_PASSWORD", ""))
-    except Exception:
-        username = os.environ.get("ADMIN_USERNAME", "")
-        password = os.environ.get("ADMIN_PASSWORD", "")
+    """Get initial credentials from environment variables or Streamlit secrets."""
+    username = os.environ.get("ADMIN_USERNAME") or st.secrets.get("ADMIN_USERNAME", "admin")
+    password = os.environ.get("ADMIN_PASSWORD") or st.secrets.get("ADMIN_PASSWORD", "")
     return username, password
 
 
@@ -56,7 +52,6 @@ def login_page():
         username, password = _get_initial_credentials()
         if username and password:
             set_admin_credentials(username, password)
-            st.info("Admin credentials initialized from configuration.")
         else:
             # Show setup form
             st.markdown("### Initial Admin Setup")
@@ -90,7 +85,7 @@ def login_page():
     st.caption("Enter admin credentials to access settings")
 
     with st.form("admin_login_form"):
-        username = st.text_input("Username", placeholder="Enter username")
+        username = st.text_input("Username", value="admin", placeholder="Enter username")
         password = st.text_input("Password", type="password", placeholder="Enter password")
 
         col1, col2 = st.columns([1, 3])

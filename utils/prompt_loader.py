@@ -241,6 +241,11 @@ def load_shared_prompt(prompt_name: str, **kwargs) -> str:
     return load_prompt(f"shared/{prompt_name}", **kwargs)
 
 
+def load_brochure_prompt(prompt_name: str, **kwargs) -> str:
+    """Load a brochure-related prompt."""
+    return load_prompt(f"brochure/{prompt_name}", **kwargs)
+
+
 # Prompt Management Functions for Streamlit Interface
 def clear_prompt_cache():
     """Clear all cached prompts to force reload from disk."""

@@ -75,6 +75,12 @@ from openai import OpenAI
 from generate_assessment.utils.openai_agentic_CS import generate_cs
 from generate_assessment.utils.openai_agentic_PP import generate_pp
 from generate_assessment.utils.openai_agentic_SAQ import generate_saq
+from generate_assessment.utils.openai_agentic_PRJ import generate_prj
+from generate_assessment.utils.openai_agentic_ASGN import generate_asgn
+from generate_assessment.utils.openai_agentic_OI import generate_oi
+from generate_assessment.utils.openai_agentic_DEM import generate_dem
+from generate_assessment.utils.openai_agentic_RP import generate_rp
+from generate_assessment.utils.openai_agentic_OQ import generate_oq
 from generate_assessment.utils.pydantic_models import FacilitatorGuideExtraction
 from settings.model_configs import get_model_config
 from settings.api_manager import load_api_keys
@@ -644,16 +650,23 @@ def generate_documents(context: dict, assessment_type: str, output_dir: str) -> 
             for question in formatted_questions
         ]
     }
-    answer_doc.render(answer_context, autoescape=True)
-    question_doc.render(question_context, autoescape=True)
+    answer_doc.render(answer_context)
+    question_doc.render(question_context)
+
+    # Create temp files and close them before saving (Windows compatibility)
     question_tempfile = tempfile.NamedTemporaryFile(
         delete=False, suffix=f"_{assessment_type}_Questions.docx"
     )
+    question_tempfile.close()
+
     answer_tempfile = tempfile.NamedTemporaryFile(
         delete=False, suffix=f"_{assessment_type}_Answers.docx"
     )
+    answer_tempfile.close()
+
     question_doc.save(question_tempfile.name)
     answer_doc.save(answer_tempfile.name)
+
     return {
         "ASSESSMENT_TYPE": assessment_type,
         "QUESTION": question_tempfile.name,
@@ -755,67 +768,18 @@ def app():
                     with open(interp_cache_path, 'r', encoding='utf-8') as f:
                         interpreted_data = json.load(f)
 
-                    # Apply filter to cached data too (in case cache was created before filter was added)
+                    # Keep all assessments from cache - trust the FG document
                     if "assessments" in interpreted_data and isinstance(interpreted_data["assessments"], list):
-                        original_count = len(interpreted_data["assessments"])
-                        filtered_assessments = []
-                        seen_durations = {}
-
-                        for assessment in interpreted_data["assessments"]:
-                            code = assessment.get("code", "")
-                            duration = assessment.get("duration", "")
-                            is_suspicious = False
-
-                            # Filter CS with duplicate duration
-                            if duration in seen_durations and code in ["CS", "CASE STUDY"]:
-                                print(f"⚠️ Filtering suspicious {code} from cache (duplicate duration: {duration})")
-                                is_suspicious = True
-
-                            if code == "CS" and duration in [a.get("duration") for a in filtered_assessments]:
-                                print(f"⚠️ Filtering suspicious CS from cache (matches existing duration: {duration})")
-                                is_suspicious = True
-
-                            if not is_suspicious:
-                                filtered_assessments.append(assessment)
-                                seen_durations[duration] = code
-
-                        if original_count != len(filtered_assessments):
-                            interpreted_data["assessments"] = filtered_assessments
-                            print(f"✅ Filtered {original_count - len(filtered_assessments)} suspicious assessment(s) from cache")
+                        print(f"📋 Found {len(interpreted_data['assessments'])} assessment(s) in cached FG data")
                 else:
                     print(f"⏳ Interpreting FG with LLM (this may take 10-30 seconds)...")
                     interpreted_data = asyncio.run(interpret_fg(fg_data, model_choice))
 
-                    # Validate and filter hallucinated assessments
+                    # Keep all assessments from FG - trust the document
                     if "assessments" in interpreted_data and isinstance(interpreted_data["assessments"], list):
-                        original_count = len(interpreted_data["assessments"])
-                        filtered_assessments = []
-                        seen_durations = {}
-
-                        for assessment in interpreted_data["assessments"]:
-                            code = assessment.get("code", "")
-                            duration = assessment.get("duration", "")
-
-                            # Check for suspicious patterns
-                            is_suspicious = False
-
-                            # Pattern 1: Same duration as another assessment (sign of hallucination)
-                            if duration in seen_durations and code in ["CS", "CASE STUDY"]:
-                                print(f"⚠️ Filtering suspicious {code} assessment (duplicate duration: {duration})")
-                                is_suspicious = True
-
-                            # Pattern 2: CS with same duration as PP or SAQ
-                            if code == "CS" and duration in [a.get("duration") for a in filtered_assessments]:
-                                print(f"⚠️ Filtering suspicious CS assessment (matches existing duration: {duration})")
-                                is_suspicious = True
-
-                            if not is_suspicious:
-                                filtered_assessments.append(assessment)
-                                seen_durations[duration] = code
-
-                        interpreted_data["assessments"] = filtered_assessments
-                        if original_count != len(filtered_assessments):
-                            print(f"✅ Filtered {original_count - len(filtered_assessments)} suspicious assessment(s)")
+                        print(f"📋 Found {len(interpreted_data['assessments'])} assessment(s) in FG document")
+                        for i, a in enumerate(interpreted_data["assessments"]):
+                            print(f"  Assessment {i+1}: {a.get('code', 'N/A')} - {a.get('duration', 'N/A')}")
 
                     # Save interpretation to cache
                     with open(interp_cache_path, 'w', encoding='utf-8') as f:
@@ -883,7 +847,7 @@ def app():
         if st.button("🚀 Generate Assessments", type="primary"):
             assessments = st.session_state['fg_data'].get('assessments', [])
 
-            # Auto-detect which assessment types are available
+            # Auto-detect which assessment types are available from FG document
             available_types = []
 
             # Debug: Show all assessment codes found
@@ -896,29 +860,80 @@ def app():
             for assessment in assessments:
                 code = assessment.get('code', '').upper().strip()
 
-                # Use word boundary matching to avoid false positives (e.g., "PROCESS" shouldn't match "CS")
+                # Robust detection for all assessment types from FG document
                 detected = False
 
-                # Check for WA (SAQ)
-                if 'WA-SAQ' in code or 'WA (SAQ)' in code or 'SAQ' in code or (code.startswith('WA') and 'SAQ' in code):
+                # Check for WA (SAQ) - Written Assessment / Short Answer Questions
+                saq_patterns = ['WA-SAQ', 'WA (SAQ)', 'WA(SAQ)', 'SAQ', 'SHORT ANSWER',
+                               'WRITTEN ASSESSMENT', 'WA - SAQ', 'WRITTEN']
+                if any(pattern in code for pattern in saq_patterns) or (code.startswith('WA') and 'SAQ' in code):
                     if 'WA (SAQ)' not in available_types:
                         available_types.append('WA (SAQ)')
                         print(f"DEBUG: Detected WA (SAQ) from code: '{code}'")
                     detected = True
 
-                # Check for PP - be more strict
-                if code == 'PP' or 'PP' == code or '-PP' in code or 'PP-' in code or '(PP)' in code:
+                # Check for PP - Practical Performance
+                pp_patterns = ['PP', 'PRACTICAL PERFORMANCE', 'PRACTICAL', '-PP', 'PP-', '(PP)']
+                if code == 'PP' or any(pattern in code for pattern in pp_patterns if pattern != 'PP'):
                     if 'PP' not in available_types:
                         available_types.append('PP')
                         print(f"DEBUG: Detected PP from code: '{code}'")
                     detected = True
 
-                # Check for CS - be VERY strict to avoid false positives
-                # Only match exact CS or CS with delimiters, not substrings
-                if code == 'CS' or code == 'CASE STUDY' or code == 'WA-CS' or code == 'CS-' in code or code.startswith('CS-') or code.endswith('-CS') or '(CS)' in code:
+                # Check for CS - Case Study
+                cs_patterns = ['CASE STUDY', 'CASE-STUDY', 'WA-CS', 'CS-', '-CS', '(CS)']
+                if code == 'CS' or any(pattern in code for pattern in cs_patterns):
                     if 'CS' not in available_types:
                         available_types.append('CS')
                         print(f"DEBUG: Detected CS from code: '{code}'")
+                    detected = True
+
+                # Check for PRJ - Project
+                prj_patterns = ['PRJ', 'PROJECT', 'WA-PRJ', '-PRJ', '(PRJ)']
+                if code == 'PRJ' or any(pattern in code for pattern in prj_patterns if pattern != 'PRJ'):
+                    if 'PRJ' not in available_types:
+                        available_types.append('PRJ')
+                        print(f"DEBUG: Detected PRJ from code: '{code}'")
+                    detected = True
+
+                # Check for ASGN - Assignment
+                asgn_patterns = ['ASGN', 'ASSIGNMENT', 'WA-ASGN', '-ASGN', '(ASGN)']
+                if code == 'ASGN' or any(pattern in code for pattern in asgn_patterns if pattern != 'ASGN'):
+                    if 'ASGN' not in available_types:
+                        available_types.append('ASGN')
+                        print(f"DEBUG: Detected ASGN from code: '{code}'")
+                    detected = True
+
+                # Check for OI - Oral Interview
+                oi_patterns = ['OI', 'ORAL INTERVIEW', 'ORAL-INTERVIEW', '-OI', '(OI)']
+                if code == 'OI' or any(pattern in code for pattern in oi_patterns if pattern != 'OI'):
+                    if 'OI' not in available_types:
+                        available_types.append('OI')
+                        print(f"DEBUG: Detected OI from code: '{code}'")
+                    detected = True
+
+                # Check for DEM - Demonstration
+                dem_patterns = ['DEM', 'DEMO', 'DEMONSTRATION', '-DEM', '(DEM)']
+                if code == 'DEM' or any(pattern in code for pattern in dem_patterns if pattern != 'DEM'):
+                    if 'DEM' not in available_types:
+                        available_types.append('DEM')
+                        print(f"DEBUG: Detected DEM from code: '{code}'")
+                    detected = True
+
+                # Check for RP - Role Play
+                rp_patterns = ['RP', 'ROLE PLAY', 'ROLE-PLAY', 'ROLEPLAY', '-RP', '(RP)']
+                if code == 'RP' or any(pattern in code for pattern in rp_patterns if pattern != 'RP'):
+                    if 'RP' not in available_types:
+                        available_types.append('RP')
+                        print(f"DEBUG: Detected RP from code: '{code}'")
+                    detected = True
+
+                # Check for OQ - Oral Questioning
+                oq_patterns = ['OQ', 'ORAL QUESTIONING', 'ORAL-QUESTIONING', '-OQ', '(OQ)']
+                if code == 'OQ' or any(pattern in code for pattern in oq_patterns if pattern != 'OQ'):
+                    if 'OQ' not in available_types:
+                        available_types.append('OQ')
+                        print(f"DEBUG: Detected OQ from code: '{code}'")
                     detected = True
 
                 if not detected:
@@ -956,6 +971,36 @@ def app():
                                         cs_context = asyncio.run(generate_cs(st.session_state['fg_data'], index, model_choice))
                                         files = generate_documents(cs_context, assessment_type, "output")
                                         st.session_state['assessment_generated_files'][assessment_type] = files
+                                elif assessment_type == "PRJ":
+                                    with st.spinner(f"Auto-generating Project... (attempt {attempt + 1}/{max_retries})"):
+                                        prj_context = asyncio.run(generate_prj(st.session_state['fg_data'], index, None, model_choice))
+                                        files = generate_documents(prj_context, assessment_type, "output")
+                                        st.session_state['assessment_generated_files'][assessment_type] = files
+                                elif assessment_type == "ASGN":
+                                    with st.spinner(f"Auto-generating Assignment... (attempt {attempt + 1}/{max_retries})"):
+                                        asgn_context = asyncio.run(generate_asgn(st.session_state['fg_data'], index, None, model_choice))
+                                        files = generate_documents(asgn_context, assessment_type, "output")
+                                        st.session_state['assessment_generated_files'][assessment_type] = files
+                                elif assessment_type == "OI":
+                                    with st.spinner(f"Auto-generating Oral Interview... (attempt {attempt + 1}/{max_retries})"):
+                                        oi_context = asyncio.run(generate_oi(st.session_state['fg_data'], index, None, model_choice))
+                                        files = generate_documents(oi_context, assessment_type, "output")
+                                        st.session_state['assessment_generated_files'][assessment_type] = files
+                                elif assessment_type == "DEM":
+                                    with st.spinner(f"Auto-generating Demonstration... (attempt {attempt + 1}/{max_retries})"):
+                                        dem_context = asyncio.run(generate_dem(st.session_state['fg_data'], index, None, model_choice))
+                                        files = generate_documents(dem_context, assessment_type, "output")
+                                        st.session_state['assessment_generated_files'][assessment_type] = files
+                                elif assessment_type == "RP":
+                                    with st.spinner(f"Auto-generating Role Play... (attempt {attempt + 1}/{max_retries})"):
+                                        rp_context = asyncio.run(generate_rp(st.session_state['fg_data'], index, None, model_choice))
+                                        files = generate_documents(rp_context, assessment_type, "output")
+                                        st.session_state['assessment_generated_files'][assessment_type] = files
+                                elif assessment_type == "OQ":
+                                    with st.spinner(f"Auto-generating Oral Questioning... (attempt {attempt + 1}/{max_retries})"):
+                                        oq_context = asyncio.run(generate_oq(st.session_state['fg_data'], index, None, model_choice))
+                                        files = generate_documents(oq_context, assessment_type, "output")
+                                        st.session_state['assessment_generated_files'][assessment_type] = files
                                 break  # Success, exit retry loop
                             except Exception as e:
                                 error_str = str(e)
@@ -988,6 +1033,12 @@ def app():
         saq = st.checkbox("Short Answer Questions (SAQ)")
         pp = st.checkbox("Practical Performance (PP)")
         cs = st.checkbox("Case Study (CS)")
+        prj = st.checkbox("Project (PRJ)")
+        asgn = st.checkbox("Assignment (ASGN)")
+        oi = st.checkbox("Oral Interview (OI)")
+        dem = st.checkbox("Demonstration (DEM)")
+        rp = st.checkbox("Role Play (RP)")
+        oq = st.checkbox("Oral Questioning (OQ)")
 
         if st.button("Generate Selected Assessments"):
             st.session_state['assessment_generated_files'] = {}
@@ -1003,6 +1054,18 @@ def app():
                     selected_types.append("PP")
                 if cs:
                     selected_types.append("CS")
+                if prj:
+                    selected_types.append("PRJ")
+                if asgn:
+                    selected_types.append("ASGN")
+                if oi:
+                    selected_types.append("OI")
+                if dem:
+                    selected_types.append("DEM")
+                if rp:
+                    selected_types.append("RP")
+                if oq:
+                    selected_types.append("OQ")
                 if not selected_types:
                     st.error("❌ Please select at least one assessment type to generate.")
                     return

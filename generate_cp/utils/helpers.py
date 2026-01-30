@@ -16,8 +16,14 @@ def validate_knowledge_and_ability():
             sys.exit(error_message)
 
         # Extract Knowledge and Ability factors from the data
-        knowledge_factors = set([k.split(":")[0].strip() for k in data['Learning Outcomes']['Knowledge']])
-        ability_factors = set([a.split(":")[0].strip() for a in data['Learning Outcomes']['Ability']])
+        learning_outcomes = data.get('Learning Outcomes', {})
+        if not learning_outcomes or 'Knowledge' not in learning_outcomes or 'Ability' not in learning_outcomes:
+            error_message = "ERROR: 'Learning Outcomes' is missing 'Knowledge' or 'Ability' keys. The extraction team may have failed (e.g., API rate limit). Please re-run the pipeline."
+            print(error_message)
+            sys.exit(error_message)
+
+        knowledge_factors = set([k.split(":")[0].strip() for k in learning_outcomes['Knowledge']])
+        ability_factors = set([a.split(":")[0].strip() for a in learning_outcomes['Ability']])
 
         # Extract topics and their factors
         topics = data['TSC and Topics']['Topics']

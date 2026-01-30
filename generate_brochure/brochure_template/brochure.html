@@ -10,375 +10,315 @@
             padding: 0;
             box-sizing: border-box;
         }
-        
+
         body {
             font-family: Arial, sans-serif;
-            line-height: 1.3;
+            font-size: 10.5pt;
+            line-height: 1.35;
             color: #333;
             background-color: #fff;
         }
-        
+
         .container {
-            max-width: 800px;
-            margin: 0 auto;
-            padding: 5px 20px 20px 20px;
-        }
-        
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        
-        .logo {
-            width: 120px;
-            height: 48px;
-            background-color: #2b5a87;
-            border-radius: 50%;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-weight: bold;
-            font-size: 24px;
-            margin-bottom: 20px;
-        }
-        
-        .tertiary-logo {
-            display: inline-block;
-            background-color: #2b5a87;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 50px;
-            font-weight: bold;
-            margin-left: 20px;
-            font-size: 14px;
-        }
-        
-        .tertiary-text {
-            font-size: 12px;
-            color: #666;
-            margin-top: 5px;
-        }
-        
-        h1 {
-            font-size: 28px;
-            font-weight: bold;
-            color: #2b5a87;
-            margin-bottom: 30px;
-            text-align: center;
-        }
-        
-        h2 {
-            font-size: 22px;
-            font-weight: bold;
-            color: #333;
-            margin: 30px 0 15px 0;
+            width: 100%;
+            max-width: 100%;
         }
 
-        /* Reduce spacing for first h2 on first page only */
-        h1 + h2 {
-            margin-top: 10px;
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
         }
-        
-        h3 {
-            font-size: 18px;
+
+        .header-logo {
+            width: 240px;
+            height: auto;
+        }
+
+        h1 {
+            font-size: 20pt;
             font-weight: bold;
             color: #2b5a87;
-            margin: 25px 0 10px 0;
-        }
-        
-        p {
             margin-bottom: 15px;
+            text-align: center;
+            line-height: 1.2;
+        }
+
+        h2 {
+            font-size: 14pt;
+            font-weight: bold;
+            color: #333;
+            margin: 14px 0 8px 0;
+        }
+
+        h3 {
+            font-size: 12pt;
+            font-weight: bold;
+            color: #2b5a87;
+            margin: 10px 0 5px 0;
+        }
+
+        p {
+            margin-bottom: 8px;
             text-align: justify;
         }
-        
-        
+
+        ul, ol {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        li {
+            margin-bottom: 4px;
+        }
+
+        /* Course Outline Table - Ultra-compact for 5+ Learning Units */
+        .course-outline {
+            margin: 8px 0;
+        }
+
         .course-outline table {
             width: 100%;
             border-collapse: collapse;
-            margin: 10px 0;
-            border: 2px solid #333;
+            border: 1px solid #ccc;
         }
-        
+
         .course-outline td {
-            padding: 8px 15px;
-            border: 1px solid #333;
+            padding: 4px 10px;
+            border: 1px solid #ccc;
             vertical-align: top;
+            border-left: 4px solid #2b5a87;
+            font-size: 9.5pt;
+            line-height: 1.25;
         }
-        
+
         .course-outline .topic-header {
             font-weight: bold;
-            background-color: #f5f5f5;
+            background-color: #fff;
+            border-left: 4px solid #2b5a87;
+            padding: 5px 10px;
+            font-size: 10pt;
         }
 
-        /* Dynamic table pagination based on content height */
-        .course-outline tr {
-            page-break-inside: avoid;
-            break-inside: avoid;
+        .course-outline .topic-content {
+            background-color: #fff;
+            border-left: 4px solid #2b5a87;
+            padding: 3px 10px 3px 16px;
+            font-size: 9pt;
+            line-height: 1.2;
         }
 
-        .course-outline .topic-header {
-            page-break-after: avoid;
-            break-after: avoid;
-        }
-
-        /* Dynamic table pagination based on content height */
-        .course-outline tr {
-            page-break-inside: avoid;
-            break-inside: avoid;
-        }
-
-        .course-outline .topic-header {
-            page-break-after: avoid;
-            break-after: avoid;
-        }
-        
+        /* Course Info Box */
         .course-info {
-            background-color: #f8f9fa;
-            padding: 15px 20px;
-            border-radius: 20px;
-            margin: 20px 0;
+            background-color: #f5f7fa;
+            padding: 15px;
+            border-radius: 12px;
+            margin: 15px 0;
+            border: 1px solid #e0e0e0;
+            width: 100%;
+            box-sizing: border-box;
         }
-        
-        .course-info h3 {
-            color: #2b5a87;
-            margin-bottom: 15px;
+
+        .course-info p {
+            margin-bottom: 8px;
+            width: 100%;
         }
-        
-        .fee-info {
-            margin: 10px 0;
+
+        .course-info a {
+            display: inline-block;
+            max-width: 100%;
+            word-break: break-all;
+            overflow-wrap: anywhere;
+            white-space: normal;
         }
-        
+
+        /* Certificate Section - Unified blue box */
+        .certificate-section {
+            background-color: #2b5a87;
+            color: white;
+            padding: 14px 18px;
+            border-radius: 12px;
+            margin: 14px 0;
+        }
+
+        .certificate-section h3 {
+            color: white;
+            font-size: 14pt;
+            font-weight: bold;
+            margin: 0 0 8px 0;
+        }
+
+        .certificate-section p {
+            color: white;
+            text-align: left;
+            margin: 0 0 6px 0;
+            font-size: 9.5pt;
+            line-height: 1.4;
+        }
+
+        .certificate-section strong {
+            color: white;
+            font-weight: bold;
+        }
+
+        .certificate-section .cert-subheader {
+            color: white;
+            font-weight: bold;
+            font-size: 10pt;
+            margin: 10px 0 4px 0;
+            padding-left: 15px;
+        }
+
+        .certificate-section .cert-detail {
+            color: white;
+            margin: 0 0 8px 0;
+            padding-left: 15px;
+        }
+
+        .certificate-section .cert-normal {
+            color: white;
+            font-weight: normal;
+        }
+
+        /* Enquiry Section */
+        .enquiry-section {
+            background-color: #2b5a87;
+            color: white;
+            padding: 12px 18px;
+            border-radius: 12px;
+            margin: 15px 0;
+        }
+
+        .enquiry-section h3 {
+            color: white;
+            font-size: 16pt;
+            margin-bottom: 8px;
+        }
+
+        /* Funding Section */
         .funding-section {
             background-color: #2b5a87;
             color: white;
-            padding: 20px;
-            border-radius: 20px;
-            margin: 40px 0;
-            border: 2px solid transparent;
+            padding: 18px;
+            border-radius: 12px;
+            margin: 15px 0;
         }
-        
+
         .funding-section h2 {
             color: white;
-            margin-bottom: 20px;
+            margin-bottom: 12px;
         }
-        
+
+        .funding-section h3 {
+            color: white;
+            margin: 12px 0 6px 0;
+        }
+
+        .funding-section p {
+            text-align: left;
+            margin-bottom: 8px;
+        }
+
+        /* Funding Table */
+        .funding-table-container {
+            background-color: white;
+            color: #333;
+            padding: 12px;
+            border-radius: 8px;
+            margin: 12px 0;
+        }
+
+        .funding-table-container h4 {
+            text-align: center;
+            margin-bottom: 10px;
+            color: #333;
+        }
+
         .funding-table {
             width: 100%;
             border-collapse: collapse;
-            margin: 20px 0;
             background-color: white;
             color: #333;
         }
-        
+
         .funding-table th,
         .funding-table td {
             border: 1px solid #ddd;
-            padding: 12px;
+            padding: 8px;
             text-align: center;
         }
-        
+
         .funding-table th {
             background-color: #f0f0f0;
             font-weight: bold;
         }
-        
-        .funding-table .header-row {
-            background-color: #e8e8e8;
-            font-weight: bold;
-        }
-        
-        .certificate-section {
-            background-color: #2b5a87;
-            color: white;
-            padding: 2px 20px;
-            border-radius: 20px;
-            margin: 30px 0;
-            text-align: left;
-        }
-        
-        .certificate-section h3 {
-            color: white;
-            margin-bottom: 15px;
-            font-size: 24px;
-        }
-        
-        .certificate-content {
-            display: flex;
-            justify-content: space-around;
-            margin-top: 20px;
-            text-align: left;
-        }
-        
-        .certificate-item {
-            flex: 1;
-            margin: 0 20px;
-            text-align: left;
-        }
 
-        .certificate-item h4 {
-            font-size: 18px;
-            margin-bottom: 10px;
-            text-align: left;
-        }
-        
-        ul {
-            margin: 15px 0;
-            padding-left: 30px;
-        }
-        
-        li {
-            margin-bottom: 8px;
-        }
-        
         .link {
             color: #0066cc;
             text-decoration: underline;
+            word-break: break-all;
+            overflow-wrap: anywhere;
         }
-        
-        .enquiry-section {
-            background-color: #2b5a87;
-            color: white;
-            padding: 5px 20px;
-            border-radius: 20px;
-            margin: 25px 0 !important;
-            display: block;
-            isolation: isolate;
-            break-inside: avoid;
-        }
-        
-        .enquiry-section h3 {
-            color: white;
-            margin-bottom: 15px;
-            font-size: 24px;
-        }
-        
-        .enquiry-section a {
-            color: white;
-            text-decoration: underline;
-        }
-        
+
+        /* Page Break */
         .page-break {
-            margin: 40px 0;
-            border-top: 1px solid #ddd;
-            padding-top: 40px;
+            page-break-before: always;
+            break-before: page;
+            padding-top: 0;
         }
-        
-        .brand-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
+
+        .page-header {
+            margin-bottom: 10px;
         }
-        
-        .brand-logo {
-            background-color: #2b5a87;
-            color: white;
-            width: 60px;
-            height: 60px;
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: bold;
-            font-size: 20px;
-        }
-        
-        .header-logo {
-            width: 300px;
-            height: auto;
-        }
-        
-        /* CSS for automatic page breaks when printing/generating PDF */
+
+        /* Page 1 content - removed overflow constraint */
+
+        /* Print styles */
         @media print {
+            @page {
+                size: A4;
+                margin: 18mm;
+            }
+
             .page-break {
                 page-break-before: always;
                 break-before: page;
-                margin: 0 !important;
-                padding-top: 5px !important;
-                border-top: none !important;
             }
-            
+
+            .funding-section,
+            .enquiry-section,
+            .course-info,
             .certificate-section {
                 page-break-inside: avoid;
                 break-inside: avoid;
             }
-            
-            .funding-section {
-                page-break-inside: avoid;
-                break-inside: avoid;
-            }
-            
-            .enquiry-section {
-                page-break-inside: avoid;
-                break-inside: avoid;
-            }
-            
-            .course-info {
-                page-break-inside: avoid;
-                break-inside: avoid;
-            }
-            
-            .course-outline {
-                page-break-inside: auto;
-                break-inside: auto;
+
+            .certificate-section {
+                background-color: #2b5a87 !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
             }
 
-            /* Dynamic smart table pagination */
+            /* Allow course outline to flow across page if needed, but keep rows together */
             .course-outline tr {
                 page-break-inside: avoid;
                 break-inside: avoid;
-                margin-bottom: 15px; /* Ensure 15px spacing from bottom */
             }
 
-            .course-outline .topic-header {
-                page-break-after: avoid !important;
-                break-after: avoid !important;
-                orphans: 2;
-                widows: 2;
+            /* Keep topic header and its content together */
+            .course-outline .topic-header + .topic-content {
+                page-break-before: avoid;
+                break-before: avoid;
             }
 
-            /* Ensure topic header and content stay together */
-            .course-outline .topic-header {
-                page-break-after: avoid !important;
-                break-after: avoid !important;
-                orphans: 2;
-                widows: 2;
-            }
-
-            /* Better page margins for dynamic content */
-            @page {
-                margin-bottom: 25px;
-                margin-top: 20px;
-            }
-
-            .course-outline table {
-                width: 100%;
-                table-layout: auto;
-                orphans: 2;
-                widows: 2;
-            }
-            
-            /* Force page break before major sections if they don't fit */
-            .certificate-section,
-            .funding-section,
-            .enquiry-section {
-                page-break-before: auto;
-                break-before: auto;
-            }
-            
-            /* Prevent orphaned headers */
             h1, h2, h3 {
                 page-break-after: avoid;
                 break-after: avoid;
             }
-            
-            /* Keep content together */
-            .brand-header {
-                page-break-after: avoid;
-                break-after: avoid;
-                margin-top: 0 !important;
-                margin-bottom: 20px !important;
+
+            body {
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+                color-adjust: exact !important;
             }
         }
     </style>
@@ -386,17 +326,17 @@
 <body>
     <div class="container">
         <!-- Page 1 -->
-        <div class="brand-header">
-            <img src="TertiaryCoursesSingapore.png" alt="Tertiary Infotech Logo" class="header-logo">
+        <div class="page-header">
+            <img src="TertiaryCoursesSingapore.png" alt="Tertiary Courses Singapore" class="header-logo">
         </div>
-        
+
         <h1>WSQ - Design and Build Responsive Websites from Scratch</h1>
-        
+
         <h2>About This Course</h2>
         <p>Elevate your web development skills with our course on Responsive Web Interface Design using Bootstrap. This course equips you with the knowledge and practical skills to build visually appealing and highly functional web interfaces. You'll learn how to use Bootstrap's grid system, components, and utilities to design layouts that adapt seamlessly to various screen sizes. The course covers essential concepts like navigation bars, form controls, and responsive typography, ensuring you can create professional-quality websites.</p>
-        
+
         <p>In addition to the core Bootstrap components, this course also delves into best practices for user experience (UX) design. You'll understand how to conduct basic usability tests, apply responsive design patterns, and optimize site performance. These complementary skills will enable you to create web interfaces that not only look good but also provide an exceptional user experience, making you a more versatile and employable front-end developer.</p>
-        
+
         <h2>What You'll Learn</h2>
         <p>By end of course, learners should be able to:</p>
         <ul>
@@ -409,58 +349,51 @@
         <div class="certificate-section">
             <h3>Course Certificate</h3>
             <p>Two e-certificates will be awarded to trainees who have passed the assessment.</p>
-            
-            <div class="certificate-item">
-                <h4>1. Statement of Achievement</h4>
-                <p><strong>User Interface Design ICT-DES-3008-1.1 TSC</strong> under ICT Skills Framework issued by WSG/SSG.</p>
+            <p class="cert-subheader">1. Statement of Achievement</p>
+            <p class="cert-detail"><strong>User Interface Design ICT-DES-3008-1.1 TSC</strong> under ICT Skills Framework issued by WSG/SSG.</p>
+            <p class="cert-subheader">2. Certification of Achievement <span class="cert-normal">issued by Tertiary Infotech Academy Pte Ltd.</span></p>
+        </div>
+
+        <!-- Page 2 - Course Outline -->
+        <div class="page-break">
+            <div class="page-header">
+                <img src="TertiaryCoursesSingapore.png" alt="Tertiary Courses Singapore" class="header-logo">
             </div>
 
-            <div class="certificate-item">
-                <p><strong>2. Certification of Achievement</strong> issued by Tertiary Infotech Academy Pte Ltd.</p>
-            </div>
-        </div>
-        
-        <!-- Page 2 -->
-        <div class="page-break">
-            <div class="brand-header">
-                <img src="TertiaryCoursesSingapore.png" alt="Tertiary Infotech Logo" class="header-logo">
-            </div>
-            
             <h1>WSQ - Design and Build Responsive Websites from Scratch</h1>
-            
+
             <h2>Course Outline:</h2>
             <div class="course-outline">
                 <table>
                     <tr>
-                        <td class="topic-header"><strong>Topic 1: Overview of Responsive Web Interface Design and Bootstrap</strong></td>
+                        <td class="topic-header"><strong>LU1: Overview of Responsive Web Interface Design and Bootstrap</strong></td>
                     </tr>
                     <tr>
-                        <td>What is Responsive Web Design?<br>
-                        Introduction to Bootstrap Framework<br>
-                        Create Responsive Web Layout using Bootstrap</td>
+                        <td class="topic-content">T1: What is Responsive Web Design?<br>
+                        T2: Introduction to Bootstrap Framework<br>
+                        T3: Create Responsive Web Layout using Bootstrap</td>
                     </tr>
                     <tr>
-                        <td class="topic-header"><strong>Topic 2: Components and Graphics Content</strong></td>
+                        <td class="topic-header"><strong>LU2: Components and Graphics Content</strong></td>
                     </tr>
                     <tr>
-                        <td>Create Basic Bootstrap Components<br>
-                        Design GUI with Style and Content Elements</td>
+                        <td class="topic-content">T1: Create Basic Bootstrap Components<br>
+                        T2: Design GUI with Style and Content Elements</td>
                     </tr>
                     <tr>
-                        <td class="topic-header"><strong>Topic 3: Interactivity and Responsiveness</strong></td>
+                        <td class="topic-header"><strong>LU3: Interactivity and Responsiveness</strong></td>
                     </tr>
                     <tr>
-                        <td>Create Interactive Components<br>
-                        Apply Bootstrap Utilities<br>
-                        Evaluate Web Interface Interactivity and Responsiveness<br>
-                        Passing Data via Props</td>
+                        <td class="topic-content">T1: Create Interactive Components<br>
+                        T2: Apply Bootstrap Utilities<br>
+                        T3: Evaluate Web Interface Interactivity and Responsiveness</td>
                     </tr>
                     <tr>
-                        <td class="topic-header"><strong>Topic 4: Single Page Design</strong></td>
+                        <td class="topic-header"><strong>LU4: Single Page Design</strong></td>
                     </tr>
                     <tr>
-                        <td>Web Design Requirement for Single Page<br>
-                        Implement Single Page Design</td>
+                        <td class="topic-content">T1: Web Design Requirement for Single Page<br>
+                        T2: Implement Single Page Design</td>
                     </tr>
                     <tr>
                         <td class="topic-header"><strong>Final Assessment</strong></td>
@@ -468,45 +401,42 @@
                 </table>
             </div>
         </div>
-        
-        <!-- Page 3 -->
+
+        <!-- Page 3 - Course Information -->
         <div class="page-break">
-            <div class="brand-header">
-                <img src="TertiaryCoursesSingapore.png" alt="Tertiary Infotech Logo" class="header-logo">
+            <div class="page-header">
+                <img src="TertiaryCoursesSingapore.png" alt="Tertiary Courses Singapore" class="header-logo">
             </div>
-            
+
             <h2>Course Information</h2>
-            
+
             <div class="course-info">
-                <p><strong>Course Code:</strong> <strong>TGS-2021002504</strong></p>
-                
+                <p><strong>Course Code:</strong> TGS-2021002504</p>
+
                 <p><strong>Skills Framework:</strong> <strong>User Interface Design ICT-DES-3008-1.1 TSC</strong> under ICT Skills Framework</p>
-                
+
                 <p><strong>Course Fee (Before Funding):</strong></p>
-                <div class="fee-info">
-                    <p>$750.00 (Bef. GST)</p>
-                    <p>$817.50 (Incl. GST)</p>
-                </div>
-                
+                <p>$750.00 (Bef. GST)<br>
+                $817.50 (Incl. GST)</p>
+
                 <p><strong>Time:</strong> 9:30am-6:30pm<br>
                 <strong>Duration:</strong> 16hrs (2 days)</p>
-                <p><strong>Tel:</strong> +65 6100 0613<br>
-                <strong>Email:</strong> <a href="mailto:support@tertiaryinfotech.com" class="link">support@tertiaryinfotech.com</a><br>
-                <strong>WhatsApp:</strong> <a href="https://wa.me/6561000613" class="link">https:
-                    //wa.me/6561000613</a></p>
-                
-                <p><strong>Registration Link:</strong><br>
-                <a href="https://www.tertiarycourses.com.sg/wsq-bootstrap-web-design.html" class="link">https://www.tertiarycourses.com.sg/wsq-bootstrap-web-design.html</a></p>
-                
-                <div class="enquiry-section">
-                    <h3>Enquiry</h3>
-                    <p><strong>Venue:</strong> 12 Woodlands Square, #07-85/86/87,<br>
-                    Woods Square Tower 1, Singapore 733715 (Disabled-Friendly)</p>
-                </div>
+
+                <p><strong>Tel:</strong> +65 6100 0613</p>
+                <p><strong>Email:</strong> <a href="mailto:support@tertiaryinfotech.com" class="link">support@tertiaryinfotech.com</a></p>
+                <p><strong>WhatsApp:</strong> <a href="https://wa.me/6561000613" class="link">https://wa.me/6561000613</a></p>
+
+                <p><strong>Registration Link:</strong> <a href="https://www.tertiarycourses.com.sg/wsq-bootstrap-web-design.html" class="link">https://www.tertiarycourses.com.sg/wsq-bootstrap-web-design.html</a></p>
             </div>
-            
+
+            <div class="enquiry-section">
+                <h3>Enquiry</h3>
+                <p><strong>Venue:</strong> 12 Woodlands Square, #07-85/86/87,<br>
+                Woods Square Tower 1, Singapore 733715 (Disabled-Friendly)</p>
+            </div>
+
             <h2>Minimum Entry Requirements</h2>
-            
+
             <h3>Knowledge and Skills</h3>
             <ul>
                 <li>Able to operate using computer functions with minimum Computer Literacy<br>
@@ -515,36 +445,36 @@
                 (Average of Reading, Listening, Speaking & Writing Scores).</li>
             </ul>
         </div>
-        
-        <!-- Page 4 -->
+
+        <!-- Page 4 - WSQ Funding -->
         <div class="page-break">
-            <div class="brand-header">
-                <img src="TertiaryCoursesSingapore.png" alt="Tertiary Infotech Logo" class="header-logo">
+            <div class="page-header">
+                <img src="TertiaryCoursesSingapore.png" alt="Tertiary Courses Singapore" class="header-logo">
             </div>
-            
+
             <div class="funding-section">
                 <h2>WSQ Funding</h2>
                 <p>WSQ funding is only applicable to Singaporeans/PRs. Subject to eligibility, the funding support is subjected to funding caps.</p>
-                
+
                 <p><strong>Baseline:</strong> Singaporean/PR age 21 and above<br>
                 <strong>MCES:</strong> Singaporeans aged 40 years old and above<br>
                 <strong>SME:</strong> Small and Medium Enterprises.</p>
-                
-                <h3 style="color: white;">SkillsFuture Enterprise Credit (SFEC):</h3>
+
+                <h3>SkillsFuture Enterprise Credit (SFEC):</h3>
                 <p>Eligible Singapore-registered companies can claim up to $10,000.</p>
-                
-                <div style="background-color: white; color: #333; padding: 15px; border-radius: 5px; margin: 20px 0;">
-                    <h4 style="text-align: center; margin-bottom: 15px; color: #333;">Effective for Courses starting from 1 Jan 2024</h4>
-                    
+
+                <div class="funding-table-container">
+                    <h4>Effective for Courses starting from 1 Jan 2024</h4>
+
                     <table class="funding-table">
-                        <tr class="header-row">
-                            <td rowspan="2"><strong>Full<br>Fee</strong></td>
-                            <td rowspan="2"><strong>GST</strong></td>
-                            <td colspan="2"><strong>Nett Fee after Funding (Inc. GST)</strong></td>
+                        <tr>
+                            <th rowspan="2">Full<br>Fee</th>
+                            <th rowspan="2">GST</th>
+                            <th colspan="2">Nett Fee after Funding (Inc. GST)</th>
                         </tr>
-                        <tr class="header-row">
-                            <td><strong>Baseline</strong></td>
-                            <td><strong>MCES / SME</strong></td>
+                        <tr>
+                            <th>Baseline</th>
+                            <th>MCES / SME</th>
                         </tr>
                         <tr>
                             <td>$750</td>
@@ -554,34 +484,34 @@
                         </tr>
                     </table>
                 </div>
-                
-                <h3 style="color: white;">UTAP Funding</h3>
+
+                <h3>UTAP Funding</h3>
                 <p>Eligible NTUC members can apply for 50% of the unfunded fee from UTAP, capped at $250 per year. NTUC members aged 40 and above will get increased funding support from $250 to $500.</p>
-                
-                <h3 style="color: white;">Absentee Payroll (AP) Funding</h3>
+
+                <h3>Absentee Payroll (AP) Funding</h3>
                 <p>$4.50 per hour, capped at $100,000 per enterprise per calendar year.<br>
                 AP funding will be computed based on the actual number of training hours attended by the trainee.</p>
             </div>
         </div>
-        
-        <!-- Page 5 -->
+
+        <!-- Page 5 - FAQ -->
         <div class="page-break">
-            <div class="brand-header">
-                <img src="TertiaryCoursesSingapore.png" alt="Tertiary Infotech Logo" class="header-logo">
+            <div class="page-header">
+                <img src="TertiaryCoursesSingapore.png" alt="Tertiary Courses Singapore" class="header-logo">
             </div>
-            
+
             <h2>Frequently Asked Questions</h2>
-            
+
             <h3>* What are the prerequisites for WSQ Funding?</h3>
             <ol>
                 <li>You need to be a Singaporean Citizen or Permanent Resident, physically based in Singapore.</li>
                 <li>You must successfully complete the programme and pass the assessment in order to be eligible.</li>
                 <li>You must attend at least 75% of the training.</li>
             </ol>
-            
+
             <h3>* Can I club any other grant with this subsidy?</h3>
             <p>No, you cannot claim any other grant if you are claiming this subsidy from SSG. You should not be claiming for any other grants, subsidies, or tax concessions, provided unless explicitly permitted.</p>
-            
+
             <h3>* Do I need to pay the full fee, and then claim the subsidy from WSQ Funding?</h3>
             <p>The programme works on a Nett fee model, i.e. you only need to pay the difference between the fee, and the funding amount at the time of enrollment. The training provider (TP) will claim the funding amount from SSG on completion of the programme. In case you fail to complete the programme, or if the claim raised by TP is rejected by SSG then you are liable to pay the funding amount to TP.</p>
         </div>

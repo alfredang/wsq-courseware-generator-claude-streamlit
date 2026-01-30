@@ -52,24 +52,92 @@ def generate_lesson_plan(context: dict, name_of_organisation: str) -> str:
     It also processes and inserts the organization's logo into the document before rendering it.
 
     Args:
-        context (dict): 
+        context (dict):
             A dictionary containing course-related details that will be used to populate the template.
-        name_of_organisation (str): 
+        name_of_organisation (str):
             The name of the organization, used to fetch and insert the corresponding logo.
 
     Returns:
-        str: 
+        str:
             The file path of the generated Lesson Plan document.
 
     Raises:
-        FileNotFoundError: 
+        FileNotFoundError:
             If the template file or the organization's logo file is missing.
-        KeyError: 
+        KeyError:
             If required keys are missing from the `context` dictionary.
-        IOError: 
+        IOError:
             If there are issues with reading/writing the document.
     """
-    
+    import re
+
+    # Debug: Log incoming context for LP generation
+    print("=" * 60)
+    print("LP GENERATION - CONTEXT DEBUG")
+    print("=" * 60)
+    print(f"LP DEBUG: Course_Title = {context.get('Course_Title')}")
+    print(f"LP DEBUG: Learning_Units count = {len(context.get('Learning_Units', []))}")
+    print(f"LP DEBUG: lesson_plan exists = {'lesson_plan' in context}")
+    print("=" * 60)
+
+    # Helper to check if a value is effectively null/empty
+    def is_empty(val):
+        return val is None or val == "" or val == "null" or val == "None"
+
+    # ================================================================
+    # Validate and normalize Learning_Units structure for template
+    # ================================================================
+    learning_units = context.get("Learning_Units", [])
+
+    # Ensure Learning_Units is a list
+    if not isinstance(learning_units, list):
+        print(f"LP DEBUG: WARNING - Learning_Units is not a list, type = {type(learning_units)}")
+        learning_units = []
+
+    # Validate each Learning Unit has required fields
+    validated_learning_units = []
+    for i, lu in enumerate(learning_units):
+        if not isinstance(lu, dict):
+            continue
+
+        validated_lu = {
+            "LU_Title": lu.get("LU_Title", f"Learning Unit {i+1}"),
+            "LO": lu.get("LO", ""),
+            "Topics": lu.get("Topics", []),
+            "K_numbering_description": lu.get("K_numbering_description", []),
+            "A_numbering_description": lu.get("A_numbering_description", []),
+            "Assessment_Methods": lu.get("Assessment_Methods", []),
+            "Instructional_Methods": lu.get("Instructional_Methods", []),
+        }
+
+        # Ensure Topics have required structure
+        validated_topics = []
+        for topic in validated_lu["Topics"]:
+            if isinstance(topic, dict):
+                validated_topics.append({
+                    "Topic_Title": topic.get("Topic_Title", ""),
+                    "Bullet_Points": topic.get("Bullet_Points", [])
+                })
+        validated_lu["Topics"] = validated_topics
+
+        # Ensure K/A statements have required structure
+        validated_k = []
+        for k in validated_lu["K_numbering_description"]:
+            if isinstance(k, dict):
+                validated_k.append({"K_number": k.get("K_number", ""), "Description": k.get("Description", "")})
+        validated_lu["K_numbering_description"] = validated_k
+
+        validated_a = []
+        for a in validated_lu["A_numbering_description"]:
+            if isinstance(a, dict):
+                validated_a.append({"A_number": a.get("A_number", ""), "Description": a.get("Description", "")})
+        validated_lu["A_numbering_description"] = validated_a
+
+        validated_learning_units.append(validated_lu)
+
+    context["Learning_Units"] = validated_learning_units
+    print(f"LP DEBUG: Total validated Learning_Units = {len(validated_learning_units)}")
+
     doc = DocxTemplate(LP_TEMPLATE_DIR)
 
     # Add the logo and organization details to the context

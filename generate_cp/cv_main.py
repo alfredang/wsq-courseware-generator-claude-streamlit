@@ -53,10 +53,6 @@ async def create_course_validation(model_choice: str) -> None:
     if isinstance(validation_output, str):
         validation_output = json.loads(validation_output)
 
-    # Load mapping template with key:empty list pair
-    with open('generate_cp/json_output/validation_mapping_source.json', 'r') as file:
-        validation_mapping_source = json.load(file)
-
     # Loop through the responses and create three different output documents
     responses = validation_output.get('analyst_responses', [])
     # Handle consolidated response format - duplicate single response for 3 templates

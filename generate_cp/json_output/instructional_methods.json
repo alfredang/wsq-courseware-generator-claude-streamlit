@@ -1,0 +1,22 @@
+{
+  "Lecture": "A structured presentation method where the trainer delivers content to learners, providing foundational knowledge and theoretical concepts essential for understanding the subject matter.",
+  "Demonstration": "A hands-on method where the trainer shows learners how to perform specific tasks or procedures, allowing them to observe techniques before practicing independently.",
+  "Discussion": "An interactive method that encourages learners to share ideas, ask questions, and engage in dialogue to deepen understanding and promote critical thinking.",
+  "Didactic Questioning": "A guided questioning technique where the trainer poses questions to learners to stimulate thinking, check understanding, and encourage active participation in the learning process.",
+  "Practical Exercise": "Hands-on activities where learners apply knowledge and skills in simulated or real-world scenarios to reinforce learning and build competency.",
+  "Case Study": "Analysis of real-world scenarios or problems that allows learners to apply theoretical knowledge, develop problem-solving skills, and understand practical applications.",
+  "Role Play": "A simulation technique where learners act out scenarios to practice interpersonal skills, decision-making, and handling of various situations in a safe environment.",
+  "Group Work": "Collaborative activities where learners work together in teams to complete tasks, solve problems, and learn from each other's perspectives and experiences.",
+  "Self-directed Learning": "A learner-centered approach where individuals take responsibility for their own learning, setting goals, identifying resources, and evaluating their progress.",
+  "E-Learning": "Technology-based instruction delivered through digital platforms, allowing flexible, self-paced learning with multimedia content and interactive elements.",
+  "Project Work": "Extended assignments where learners apply knowledge and skills to complete a substantial piece of work, demonstrating competency through practical application.",
+  "Workshop": "Interactive sessions combining instruction with hands-on practice, allowing learners to immediately apply concepts and receive feedback in a collaborative environment.",
+  "Simulation": "Recreated environments or scenarios that replicate real-world conditions, enabling learners to practice skills safely before applying them in actual situations.",
+  "Coaching": "One-on-one guidance where a trainer provides personalized feedback, support, and direction to help learners develop specific skills and overcome challenges.",
+  "Mentoring": "A developmental relationship where an experienced individual guides a less experienced learner, sharing knowledge, providing advice, and supporting professional growth.",
+  "Video-based Learning": "Instruction delivered through recorded visual content, allowing learners to observe demonstrations, explanations, and examples at their own pace.",
+  "Reading Assignment": "Self-study activities where learners review written materials to gain knowledge and prepare for discussions or practical applications.",
+  "Quiz/Assessment": "Evaluation activities that measure learner understanding and retention of content, providing feedback on progress and identifying areas for improvement.",
+  "Brainstorming": "A creative technique where learners generate ideas freely without initial criticism, fostering innovation and exploring multiple solutions to problems.",
+  "Peer Teaching": "An approach where learners explain concepts to each other, reinforcing their own understanding while helping others learn."
+}

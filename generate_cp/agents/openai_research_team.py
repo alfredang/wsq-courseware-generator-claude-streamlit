@@ -132,6 +132,7 @@ async def run_background_analyst(
         completion = client.chat.completions.create(
             model=config["model"],
             temperature=config["temperature"],
+            max_tokens=8000,  # Limit for OpenRouter free tier
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_task}
@@ -240,6 +241,7 @@ async def run_performance_gap_analyst(
         completion = client.chat.completions.create(
             model=config["model"],
             temperature=config["temperature"],
+            max_tokens=8000,  # Limit for OpenRouter free tier
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_task}
@@ -328,6 +330,7 @@ async def run_sequencing_rationale_agent(
         completion = client.chat.completions.create(
             model=config["model"],
             temperature=config["temperature"],
+            max_tokens=8000,  # Limit for OpenRouter free tier
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_task}
@@ -448,6 +451,7 @@ async def run_editor_agent(
         completion = client.chat.completions.create(
             model=config["model"],
             temperature=config["temperature"],
+            max_tokens=8000,  # Limit for OpenRouter free tier
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_task}

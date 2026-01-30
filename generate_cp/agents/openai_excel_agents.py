@@ -134,6 +134,7 @@ async def run_course_agent(
         completion = client.chat.completions.create(
             model=config["model"],
             temperature=config["temperature"],
+            max_tokens=8000,  # Limit for OpenRouter free tier
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_task}
@@ -252,6 +253,7 @@ async def run_ka_analysis_agent(
         completion = client.chat.completions.create(
             model=config["model"],
             temperature=config["temperature"],
+            max_tokens=8000,  # Limit for OpenRouter free tier
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_task}
@@ -365,6 +367,7 @@ async def run_im_agent(
         completion = client.chat.completions.create(
             model=config["model"],
             temperature=config["temperature"],
+            max_tokens=8000,  # Limit for OpenRouter free tier
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_task}

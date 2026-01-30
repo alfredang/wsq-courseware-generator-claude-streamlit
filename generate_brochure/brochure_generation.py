@@ -45,6 +45,19 @@ class CourseTopic(BaseModel):
     title: str
     subtopics: List[str]
 
+class EntryRequirements(BaseModel):
+    knowledge_skills: List[str] = []
+    attitude: List[str] = []
+    experience: str = ""
+    target_age: str = ""
+    software_hardware: str = ""
+
+class CertificateInfo(BaseModel):
+    has_wsq_cert: bool = False
+    statement_of_achievement: str = ""
+    certification_of_achievement: str = ""
+    certificate_text: str = ""  # Raw certificate text from website
+
 class CourseData(BaseModel):
     course_title: str
     course_description: List[str]
@@ -60,6 +73,8 @@ class CourseData(BaseModel):
     duration_hrs: str
     course_details_topics: List[CourseTopic]
     course_url: str
+    entry_requirements: EntryRequirements = None
+    certificate_info: CertificateInfo = None
 
     def to_dict(self):
         return self.dict()
@@ -165,12 +180,18 @@ def web_scrape_course_info(url: str) -> CourseData:
         else:
             framework = get_framework_from_tsc_code(tsc_code)
 
+        # Extract TSC title for certificate info
+        tsc_title = extract_tsc_title(soup)
+
+        # Extract certificate information
+        cert_info = extract_certificate_info(soup, tsc_code, tsc_title, framework)
+
         # Extract data in original format structure
         course_data = CourseData(
             course_title=extract_course_title_wsq_format(soup),
             course_description=extract_course_description_paragraphs(soup),
             learning_outcomes=extract_learning_outcomes_list(soup),
-            tsc_title=extract_tsc_title(soup),
+            tsc_title=tsc_title,
             tsc_code=tsc_code,
             tsc_framework=framework,  # Use extracted framework or fallback to mapping
             wsq_funding=extract_wsq_funding_table(soup),
@@ -180,7 +201,9 @@ def web_scrape_course_info(url: str) -> CourseData:
             session_days=extract_session_days(soup),
             duration_hrs=extract_duration_hrs(soup),
             course_details_topics=extract_course_topics_with_subtopics(soup),
-            course_url=url
+            course_url=url,
+            entry_requirements=extract_entry_requirements(soup),
+            certificate_info=cert_info
         )
         
         return course_data
@@ -196,7 +219,7 @@ def web_scrape_course_info(url: str) -> CourseData:
             ],
             learning_outcomes=[
                 "Evaluate core concepts and methodologies",
-                "Analyze advanced implementation techniques", 
+                "Analyze advanced implementation techniques",
                 "Assess practical application scenarios"
             ],
             tsc_title="Skills Development",
@@ -205,7 +228,7 @@ def web_scrape_course_info(url: str) -> CourseData:
             wsq_funding={"Full Fee": "$900", "GST": "$81.00", "Baseline": "$531.00", "MCES / SME": "$351.00"},
             tgs_reference_no="TGS-2025097470",
             gst_exclusive_price="$900.00",
-            gst_inclusive_price="$981.00", 
+            gst_inclusive_price="$981.00",
             session_days="2",
             duration_hrs="16",
             course_details_topics=[
@@ -213,7 +236,19 @@ def web_scrape_course_info(url: str) -> CourseData:
                 CourseTopic(title="Advanced Techniques", subtopics=["Practical implementation", "Best practices"]),
                 CourseTopic(title="Real-world Applications", subtopics=["Case studies", "Industry examples"])
             ],
-            course_url=url
+            course_url=url,
+            entry_requirements=EntryRequirements(
+                knowledge_skills=["Able to operate using computer functions with minimum Computer Literacy Level 2"],
+                attitude=["Positive Learning Attitude"],
+                experience="",
+                target_age="18-65 years old"
+            ),
+            certificate_info=CertificateInfo(
+                has_wsq_cert=True,
+                statement_of_achievement="Skills Development ICT-INT-0047-1.1 TSC under ICT Skills Framework issued by WSG/SSG.",
+                certification_of_achievement="issued by Tertiary Infotech Academy Pte Ltd.",
+                certificate_text=""
+            )
         )
 
 
@@ -402,7 +437,7 @@ def extract_tsc_title(soup):
         if match:
             # MOST SPECIFIC pattern (index 0): TSC-CODE: TITLE under Framework
             # This pattern has only 1 group which is the title
-            if 'follows.*?guideline.*?of\s+[A-Z]{3}-[A-Z]{3}' in pattern and len(match.groups()) == 1:
+            if r'follows.*?guideline.*?of\s+[A-Z]{3}-[A-Z]{3}' in pattern and len(match.groups()) == 1:
                 return match.group(1).strip()
             # For "guideline of" patterns - title is in group 1 or 2
             elif 'guideline of' in pattern:
@@ -554,6 +589,96 @@ def extract_tsc_framework(soup):
         if framework != "Not Applicable":
             return framework
     return "Not Applicable"
+
+
+def extract_entry_requirements(soup) -> EntryRequirements:
+    """Extract entry requirements from the webpage"""
+    text = soup.get_text()
+
+    requirements = EntryRequirements()
+
+    # Extract Knowledge and Skills
+    ks_match = re.search(r'Knowledge and Skills[:\s]*(.*?)(?=Attitude|Experience|Target Age|Minimum Software|WSQ Funding|Course Schedule|\$)', text, re.IGNORECASE | re.DOTALL)
+    if ks_match:
+        ks_text = ks_match.group(1).strip()
+        # Split into separate requirements
+        lines = [line.strip() for line in ks_text.split('\n') if line.strip() and len(line.strip()) > 10]
+        requirements.knowledge_skills = lines[:5]  # Max 5 items
+
+    # Extract Attitude
+    att_match = re.search(r'Attitude[:\s]*(.*?)(?=Experience|Target Age|Minimum Software|WSQ Funding|Course Schedule|\$)', text, re.IGNORECASE | re.DOTALL)
+    if att_match:
+        att_text = att_match.group(1).strip()
+        lines = [line.strip() for line in att_text.split('\n') if line.strip() and len(line.strip()) > 5]
+        requirements.attitude = lines[:3]  # Max 3 items
+
+    # Extract Experience
+    exp_match = re.search(r'Experience[:\s]*(.*?)(?=Target Age|Minimum Software|WSQ Funding|Course Schedule|\$)', text, re.IGNORECASE | re.DOTALL)
+    if exp_match:
+        exp_text = exp_match.group(1).strip()
+        # Get first meaningful line
+        lines = [line.strip() for line in exp_text.split('\n') if line.strip() and len(line.strip()) > 10]
+        if lines:
+            requirements.experience = lines[0]
+
+    # Extract Target Age Group
+    age_match = re.search(r'Target Age Group[:\s]*(\d+\s*-\s*\d+\s*years?\s*old)', text, re.IGNORECASE)
+    if age_match:
+        requirements.target_age = age_match.group(1)
+
+    # Extract Software/Hardware requirements
+    sw_match = re.search(r'Minimum Software/Hardware Requirement[s]?[:\s]*(.*?)(?=Job Roles|WSQ Funding|Course Schedule|\$)', text, re.IGNORECASE | re.DOTALL)
+    if sw_match:
+        sw_text = sw_match.group(1).strip()
+        # Clean up and get meaningful text
+        sw_text = re.sub(r'\s+', ' ', sw_text)
+        if len(sw_text) > 10:
+            requirements.software_hardware = sw_text[:200]  # Limit length
+
+    return requirements
+
+
+def extract_certificate_info(soup, tsc_code: str, tsc_title: str, tsc_framework: str) -> CertificateInfo:
+    """Extract certificate information from the webpage"""
+    text = soup.get_text()
+    cert_info = CertificateInfo()
+
+    # Look for Certificate section content
+    cert_patterns = [
+        r'Certificate\s*[:\n]+(.*?)(?=Minimum Entry|Entry Requirement|Knowledge and Skills|WSQ Funding|\$|Course Schedule)',
+        r'Course Certificate\s*[:\n]+(.*?)(?=Minimum Entry|Entry Requirement|Knowledge and Skills|WSQ Funding|\$)',
+        r'Certification\s*[:\n]+(.*?)(?=Minimum Entry|Entry Requirement|Knowledge and Skills|WSQ Funding|\$)',
+    ]
+
+    cert_text = ""
+    for pattern in cert_patterns:
+        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
+        if match:
+            cert_text = match.group(1).strip()
+            # Clean up the text
+            cert_text = re.sub(r'\s+', ' ', cert_text)
+            break
+
+    cert_info.certificate_text = cert_text
+
+    # Determine if this is a WSQ course with Statement of Achievement
+    # Check if TSC code exists and is valid (not "Not Applicable")
+    has_valid_tsc = tsc_code and tsc_code != "Not Applicable" and len(tsc_code) > 5
+
+    if has_valid_tsc:
+        cert_info.has_wsq_cert = True
+        # Build Statement of Achievement text
+        cert_info.statement_of_achievement = f"{tsc_title} {tsc_code} TSC under {tsc_framework} Skills Framework issued by WSG/SSG."
+        cert_info.certification_of_achievement = "issued by Tertiary Infotech Academy Pte Ltd."
+    else:
+        cert_info.has_wsq_cert = False
+        # Use the raw certificate text from the website
+        if cert_text:
+            cert_info.certificate_text = cert_text
+        else:
+            cert_info.certificate_text = "Certificate of Completion will be awarded upon successful completion of the course."
+
+    return cert_info
 
 
 def extract_wsq_funding_table(soup):
@@ -1535,8 +1660,9 @@ def populate_brochure_template(course_data: CourseData) -> str:
         # Replace course outline table content - GENERATE COMPLETE TABLE DYNAMICALLY
         course_topics = data_dict.get('course_details_topics', [])
         if course_topics and len(course_topics) > 0:
-            # Build complete course outline table HTML for ALL topics with dynamic pagination
+            # Build complete course outline table HTML for ALL topics in LU/T format
             table_rows = []
+            lu_index = 1
 
             for topic in course_topics:
                 # Handle both dict and object formats
@@ -1547,54 +1673,72 @@ def populate_brochure_template(course_data: CourseData) -> str:
                     topic_title = getattr(topic, 'title', 'Course Topic')
                     topic_subtopics = getattr(topic, 'subtopics', [])
 
-                # Add topic header row
-                table_rows.append(f'                    <tr>')
-                table_rows.append(f'                        <td class="topic-header"><strong>{topic_title}</strong></td>')
-                table_rows.append(f'                    </tr>')
+                # Check if this is the Final Assessment
+                is_final = 'final assessment' in topic_title.lower()
 
-                # Add subtopics content row (skip for Final Assessment)
-                if topic_subtopics and 'final assessment' not in topic_title.lower():
-                    subtopics_text = '<br>\n                        '.join(topic_subtopics)
+                if is_final:
+                    # Add Final Assessment header
                     table_rows.append(f'                    <tr>')
-                    table_rows.append(f'                        <td>{subtopics_text}</td>')
+                    table_rows.append(f'                        <td class="topic-header"><strong>Final Assessment</strong></td>')
                     table_rows.append(f'                    </tr>')
-            
-            # Replace the entire hardcoded table content
+                else:
+                    # Clean up topic title - remove any existing LU prefix to avoid duplication
+                    clean_title = re.sub(r'^LU\s*\d+\s*:\s*', '', topic_title, flags=re.IGNORECASE).strip()
+
+                    # Format as LU header (LU1:, LU2:, etc.)
+                    table_rows.append(f'                    <tr>')
+                    table_rows.append(f'                        <td class="topic-header"><strong>LU{lu_index}: {clean_title}</strong></td>')
+                    table_rows.append(f'                    </tr>')
+
+                    # Add subtopics with T1:, T2:, etc. format
+                    if topic_subtopics:
+                        formatted_subtopics = []
+                        for t_idx, subtopic in enumerate(topic_subtopics, 1):
+                            # Clean up subtopic - remove any existing T prefix to avoid duplication
+                            clean_subtopic = re.sub(r'^T\d+\s*[:.]\s*', '', str(subtopic), flags=re.IGNORECASE).strip()
+                            formatted_subtopics.append(f'T{t_idx}: {clean_subtopic}')
+                        subtopics_text = '<br>\n                        '.join(formatted_subtopics)
+                        table_rows.append(f'                    <tr>')
+                        table_rows.append(f'                        <td class="topic-content">{subtopics_text}</td>')
+                        table_rows.append(f'                    </tr>')
+
+                    lu_index += 1
+
+            # Replace the entire hardcoded table content (matches new template)
             old_table_content = '''                    <tr>
-                        <td class="topic-header"><strong>Topic 1: Overview of Responsive Web Interface Design and Bootstrap</strong></td>
+                        <td class="topic-header"><strong>LU1: Overview of Responsive Web Interface Design and Bootstrap</strong></td>
                     </tr>
                     <tr>
-                        <td>What is Responsive Web Design?<br>
-                        Introduction to Bootstrap Framework<br>
-                        Create Responsive Web Layout using Bootstrap</td>
+                        <td class="topic-content">T1: What is Responsive Web Design?<br>
+                        T2: Introduction to Bootstrap Framework<br>
+                        T3: Create Responsive Web Layout using Bootstrap</td>
                     </tr>
                     <tr>
-                        <td class="topic-header"><strong>Topic 2: Components and Graphics Content</strong></td>
+                        <td class="topic-header"><strong>LU2: Components and Graphics Content</strong></td>
                     </tr>
                     <tr>
-                        <td>Create Basic Bootstrap Components<br>
-                        Design GUI with Style and Content Elements</td>
+                        <td class="topic-content">T1: Create Basic Bootstrap Components<br>
+                        T2: Design GUI with Style and Content Elements</td>
                     </tr>
                     <tr>
-                        <td class="topic-header"><strong>Topic 3: Interactivity and Responsiveness</strong></td>
+                        <td class="topic-header"><strong>LU3: Interactivity and Responsiveness</strong></td>
                     </tr>
                     <tr>
-                        <td>Create Interactive Components<br>
-                        Apply Bootstrap Utilities<br>
-                        Evaluate Web Interface Interactivity and Responsiveness<br>
-                        Passing Data via Props</td>
+                        <td class="topic-content">T1: Create Interactive Components<br>
+                        T2: Apply Bootstrap Utilities<br>
+                        T3: Evaluate Web Interface Interactivity and Responsiveness</td>
                     </tr>
                     <tr>
-                        <td class="topic-header"><strong>Topic 4: Single Page Design</strong></td>
+                        <td class="topic-header"><strong>LU4: Single Page Design</strong></td>
                     </tr>
                     <tr>
-                        <td>Web Design Requirement for Single Page<br>
-                        Implement Single Page Design</td>
+                        <td class="topic-content">T1: Web Design Requirement for Single Page<br>
+                        T2: Implement Single Page Design</td>
                     </tr>
                     <tr>
                         <td class="topic-header"><strong>Final Assessment</strong></td>
                     </tr>'''
-            
+
             new_table_content = '\n'.join(table_rows)
             template_content = template_content.replace(old_table_content, new_table_content)
         
@@ -1633,7 +1777,7 @@ def populate_brochure_template(course_data: CourseData) -> str:
                 new_skills_framework = f"<strong>TSC</strong> under {clean_framework_name} Skills Framework"
 
         template_content = template_content.replace(old_skills_framework, new_skills_framework)
-        
+
         # Replace fees
         template_content = template_content.replace('$750.00 (Bef. GST)', f"{data_dict.get('gst_exclusive_price', '$900.00')} (Bef. GST)")
         template_content = template_content.replace('$817.50 (Incl. GST)', f"{data_dict.get('gst_inclusive_price', '$981.00')} (Incl. GST)")
@@ -1653,9 +1797,76 @@ def populate_brochure_template(course_data: CourseData) -> str:
         template_content = template_content.replace('$442.50', wsq_funding.get('Baseline', '$531.00'))
         template_content = template_content.replace('$292.50', wsq_funding.get('MCES / SME', '$351.00'))
         
-        # Replace certificate information
-        template_content = template_content.replace('User Interface Design<br>\n                        ICT-DES-3008-1.1 TSC', f"{data_dict.get('tsc_title', 'Skills Development')}<br>\n                        {data_dict.get('tsc_code', 'ICT-INT-0047-1.1')} TSC")
-        
+        # Replace certificate information based on extracted certificate_info
+        cert_info = data_dict.get('certificate_info', {})
+        tsc_title = data_dict.get('tsc_title', 'Skills Development')
+        tsc_code = data_dict.get('tsc_code', '')
+        tsc_framework = data_dict.get('tsc_framework', 'ICT')
+
+        # Clean up values
+        if tsc_title == "Not Applicable":
+            tsc_title = "Skills Development"
+        if tsc_code == "Not Applicable":
+            tsc_code = ""
+        if tsc_framework == "Not Applicable":
+            tsc_framework = "ICT"
+
+        # Build the certificate detail text for WSQ courses
+        if tsc_code:
+            tsc_info = f"{tsc_title} {tsc_code} TSC".strip()
+        else:
+            tsc_info = f"{tsc_title} TSC".strip()
+
+        # Ensure proper TSC suffix
+        if not tsc_info.endswith("TSC"):
+            tsc_info = f"{tsc_info} TSC"
+
+        # Check if this is a WSQ course (has valid TSC code)
+        has_wsq_cert = cert_info.get('has_wsq_cert', False) if cert_info else False
+        if not has_wsq_cert and tsc_code and len(tsc_code) > 5:
+            has_wsq_cert = True  # Fallback check based on TSC code
+
+        # The skills framework replacement (above) already updates the TSC info in both
+        # the course info section AND the certificate section. We just need to verify
+        # the certificate section is present.
+
+        # Verify certificate section exists - if not, there's a template issue
+        if 'class="certificate-section"' not in template_content:
+            st.warning("Certificate section not found in template - check brochure.html")
+
+        # Debug: Save a copy of the generated HTML for inspection
+        debug_html_path = os.path.join(TEMPLATE_ASSET_DIR, "debug_generated.html")
+        try:
+            with open(debug_html_path, 'w', encoding='utf-8') as f:
+                f.write(template_content)
+        except:
+            pass
+
+        # Replace entry requirements with extracted data (Knowledge and Skills - dynamic based on URL content)
+        entry_reqs = data_dict.get('entry_requirements', {})
+        if entry_reqs:
+            # Build new entry requirements HTML - All Knowledge and Skills items from URL
+            knowledge_skills = entry_reqs.get('knowledge_skills', [])
+
+            if knowledge_skills and len(knowledge_skills) >= 1:
+                # Format all knowledge and skills items dynamically
+                new_requirements_html = []
+
+                for skill in knowledge_skills:
+                    # Clean up the skill text
+                    skill_text = skill.strip()
+                    if skill_text:
+                        new_requirements_html.append(f'                <li>{skill_text}</li>')
+
+                # Replace the old entry requirements block
+                old_requirements_block = '''                <li>Able to operate using computer functions with minimum Computer Literacy<br>
+                Level 2 based on ICAS Computer Skills Assessment Framework.</li>
+                <li>Minimum 3 GCE 'O' Levels Passes including English or WPL Level 5<br>
+                (Average of Reading, Listening, Speaking & Writing Scores).</li>'''
+
+                new_requirements_block = '\n'.join(new_requirements_html)
+                template_content = template_content.replace(old_requirements_block, new_requirements_block)
+
         return template_content
         
     except Exception as e:
@@ -1683,46 +1894,51 @@ def generate_pdf_output(html_content: str, output_path: str) -> bool:
             try:
                 with sync_playwright() as p:
                     browser = p.chromium.launch(headless=True)
-                    page = browser.new_page()
-                    
+                    # Set viewport to A4 width (210mm = ~794px at 96dpi)
+                    page = browser.new_page(viewport={'width': 794, 'height': 1123})
+
                     # Create temporary HTML file in template directory so images can be loaded
                     import tempfile
                     import os
+                    from pathlib import Path
+
                     temp_html = os.path.join(TEMPLATE_ASSET_DIR, "temp_brochure.html")
-                    
+
                     # Write HTML content to temporary file in template directory
                     with open(temp_html, 'w', encoding='utf-8') as f:
                         f.write(html_content)
-                    
-                    # Navigate to the file so images load properly
-                    page.goto(f'file://{temp_html}', wait_until='networkidle')
-                    
-                    # Generate PDF with proper margins
+
+                    # Navigate to the file - use proper file:// URL format for Windows
+                    temp_path = Path(temp_html).resolve()
+                    file_url = temp_path.as_uri()
+                    page.goto(file_url, wait_until='networkidle')
+
+                    # Generate PDF with proper margins for A4 page - matching example PDF
                     page.pdf(
                         path=output_path,
                         format='A4',
                         margin={
-                            'top': '25px',
-                            'right': '20px', 
-                            'bottom': '0px',
-                            'left': '20px'
+                            'top': '15mm',
+                            'right': '15mm',
+                            'bottom': '15mm',
+                            'left': '15mm'
                         },
-                        print_background=True,  # Preserve background colors and images
-                        prefer_css_page_size=True,  # Use CSS page size if specified
+                        print_background=True,
+                        scale=0.95,  # Scale to fit content properly with margins
                     )
-                    
+
                     browser.close()
-                    
+
                     # Clean up temporary file
                     try:
                         os.remove(temp_html)
                     except:
                         pass
-                        
+
                 return True
             except Exception as e:
-                st.warning(f"Playwright failed: {e}")
-        
+                pass  # Silently fall back to next method
+
         # Fallback to WeasyPrint if Playwright fails
         try:
             from weasyprint import HTML
@@ -1733,9 +1949,9 @@ def generate_pdf_output(html_content: str, output_path: str) -> bool:
             )
             return True
         except ImportError:
-            st.warning("WeasyPrint not available")
+            pass  # WeasyPrint not available, try next method
         except Exception as e:
-            st.warning(f"WeasyPrint failed: {e}")
+            pass  # WeasyPrint failed, try next method
 
         # Fallback to pdfkit (uses wkhtmltopdf)
         if PDF_GENERATOR == 'pdfkit':
@@ -1743,17 +1959,17 @@ def generate_pdf_output(html_content: str, output_path: str) -> bool:
                 import pdfkit
                 pdfkit.from_string(html_content, output_path, options={
                     'page-size': 'A4',
-                    'margin-top': '0.75in',
-                    'margin-right': '0.75in',
-                    'margin-bottom': '0.75in',
-                    'margin-left': '0.75in',
+                    'margin-top': '1in',
+                    'margin-right': '1in',
+                    'margin-bottom': '1in',
+                    'margin-left': '1in',
                     'encoding': "UTF-8",
                     'no-outline': None,
                     'enable-local-file-access': None
                 })
                 return True
             except Exception as e:
-                st.warning(f"pdfkit failed: {e}")
+                pass  # pdfkit failed, try next method
 
         # Fallback to xhtml2pdf
         if PDF_GENERATOR == 'xhtml2pdf':
@@ -1768,7 +1984,7 @@ def generate_pdf_output(html_content: str, output_path: str) -> bool:
                     )
                     return not pisa_status.err
             except Exception as e:
-                st.warning(f"xhtml2pdf failed: {e}")
+                pass  # xhtml2pdf failed, try next method
 
         # Final fallback - simple text PDF
         try:

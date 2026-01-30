@@ -314,14 +314,14 @@ BUILTIN_MODELS = [
     {"name": "Claude-Haiku-4.5", "model_id": "anthropic/claude-haiku-4.5", "api_provider": "OPENROUTER", "sort_order": 24},
     {"name": "Claude-3.5-Sonnet", "model_id": "anthropic/claude-3.5-sonnet", "api_provider": "OPENROUTER", "sort_order": 25},
 
-    # === Anthropic Claude Models (Native API) ===
-    {"name": "Anthropic Claude-Opus-4.5", "model_id": "claude-opus-4-5-20251101", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 118},
-    {"name": "Anthropic Claude-Sonnet-4.5", "model_id": "claude-sonnet-4-5-20251101", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 119},
-    {"name": "Anthropic Claude-Opus-4", "model_id": "claude-opus-4-20250514", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 120},
-    {"name": "Anthropic Claude-Sonnet-4", "model_id": "claude-sonnet-4-20250514", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 121},
-    {"name": "Anthropic Claude-3.5-Sonnet", "model_id": "claude-3-5-sonnet-20241022", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 122},
-    {"name": "Anthropic Claude-3.5-Haiku", "model_id": "claude-3-5-haiku-20241022", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 123},
-    {"name": "Anthropic Claude-3-Opus", "model_id": "claude-3-opus-20240229", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 124},
+    # === Anthropic Claude Models (Native API) - Sonnet 4.5 is default (sort_order 0) ===
+    {"name": "Anthropic Claude-Sonnet-4.5", "model_id": "claude-sonnet-4-5-20251101", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 0},
+    {"name": "Anthropic Claude-Opus-4.5", "model_id": "claude-opus-4-5-20251101", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 1},
+    {"name": "Anthropic Claude-Sonnet-4", "model_id": "claude-sonnet-4-20250514", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 2},
+    {"name": "Anthropic Claude-Opus-4", "model_id": "claude-opus-4-20250514", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 3},
+    {"name": "Anthropic Claude-3.5-Sonnet", "model_id": "claude-3-5-sonnet-20241022", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 4},
+    {"name": "Anthropic Claude-3.5-Haiku", "model_id": "claude-3-5-haiku-20241022", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 5},
+    {"name": "Anthropic Claude-3-Opus", "model_id": "claude-3-opus-20240229", "api_provider": "ANTHROPIC", "base_url": "https://api.anthropic.com/v1", "sort_order": 6},
 
     # === Google Gemini Models (via OpenRouter) ===
     {"name": "Gemini-3-Pro", "model_id": "google/gemini-3-pro-preview", "api_provider": "OPENROUTER", "sort_order": 30},
@@ -332,11 +332,11 @@ BUILTIN_MODELS = [
     {"name": "Gemini-Pro-1.5", "model_id": "google/gemini-pro-1.5", "api_provider": "OPENROUTER", "sort_order": 35},
 
     # === Google Gemini Models (Native API) ===
-    {"name": "Gemini 2.5-Flash", "model_id": "gemini-2.5-flash-preview-05-20", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 130},
-    {"name": "Gemini 2.5-Pro", "model_id": "gemini-2.5-pro-preview-05-06", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 131},
-    {"name": "Gemini 2.0-Flash", "model_id": "gemini-2.0-flash", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 132},
-    {"name": "Gemini 1.5-Pro", "model_id": "gemini-1.5-pro", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 133},
-    {"name": "Gemini 1.5-Flash", "model_id": "gemini-1.5-flash", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 134},
+    {"name": "Gemini 2.0-Flash", "model_id": "gemini-2.0-flash", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 130},
+    {"name": "Gemini 2.0-Flash-Lite", "model_id": "gemini-2.0-flash-lite", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 131},
+    {"name": "Gemini 1.5-Pro", "model_id": "gemini-1.5-pro", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 132},
+    {"name": "Gemini 1.5-Flash", "model_id": "gemini-1.5-flash", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 133},
+    {"name": "Gemini 1.5-Flash-8B", "model_id": "gemini-1.5-flash-8b", "api_provider": "GEMINI", "base_url": "https://generativelanguage.googleapis.com/v1beta", "sort_order": 134},
 
     # === DeepSeek Models (via OpenRouter) ===
     {"name": "DeepSeek-V3", "model_id": "deepseek/deepseek-chat", "api_provider": "OPENROUTER", "sort_order": 40},
@@ -947,6 +947,7 @@ AVAILABLE_TASKS = [
     {"task_id": "generate_cp", "task_name": "Generate CP", "icon": "📄"},
     {"task_id": "generate_courseware", "task_name": "Generate AP/FG/LG/LP", "icon": "📚"},
     {"task_id": "generate_assessment", "task_name": "Generate Assessment", "icon": "✅"},
+    {"task_id": "generate_slides", "task_name": "Generate Slides", "icon": "🎯"},
     {"task_id": "generate_brochure", "task_name": "Generate Brochure", "icon": "📰"},
     {"task_id": "add_assessment_ap", "task_name": "Add Assessment to AP", "icon": "📎"},
     {"task_id": "check_documents", "task_name": "Check Documents", "icon": "🔍"},
@@ -1043,17 +1044,16 @@ def _seed_admin_credentials():
         count = cursor.fetchone()[0]
 
         if count == 0:
-            # Only seed if no admin exists - get from env/secrets first
+            # Seed admin credentials from environment variables or Streamlit secrets
             import os
             try:
                 import streamlit as st
-                username = st.secrets.get("ADMIN_USERNAME", os.environ.get("ADMIN_USERNAME", "admin"))
-                password = st.secrets.get("ADMIN_PASSWORD", os.environ.get("ADMIN_PASSWORD", ""))
+                username = os.environ.get("ADMIN_USERNAME") or st.secrets.get("ADMIN_USERNAME", "admin")
+                password = os.environ.get("ADMIN_PASSWORD") or st.secrets.get("ADMIN_PASSWORD", "")
             except Exception:
                 username = os.environ.get("ADMIN_USERNAME", "admin")
                 password = os.environ.get("ADMIN_PASSWORD", "")
 
-            # Only create default admin if password is provided via env/secrets
             if password:
                 password_hash = _hash_password(password)
                 cursor.execute("""
@@ -1101,8 +1101,13 @@ def set_admin_credentials(username: str, password: str) -> bool:
 def verify_admin_password(username: str, password: str) -> bool:
     """Verify admin credentials against database"""
     creds = get_admin_credentials_from_db()
+
     if not creds:
-        return False
+        # No credentials in DB - seed from environment/secrets and verify
+        _seed_admin_credentials()
+        creds = get_admin_credentials_from_db()
+        if not creds:
+            return False
 
     password_hash = _hash_password(password)
     return creds["username"] == username and creds["password_hash"] == password_hash
@@ -1122,26 +1127,45 @@ def admin_credentials_exist() -> bool:
 
 # Built-in prompt templates metadata (content loaded from files)
 BUILTIN_PROMPT_TEMPLATES = [
+    # --- Courseware: Learner Guide (LG) ---
     {
         "category": "courseware",
+        "name": "learner_guide",
+        "display_name": "[LG] Learner Guide - Content Generation",
+        "description": "Generate Course Overview and Learning Outcome descriptions for the Learner Guide",
+        "variables": ""
+    },
+    # --- Courseware: Lesson Plan (LP) ---
+    {
+        "category": "courseware",
+        "name": "timetable_generation",
+        "display_name": "[LP] Lesson Plan - Timetable Generation",
+        "description": "Generate WSQ-compliant lesson plan timetables with session scheduling",
+        "variables": "num_of_days, list_of_im"
+    },
+    # --- Courseware: Facilitator Guide (FG) ---
+    {
+        "category": "courseware",
+        "name": "facilitator_guide",
+        "display_name": "[FG] Facilitator Guide - Content Generation",
+        "description": "Generate structured content for the Facilitator Guide document",
+        "variables": ""
+    },
+    # --- Courseware: Assessment Plan (AP) ---
+    {
+        "category": "courseware",
+        "name": "assessment_plan",
+        "display_name": "[AP] Assessment Plan - Evidence & Justification",
+        "description": "Generate structured justifications for assessment methods (CS, PP, OQ, RP) including Assessment Record & Summary",
+        "variables": "course_title, learning_outcomes, extracted_content, assessment_methods"
+    },
+    # --- Course Proposal: CP Interpretation ---
+    {
+        "category": "course_proposal",
         "name": "cp_interpretation",
         "display_name": "CP Interpretation",
         "description": "Extract and structure Course Proposal data for document generation",
         "variables": "schema"
-    },
-    {
-        "category": "courseware",
-        "name": "assessment_plan",
-        "display_name": "Assessment Plan Generation",
-        "description": "Generate structured justifications for assessment methods (CS, PP, OQ, RP)",
-        "variables": "course_title, learning_outcomes, extracted_content, assessment_methods"
-    },
-    {
-        "category": "courseware",
-        "name": "timetable_generation",
-        "display_name": "Timetable/Lesson Plan Generation",
-        "description": "Generate WSQ-compliant lesson plan timetables",
-        "variables": "num_of_days, list_of_im"
     },
     {
         "category": "course_proposal",
@@ -1170,6 +1194,55 @@ BUILTIN_PROMPT_TEMPLATES = [
         "display_name": "Case Study",
         "description": "Generate Case Study assessment scenarios",
         "variables": ""
+    },
+    {
+        "category": "assessment",
+        "name": "project",
+        "display_name": "Project",
+        "description": "Generate Project-based assessment briefs with rubrics and deliverables",
+        "variables": ""
+    },
+    {
+        "category": "assessment",
+        "name": "assignment",
+        "display_name": "Assignment",
+        "description": "Generate Assignment tasks with marking criteria",
+        "variables": ""
+    },
+    {
+        "category": "assessment",
+        "name": "oral_interview",
+        "display_name": "Oral Interview",
+        "description": "Generate Oral Interview assessment questions and expected responses",
+        "variables": ""
+    },
+    {
+        "category": "assessment",
+        "name": "demonstration",
+        "display_name": "Demonstration",
+        "description": "Generate Demonstration tasks with observation checklists",
+        "variables": ""
+    },
+    {
+        "category": "assessment",
+        "name": "role_play",
+        "display_name": "Role Play",
+        "description": "Generate Role Play scenarios with evaluation criteria",
+        "variables": ""
+    },
+    {
+        "category": "assessment",
+        "name": "oral_questioning",
+        "display_name": "Oral Questioning",
+        "description": "Generate Oral Questioning assessment with probing questions",
+        "variables": ""
+    },
+    {
+        "category": "brochure",
+        "name": "brochure_generation",
+        "display_name": "Brochure Content Generation",
+        "description": "Generate marketing-quality content for WSQ course brochures",
+        "variables": "course_title, course_topics, entry_requirements, certification_info"
     },
 ]
 

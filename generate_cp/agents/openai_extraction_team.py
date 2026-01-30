@@ -172,6 +172,7 @@ async def run_course_info_extractor(
         completion = client.chat.completions.create(
             model=config["model"],
             temperature=config["temperature"],
+            max_tokens=8000,  # Limit for OpenRouter free tier
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_task}
@@ -259,6 +260,7 @@ async def run_learning_outcomes_extractor(
         completion = client.chat.completions.create(
             model=config["model"],
             temperature=config["temperature"],
+            max_tokens=8000,  # Limit for OpenRouter free tier
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_task}
@@ -350,6 +352,7 @@ async def run_tsc_and_topics_extractor(
         completion = client.chat.completions.create(
             model=config["model"],
             temperature=config["temperature"],
+            max_tokens=8000,  # Limit for OpenRouter free tier
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_task}
@@ -454,6 +457,7 @@ async def run_assessment_methods_extractor(
         completion = client.chat.completions.create(
             model=config["model"],
             temperature=config["temperature"],
+            max_tokens=8000,  # Limit for OpenRouter free tier
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_task}
@@ -561,6 +565,7 @@ async def run_aggregator_agent(
         completion = client.chat.completions.create(
             model=config["model"],
             temperature=config["temperature"],
+            max_tokens=8000,  # Limit for OpenRouter free tier
             messages=[
                 {"role": "system", "content": system_message},
                 {"role": "user", "content": user_task}
