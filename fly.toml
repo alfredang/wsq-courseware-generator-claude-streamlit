@@ -1,14 +1,12 @@
-# Fly.io Configuration for WSQ Courseware Generator
+# fly.toml app configuration file generated for courseware-claude-agents on 2026-02-01T08:52:56Z
+#
 # See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
 
 app = 'courseware-claude-agents'
-primary_region = 'sin'  # Singapore - closest to you
+primary_region = 'iad'
 
 [build]
-  dockerfile = 'Dockerfile'
-
-[env]
-  PORT = '8080'
 
 [http_service]
   internal_port = 8080
@@ -22,6 +20,4 @@ primary_region = 'sin'  # Singapore - closest to you
   memory = '1gb'
   cpu_kind = 'shared'
   cpus = 1
-
-[processes]
-  app = "chainlit run app.py --host 0.0.0.0 --port 8080"
+  memory_mb = 1024
