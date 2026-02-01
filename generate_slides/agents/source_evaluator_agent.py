@@ -12,7 +12,7 @@ import json
 import logging
 from typing import Dict, Any, List
 
-from generate_cp.utils.openai_model_client import create_openai_client
+from generate_cp.utils.claude_model_client import create_llm_client
 from utils.prompt_loader import load_prompt
 
 logger = logging.getLogger(__name__)
@@ -83,13 +83,13 @@ async def run_source_evaluator(
         document_domain: Domain identified by topic analysis agent
         research_query: The research query that found these sources
         material_type: Document type (FG, LG, CP)
-        model_choice: Model selection string for create_openai_client
+        model_choice: Model selection string for create_llm_client
 
     Returns:
         Dict with evaluated_sources (each with scores and approved flag),
         approved_count, rejected_count
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = load_prompt(
         "slides/source_evaluation",

@@ -17,10 +17,10 @@ if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
 from generate_cp.utils.document_parser import parse_document
-from generate_cp.agents.openai_extraction_team import run_extraction_team
-from generate_cp.agents.openai_research_team import run_research_team
-from generate_cp.agents.openai_justification_agent import run_assessment_justification_agent, recreate_assessment_phrasing_dynamic
-from generate_cp.agents.openai_tsc_agent import run_tsc_agent
+from generate_cp.agents.claude_extraction_team import run_extraction_team
+from generate_cp.agents.claude_research_team import run_research_team
+from generate_cp.agents.claude_justification_agent import run_assessment_justification_agent, recreate_assessment_phrasing_dynamic
+from generate_cp.agents.claude_tsc_agent import run_tsc_agent
 from generate_cp.utils.helpers import (
     rename_keys_in_json_file,
     update_knowledge_ability_mapping,

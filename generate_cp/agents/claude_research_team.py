@@ -17,7 +17,7 @@ Date: 2026-01-20
 import json
 import sys
 from typing import Dict, Any
-from generate_cp.utils.openai_model_client import create_openai_client
+from generate_cp.utils.claude_model_client import create_llm_client
 
 
 def extract_json_from_response(content: str) -> dict:
@@ -95,7 +95,7 @@ async def run_background_analyst(
     Returns:
         Dict containing Background Analysis
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = f"""
     As a training consultant focusing on analyzing performance gaps and training needs based on course learning outcomes,
@@ -173,7 +173,7 @@ async def run_performance_gap_analyst(
     Returns:
         Dict containing Performance Gaps, Attributes Gained, Post-Training Benefits
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = f"""
     You are responsible for identifying the performance gaps and post-training benefits to learners that the course will address.
@@ -282,7 +282,7 @@ async def run_sequencing_rationale_agent(
     Returns:
         Dict containing Sequencing Analysis
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = f"""
     You are an experienced course developer. Your task is to justify the rationale of sequencing
@@ -373,7 +373,7 @@ async def run_editor_agent(
     Returns:
         Dict containing consolidated research output
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = f"""
     You are to consolidate the findings without amending any of the output, mapping each agent's output to these terms accordingly.

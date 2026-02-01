@@ -47,7 +47,7 @@ async def run_tsc_parsing_agent(tsc_data_json: str, model_choice: str = "claude-
     Returns:
         Cleaned and structured TSC data as JSON string
     """
-    from generate_cp.agents.openai_tsc_agent import run_tsc_agent
+    from generate_cp.agents.claude_tsc_agent import run_tsc_agent
 
     tsc_data = json.loads(tsc_data_json)
     result = await run_tsc_agent(
@@ -75,7 +75,7 @@ async def run_extraction_pipeline(tsc_data_json: str, model_choice: str = "claud
     Returns:
         Extracted course information as JSON string
     """
-    from generate_cp.agents.openai_extraction_team import run_extraction_team
+    from generate_cp.agents.claude_extraction_team import run_extraction_team
 
     tsc_data = json.loads(tsc_data_json)
     result = await run_extraction_team(
@@ -102,7 +102,7 @@ async def run_research_pipeline(ensemble_output_json: str, model_choice: str = "
     Returns:
         Research output as JSON string
     """
-    from generate_cp.agents.openai_research_team import run_research_team
+    from generate_cp.agents.claude_research_team import run_research_team
 
     ensemble_output = json.loads(ensemble_output_json)
     result = await run_research_team(
@@ -124,7 +124,7 @@ async def run_justification_pipeline(ensemble_output_json: str, model_choice: st
     Returns:
         Assessment justifications as JSON string
     """
-    from generate_cp.agents.openai_justification_agent import run_assessment_justification_agent
+    from generate_cp.agents.claude_justification_agent import run_assessment_justification_agent
 
     ensemble_output = json.loads(ensemble_output_json)
     result = await run_assessment_justification_agent(

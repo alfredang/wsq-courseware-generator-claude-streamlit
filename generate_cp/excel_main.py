@@ -18,7 +18,7 @@ if project_root not in sys.path:
 
 from generate_cp.utils.excel_replace_xml import process_excel_update, preserve_excel_metadata, cleanup_old_files
 from generate_cp.utils.excel_conversion_pipeline import map_new_key_names_excel, create_instructional_dataframe
-from generate_cp.agents.openai_excel_agents import (
+from generate_cp.agents.claude_excel_agents import (
     run_course_agent,
     run_ka_analysis_agent,
     run_im_agent

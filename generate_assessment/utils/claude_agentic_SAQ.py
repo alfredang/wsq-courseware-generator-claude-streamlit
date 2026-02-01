@@ -12,7 +12,7 @@ import asyncio
 import json
 from generate_assessment.utils.pydantic_models import FacilitatorGuideExtraction
 from utils.helpers import parse_json_content
-from generate_cp.utils.openai_model_client import create_openai_client
+from generate_cp.utils.claude_model_client import create_llm_client
 
 
 def get_topics_for_all_k_statements(fg_data):
@@ -167,7 +167,7 @@ async def generate_saq(extracted_data: FacilitatorGuideExtraction, index, model_
     Returns:
         dict: Structured dictionary with course_title, duration, and questions
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
     extracted_data = dict(extracted_data)
 
     k_topics = get_topics_for_all_k_statements(extracted_data)

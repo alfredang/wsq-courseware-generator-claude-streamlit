@@ -26,7 +26,7 @@ async def generate_saq_questions(
     Returns:
         Generated SAQ questions and answers as JSON string
     """
-    from generate_assessment.utils.openai_agentic_SAQ import generate_saq
+    from generate_assessment.utils.claude_agentic_SAQ import generate_saq
 
     fg_data = json.loads(fg_data_json)
     slides = slides_data if slides_data else None
@@ -55,7 +55,7 @@ async def generate_practical_performance(
     Returns:
         Generated PP assessment as JSON string
     """
-    from generate_assessment.utils.openai_agentic_PP import generate_pp
+    from generate_assessment.utils.claude_agentic_PP import generate_pp
 
     fg_data = json.loads(fg_data_json)
     slides = slides_data if slides_data else None
@@ -84,7 +84,7 @@ async def generate_case_study(
     Returns:
         Generated case study as JSON string
     """
-    from generate_assessment.utils.openai_agentic_CS import generate_cs
+    from generate_assessment.utils.claude_agentic_CS import generate_cs
 
     fg_data = json.loads(fg_data_json)
     slides = slides_data if slides_data else None

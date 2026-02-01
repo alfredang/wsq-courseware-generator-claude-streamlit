@@ -14,7 +14,7 @@ from settings.model_configs import get_model_config
 from settings.api_manager import load_api_keys
 
 
-def create_openai_client(model_choice: str) -> tuple[OpenAI, Dict[str, Any]]:
+def create_llm_client(model_choice: str) -> tuple[OpenAI, Dict[str, Any]]:
     """
     Create an OpenAI client configured with the specified model choice.
 
@@ -31,7 +31,7 @@ def create_openai_client(model_choice: str) -> tuple[OpenAI, Dict[str, Any]]:
             - Config dict: Contains model name, temperature, and other settings
 
     Example:
-        >>> client, config = create_openai_client("DeepSeek-Chat")
+        >>> client, config = create_llm_client("DeepSeek-Chat")
         >>> model_name = config["model"]
         >>> temperature = config["temperature"]
     """

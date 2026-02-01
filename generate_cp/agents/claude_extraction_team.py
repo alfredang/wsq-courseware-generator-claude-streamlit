@@ -18,7 +18,7 @@ Date: 2026-01-20
 import json
 import sys
 from typing import Dict, Any
-from generate_cp.utils.openai_model_client import create_openai_client
+from generate_cp.utils.claude_model_client import create_llm_client
 
 
 def extract_json_from_response(content: str) -> dict:
@@ -96,7 +96,7 @@ async def run_course_info_extractor(
     Returns:
         Dict containing Course Information
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = f"""
     You are to extract the following variables from {data}:
@@ -213,7 +213,7 @@ async def run_learning_outcomes_extractor(
     Returns:
         Dict containing Learning Outcomes
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = f"""
     You are to extract the following variables from {data}:
@@ -301,7 +301,7 @@ async def run_tsc_and_topics_extractor(
     Returns:
         Dict containing TSC and Topics
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = f"""
     You are to extract the following variables from {data}:
@@ -393,7 +393,7 @@ async def run_assessment_methods_extractor(
     Returns:
         Dict containing Assessment Methods
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = f"""
     You are to extract the following variables from {data}:
@@ -502,7 +502,7 @@ async def run_aggregator_agent(
     Returns:
         Dict containing combined extraction output
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = """
     You are to combine the outputs from the following agents into a single JSON object, do NOT aggregate output from the validator agent:

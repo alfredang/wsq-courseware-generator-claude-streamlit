@@ -12,7 +12,7 @@ import json
 import logging
 from typing import Dict, Any, List
 
-from generate_cp.utils.openai_model_client import create_openai_client
+from generate_cp.utils.claude_model_client import create_llm_client
 from utils.prompt_loader import load_prompt
 
 logger = logging.getLogger(__name__)
@@ -81,13 +81,13 @@ async def run_slide_instructions(
         topics: List of topic dicts from topic analysis agent
         config: Slide configuration from UI (style, notes, summaries etc.)
         research_sources_count: Number of approved research sources
-        model_choice: Model selection string for create_openai_client
+        model_choice: Model selection string for create_llm_client
 
     Returns:
         Dict with 'instructions' (string for NotebookLM),
         'estimated_slides', 'structure_outline'
     """
-    client, model_config = create_openai_client(model_choice)
+    client, model_config = create_llm_client(model_choice)
 
     # Build document summary (first 5000 chars)
     document_summary = content[:5000]

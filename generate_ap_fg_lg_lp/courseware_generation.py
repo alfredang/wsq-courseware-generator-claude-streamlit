@@ -306,7 +306,7 @@ def parse_cp_document(uploaded_file):
 ############################################################
 # 2. Interpret Course Proposal Data
 ############################################################
-def create_openai_client(model_choice: str = "GPT-4o-Mini"):
+def create_llm_client(model_choice: str = "GPT-4o-Mini"):
     """
     Create an OpenAI client configured with the specified model choice.
 
@@ -367,7 +367,7 @@ async def interpret_cp(raw_data: dict, model_choice: str = "GPT-4o-Mini") -> dic
         Exception:
             If the AI-generated response does not contain the expected fields.
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = f"""
         You are an AI assistant that helps extract specific information from a JSON object containing a Course Proposal Form (CP). Your task is to interpret the JSON data, regardless of its structure, and extract the required information accurately.

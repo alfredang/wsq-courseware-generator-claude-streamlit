@@ -16,7 +16,7 @@ project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 if project_root not in sys.path:
     sys.path.insert(0, project_root)
 
-from generate_cp.agents.openai_course_validation_team import run_course_validation_team
+from generate_cp.agents.claude_course_validation_team import run_course_validation_team
 from generate_cp.utils.helpers import append_validation_output
 from generate_cp.utils.json_docu_replace import replace_placeholders_in_doc
 import json

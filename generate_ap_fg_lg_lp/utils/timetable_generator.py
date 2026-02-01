@@ -123,7 +123,7 @@ def extract_unique_instructional_methods(course_context):
     return unique_methods
 
 
-def create_openai_client(model_choice: str = "GPT-4o-Mini"):
+def create_llm_client(model_choice: str = "GPT-4o-Mini"):
     """
     Create an OpenAI client configured with the specified model choice.
 
@@ -188,7 +188,7 @@ async def generate_timetable(context, num_of_days, model_choice: str = "GPT-4o-M
             If the generated timetable response is missing the required `"lesson_plan"` key or
             fails to parse correctly.
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     list_of_im = extract_unique_instructional_methods(context)
 

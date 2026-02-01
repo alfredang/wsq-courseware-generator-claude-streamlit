@@ -13,7 +13,7 @@ Date: 2026-01-20
 import json
 import sys
 from typing import Dict, Any
-from generate_cp.utils.openai_model_client import create_openai_client
+from generate_cp.utils.claude_model_client import create_llm_client
 
 
 def extract_json_from_response(content: str) -> dict:
@@ -145,7 +145,7 @@ async def run_assessment_justification_agent(
     Returns:
         Dict containing assessment method justifications
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = f"""
     Based on the following course details, you are to provide justification for the appropriate Assessment Method followng a defined structure.

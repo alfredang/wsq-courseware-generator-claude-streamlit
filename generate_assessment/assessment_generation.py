@@ -72,15 +72,15 @@ from docxtpl import DocxTemplate
 from company.company_manager import get_selected_company, get_company_template, apply_company_branding, show_company_info
 import generate_assessment.utils.utils as utils
 from openai import OpenAI
-from generate_assessment.utils.openai_agentic_CS import generate_cs
-from generate_assessment.utils.openai_agentic_PP import generate_pp
-from generate_assessment.utils.openai_agentic_SAQ import generate_saq
-from generate_assessment.utils.openai_agentic_PRJ import generate_prj
-from generate_assessment.utils.openai_agentic_ASGN import generate_asgn
-from generate_assessment.utils.openai_agentic_OI import generate_oi
-from generate_assessment.utils.openai_agentic_DEM import generate_dem
-from generate_assessment.utils.openai_agentic_RP import generate_rp
-from generate_assessment.utils.openai_agentic_OQ import generate_oq
+from generate_assessment.utils.claude_agentic_CS import generate_cs
+from generate_assessment.utils.claude_agentic_PP import generate_pp
+from generate_assessment.utils.claude_agentic_SAQ import generate_saq
+from generate_assessment.utils.claude_agentic_PRJ import generate_prj
+from generate_assessment.utils.claude_agentic_ASGN import generate_asgn
+from generate_assessment.utils.claude_agentic_OI import generate_oi
+from generate_assessment.utils.claude_agentic_DEM import generate_dem
+from generate_assessment.utils.claude_agentic_RP import generate_rp
+from generate_assessment.utils.claude_agentic_OQ import generate_oq
 from generate_assessment.utils.pydantic_models import FacilitatorGuideExtraction
 from settings.model_configs import get_model_config
 from settings.api_manager import load_api_keys
@@ -273,7 +273,7 @@ def extract_master_k_a_list(fg_markdown):
 
     return {"knowledge": master_k, "abilities": master_a}
 
-def create_openai_client(model_choice: str = "GPT-4o-Mini"):
+def create_llm_client(model_choice: str = "GPT-4o-Mini"):
     """
     Create an OpenAI client configured with the specified model choice.
 
@@ -320,7 +320,7 @@ async def interpret_fg(fg_data, model_choice: str = "GPT-4o-Mini"):
     print("🔧 USING NEW CODE WITH AUTO-INJECTION v2.0 (OpenAI SDK)")
     master_list = extract_master_k_a_list(fg_data)
 
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = f"""
         You are an expert at structured data extraction. Extract the following details from the FG Document:

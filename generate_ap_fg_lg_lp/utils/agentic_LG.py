@@ -54,7 +54,7 @@ from generate_ap_fg_lg_lp.utils.helper import process_logo_image
 LG_TEMPLATE_DIR = "generate_ap_fg_lg_lp/input/Template/LG_TGS-Ref-No_Course-Title_v1.docx"
 
 
-def create_openai_client(model_choice: str = "GPT-4o-Mini"):
+def create_llm_client(model_choice: str = "GPT-4o-Mini"):
     """
     Create an OpenAI client configured with the specified model choice.
 
@@ -121,7 +121,7 @@ async def generate_content(context, model_choice: str = "GPT-4o-Mini"):
         Exception:
             If the response lacks the required keys `"Course_Overview"` or `"LO_Description"`.
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = """
         You are an expert in creating detailed and informative content for course descriptions. Your task is to:

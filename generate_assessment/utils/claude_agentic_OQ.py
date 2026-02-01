@@ -1,5 +1,5 @@
 """
-OpenAI SDK-based Project Assessment Generation Module.
+OpenAI SDK-based Oral Questioning Assessment Generation Module.
 
 Uses JSON mode for OpenRouter compatibility.
 """
@@ -8,7 +8,7 @@ import re
 import asyncio
 from generate_assessment.utils.pydantic_models import FacilitatorGuideExtraction
 from utils.helpers import parse_json_content
-from generate_cp.utils.openai_model_client import create_openai_client
+from generate_cp.utils.claude_model_client import create_llm_client
 from utils.prompt_loader import load_prompt
 
 
@@ -51,11 +51,11 @@ def group_abilities(extracted_data):
     return result
 
 
-async def generate_prj_for_lo(client, config, course_title, assessment_duration, learning_outcome, learning_outcome_id, retrieved_content, ability_ids, ability_texts):
-    system_message = load_prompt("assessment/project")
+async def generate_oq_for_lo(client, config, course_title, assessment_duration, learning_outcome, learning_outcome_id, retrieved_content, ability_ids, ability_texts):
+    system_message = load_prompt("assessment/oral_questioning")
 
     user_task = f"""
-    Generate a Project assessment question-answer pair using the following details:
+    Generate a Oral Questioning assessment question-answer pair using the following details:
     - Course Title: '{course_title}'
     - Assessment Duration: '{assessment_duration}'
     - Learning Outcome: '{learning_outcome}'
@@ -84,7 +84,7 @@ async def generate_prj_for_lo(client, config, course_title, assessment_duration,
         content_response = completion.choices[0].message.content
         qa_result = parse_json_content(content_response)
         if qa_result is None or not isinstance(qa_result, dict):
-            raise ValueError(f"Failed to parse PRJ response for {learning_outcome_id}")
+            raise ValueError(f"Failed to parse OQ response for {learning_outcome_id}")
         return {
             "learning_outcome_id": qa_result.get("learning_outcome_id", learning_outcome_id),
             "question_statement": qa_result.get("question_statement", "Question not provided."),
@@ -92,18 +92,18 @@ async def generate_prj_for_lo(client, config, course_title, assessment_duration,
             "ability_id": ability_ids
         }
     except Exception as e:
-        print(f"Error generating PRJ question for {learning_outcome_id}: {e}")
+        print(f"Error generating OQ question for {learning_outcome_id}: {e}")
         return None
 
 
-async def generate_prj(extracted_data: FacilitatorGuideExtraction, index, model_client, model_choice: str = "DeepSeek-Chat"):
-    client, config = create_openai_client(model_choice)
+async def generate_oq(extracted_data: FacilitatorGuideExtraction, index, model_client, model_choice: str = "DeepSeek-Chat"):
+    client, config = create_llm_client(model_choice)
     extracted_data = dict(extracted_data)
 
     assessment_duration = ""
     for assessment in extracted_data["assessments"]:
         code = assessment["code"].upper()
-        if "PRJ" in code or "PROJECT" in code:
+        if "OQ" in code or "ORAL QUESTIONING" in code:
             assessment_duration = assessment["duration"]
             break
 
@@ -111,7 +111,7 @@ async def generate_prj(extracted_data: FacilitatorGuideExtraction, index, model_
 
     questions = []
     for group in grouped_abilities:
-        result = await generate_prj_for_lo(
+        result = await generate_oq_for_lo(
             client, config,
             extracted_data["course_title"],
             assessment_duration,

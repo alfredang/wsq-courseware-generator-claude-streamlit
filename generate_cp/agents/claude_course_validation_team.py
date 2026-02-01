@@ -15,7 +15,7 @@ Date: 2026-01-20
 import json
 import sys
 from typing import Dict, Any
-from generate_cp.utils.openai_model_client import create_openai_client
+from generate_cp.utils.claude_model_client import create_llm_client
 
 
 def extract_json_from_response(content: str) -> dict:
@@ -94,7 +94,7 @@ async def run_analyst_agent(
     Returns:
         Dict containing analyst responses
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = f"""
     Using the following information from {ensemble_output}:
@@ -184,7 +184,7 @@ async def run_validation_editor_agent(
     Returns:
         Dict containing consolidated validation output
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = """
     You are to combine the outputs from the following agents into a single JSON object, do NOT aggregate output from the validator agent:

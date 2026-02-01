@@ -12,7 +12,7 @@ import json
 import logging
 from typing import Dict, Any
 
-from generate_cp.utils.openai_model_client import create_openai_client
+from generate_cp.utils.claude_model_client import create_llm_client
 from utils.prompt_loader import load_prompt
 
 logger = logging.getLogger(__name__)
@@ -84,14 +84,14 @@ async def run_topic_analysis(
         filename: Original filename
         material_type: Type (FG, LG, CP, Other)
         num_queries: Maximum number of topics to return
-        model_choice: Model selection string for create_openai_client
+        model_choice: Model selection string for create_llm_client
 
     Returns:
         Dict with keys: document_domain, document_type_detected,
         topics (list with name, research_query, relevance_score, rationale),
         total_topics_found
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = load_prompt(
         "slides/topic_analysis",

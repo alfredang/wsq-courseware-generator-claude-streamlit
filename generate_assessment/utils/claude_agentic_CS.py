@@ -12,7 +12,7 @@ import re
 import asyncio
 from generate_assessment.utils.pydantic_models import FacilitatorGuideExtraction
 from utils.helpers import parse_json_content
-from generate_cp.utils.openai_model_client import create_openai_client
+from generate_cp.utils.claude_model_client import create_llm_client
 
 
 def extract_learning_outcome_id(lo_text: str) -> str:
@@ -266,7 +266,7 @@ async def generate_cs(extracted_data: FacilitatorGuideExtraction, index, model_c
         dict: Structured dictionary with course_title, duration, scenario, and questions
     """
     from settings.api_manager import load_api_keys
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
     extracted_data = dict(extracted_data)
 
     scenario = await generate_cs_scenario_openai(client, config, extracted_data)

@@ -85,7 +85,7 @@ class EvidenceGatheringPlan(BaseModel):
     assessment_methods: AssessmentMethods
 
 
-def create_openai_client(model_choice: str = "GPT-4o-Mini"):
+def create_llm_client(model_choice: str = "GPT-4o-Mini"):
     """
     Create an OpenAI client configured with the specified model choice.
 
@@ -151,7 +151,7 @@ async def extract_assessment_evidence(structured_data, model_choice: str = "GPT-
             If the AI response is missing required fields.
     """
 
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     # Build extracted content inline
     lines = []

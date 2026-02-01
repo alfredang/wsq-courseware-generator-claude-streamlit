@@ -11,7 +11,7 @@ import json
 import logging
 from typing import Dict, Any, List
 
-from generate_cp.utils.openai_model_client import create_openai_client
+from generate_cp.utils.claude_model_client import create_llm_client
 from utils.prompt_loader import load_prompt
 
 logger = logging.getLogger(__name__)
@@ -80,14 +80,14 @@ async def run_quality_validator(
         expected_topics: Topic names that should be covered
         expected_structure: Expected structure outline from instructions agent
         material_type: Document type
-        model_choice: Model selection string for create_openai_client
+        model_choice: Model selection string for create_llm_client
 
     Returns:
         Dict with overall_score, per-criterion scores (1-10),
         recommendation (pass/retry_with_modifications/retry_full),
         retry_suggestions, strengths, weaknesses
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     topics_str = json.dumps(expected_topics, indent=2)
     structure_str = json.dumps(expected_structure, indent=2)

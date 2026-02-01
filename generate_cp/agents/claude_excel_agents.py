@@ -12,7 +12,7 @@ import json
 import sys
 import re
 from typing import Dict, Any
-from generate_cp.utils.openai_model_client import create_openai_client
+from generate_cp.utils.claude_model_client import create_llm_client
 from generate_cp.schemas.excel_schemas import CourseOverviewResponse, KAAnalysisResponse, InstructionalMethodsResponse
 
 
@@ -83,7 +83,7 @@ async def run_course_agent(
     Returns:
         Dict containing course_overview with course_description
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     # System message from original Autogen implementation
     system_message = f"""
@@ -209,7 +209,7 @@ async def run_ka_analysis_agent(
     Returns:
         Dict containing KA_Analysis with K1, K2, A1, A2, etc. mappings
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = f"""
     You are responsible for elaborating on the appropriateness of the assessment methods in relation to the K and A statements. For each LO-MoA (Learning Outcome - Method of Assessment) pair, input rationale for each on why this MoA was chosen, and specify which K&As it will assess.
@@ -324,7 +324,7 @@ async def run_im_agent(
     Returns:
         Dict containing Instructional_Methods with method names as keys
     """
-    client, config = create_openai_client(model_choice)
+    client, config = create_llm_client(model_choice)
 
     system_message = f"""
     You are responsible for contextualising the explanations of the chosen instructional methods to fit the context of the course.
