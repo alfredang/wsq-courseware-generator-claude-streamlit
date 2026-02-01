@@ -16,6 +16,9 @@ __pycache__/
 # Streamlit secrets (DO NOT COMMIT - Add these to Streamlit Cloud UI)
 .streamlit/secrets.toml
 
+# Chainlit secrets
+chainlit_app/.env
+
 # API configuration (local SQLite database and legacy files)
 settings/config/api_config.db
 settings/config/api_keys.json
