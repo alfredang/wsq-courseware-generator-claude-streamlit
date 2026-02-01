@@ -32,6 +32,8 @@ app_port: 7860
 
 The **WSQ Courseware Generator** is an enterprise-grade AI platform that automates the creation of Singapore Workforce Skills Qualifications (WSQ) training materials. Using Claude AI agents, it transforms Training & Competency Standards (TSC) documents into complete courseware packages.
 
+![Course Proposal Generator](public/images/preview.png)
+
 ### Key Features
 
 | Feature | Description |
