@@ -8,13 +8,19 @@ Author: Migration from Autogen to OpenAI SDK
 Date: 2026-01-20
 """
 
+import sys
+import os
+
+# Add project root to Python path for absolute imports
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from generate_cp.agents.openai_course_validation_team import run_course_validation_team
 from generate_cp.utils.helpers import append_validation_output
 from generate_cp.utils.json_docu_replace import replace_placeholders_in_doc
 import json
 import asyncio
-import sys
-import os
 
 
 async def create_course_validation(model_choice: str) -> None:

@@ -8,6 +8,14 @@ Author: Migration from Autogen to OpenAI SDK
 Date: 2026-01-20
 """
 
+import sys
+import os
+
+# Add project root to Python path for absolute imports
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from generate_cp.utils.document_parser import parse_document
 from generate_cp.agents.openai_extraction_team import run_extraction_team
 from generate_cp.agents.openai_research_team import run_research_team

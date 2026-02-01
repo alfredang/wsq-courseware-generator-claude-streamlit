@@ -8,6 +8,14 @@ Author: Migration from Autogen to OpenAI SDK
 Date: 2026-01-20
 """
 
+import sys
+import os
+
+# Add project root to Python path for absolute imports
+project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+if project_root not in sys.path:
+    sys.path.insert(0, project_root)
+
 from generate_cp.utils.excel_replace_xml import process_excel_update, preserve_excel_metadata, cleanup_old_files
 from generate_cp.utils.excel_conversion_pipeline import map_new_key_names_excel, create_instructional_dataframe
 from generate_cp.agents.openai_excel_agents import (
@@ -17,7 +25,6 @@ from generate_cp.agents.openai_excel_agents import (
 )
 import json
 import asyncio
-import os
 from generate_cp.utils.helpers import load_json_file
 
 def combine_json_files(file1_path, file2_path):

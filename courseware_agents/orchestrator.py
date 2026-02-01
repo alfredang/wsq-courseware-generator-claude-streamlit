@@ -1,19 +1,29 @@
 """
-Orchestrator Agent
+Orchestrator Agent - Claude Agent SDK
 
 This is the main coordinator agent that interacts with users and
-delegates tasks to specialized agents via handoffs.
+delegates tasks to specialized subagents.
 
 Supports MCP (Model Context Protocol) servers for enhanced tool integration
-including filesystem operations, database access, and web fetching.
+including custom courseware tools, filesystem operations, and web fetching.
 
 Author: Courseware Generator Team
 Date: 26 January 2026
 """
 
-from agents import Agent, handoff
-from courseware_agents.base import create_agent, setup_openrouter, setup_api_provider, get_model_for_agent
-from typing import Optional, List, Any
+from typing import Optional, List, Any, Dict, AsyncGenerator
+
+try:
+    from claude_agent_sdk import query, ClaudeAgentOptions, AgentDefinition
+except ImportError:
+    from courseware_agents.base import ClaudeAgentOptions, AgentDefinition, query
+
+from courseware_agents.base import (
+    get_mcp_servers_config,
+    create_subagent,
+    setup_anthropic_api,
+    COURSEWARE_MCP_CONFIG,
+)
 
 
 # System instructions for the Orchestrator
@@ -29,7 +39,7 @@ You help users create WSQ (Workforce Skills Qualifications) courseware materials
 
 ## Available Specialized Agents
 
-You can hand off to these specialized agents:
+You can delegate to these specialized agents using the Task tool:
 
 ### 1. CP Agent (Course Proposal)
 - **Use when**: User wants to generate a Course Proposal from TSC file
@@ -61,29 +71,47 @@ You can hand off to these specialized agents:
 - **Needs**: Documents to verify (PDF, images)
 - **Outputs**: Verification reports
 
+## Available MCP Tools
+
+You have access to custom courseware tools via MCP:
+- parse_tsc_document: Parse TSC documents
+- run_extraction_pipeline: Extract course information
+- generate_assessment_plan: Generate AP documents
+- generate_facilitator_guide: Generate FG documents
+- generate_learner_guide: Generate LG documents
+- generate_lesson_plan: Generate LP documents
+- generate_saq_questions: Generate SAQ assessments
+- generate_practical_performance: Generate PP assessments
+- generate_case_study: Generate CS assessments
+- scrape_course_info: Scrape course information from URLs
+- generate_brochure_html: Generate HTML brochures
+- extract_document_entities: Extract entities from documents
+- verify_company_uen: Verify UEN against ACRA
+- And more...
+
 ## Typical Workflows
 
 ### Full Course Generation
 1. User provides TSC document
-2. Hand off to CP Agent → generates Course Proposal
-3. Hand off to Courseware Agent → generates AP, FG, LG, LP
-4. Hand off to Assessment Agent → generates assessments
-5. Hand off to Brochure Agent → creates marketing brochure
+2. Use CP tools → generates Course Proposal
+3. Use Courseware tools → generates AP, FG, LG, LP
+4. Use Assessment tools → generates assessments
+5. Use Brochure tools → creates marketing brochure
 
 ### Assessment Only
 1. User provides Facilitator Guide
-2. Hand off to Assessment Agent → generates SAQ, PP, or CS
+2. Use Assessment tools → generates SAQ, PP, or CS
 
 ### Document Verification
 1. User provides supporting documents
-2. Hand off to Document Agent → verifies and reports
+2. Use Document tools → verifies and reports
 
 ## How to Interact
 
 1. **Greet the user** and ask what they need
 2. **Clarify requirements** if unclear
-3. **Hand off** to the appropriate agent with context
-4. **Report back** results when agent completes
+3. **Use appropriate tools** with context
+4. **Report back** results when complete
 
 ## Important Guidelines
 
@@ -111,225 +139,172 @@ Do you have a Facilitator Guide I can use as source material? And which assessme
 """
 
 
-def create_orchestrator(model_name: str = "GPT-4o", api_provider: str = "OPENROUTER") -> Agent:
-    """
-    Create the main orchestrator agent with handoffs to all specialized agents.
+# Import agent instructions from individual agent files
+def _get_cp_agent_instructions() -> str:
+    """Get CP Agent instructions."""
+    from courseware_agents.cp_agent import CP_AGENT_INSTRUCTIONS
+    return CP_AGENT_INSTRUCTIONS
 
-    The orchestrator is created lazily to avoid circular imports.
+
+def _get_courseware_agent_instructions() -> str:
+    """Get Courseware Agent instructions."""
+    from courseware_agents.courseware_agent import COURSEWARE_AGENT_INSTRUCTIONS
+    return COURSEWARE_AGENT_INSTRUCTIONS
+
+
+def _get_assessment_agent_instructions() -> str:
+    """Get Assessment Agent instructions."""
+    from courseware_agents.assessment_agent import ASSESSMENT_AGENT_INSTRUCTIONS
+    return ASSESSMENT_AGENT_INSTRUCTIONS
+
+
+def _get_brochure_agent_instructions() -> str:
+    """Get Brochure Agent instructions."""
+    from courseware_agents.brochure_agent import BROCHURE_AGENT_INSTRUCTIONS
+    return BROCHURE_AGENT_INSTRUCTIONS
+
+
+def _get_document_agent_instructions() -> str:
+    """Get Document Agent instructions."""
+    from courseware_agents.document_agent import DOCUMENT_AGENT_INSTRUCTIONS
+    return DOCUMENT_AGENT_INSTRUCTIONS
+
+
+# Define subagents
+CP_AGENT = AgentDefinition(
+    name="cp_agent",
+    description="Course Proposal generation from TSC documents. Use for parsing TSC files and generating CP data.",
+    prompt=_get_cp_agent_instructions() if 'courseware_agents.cp_agent' in __builtins__ else "CP Agent for Course Proposal generation.",
+)
+
+COURSEWARE_AGENT = AgentDefinition(
+    name="courseware_agent",
+    description="AP/FG/LG/LP document generation. Use for generating Assessment Plans, Facilitator Guides, Learner Guides, and Lesson Plans.",
+    prompt="Courseware Agent for document generation.",
+)
+
+ASSESSMENT_AGENT = AgentDefinition(
+    name="assessment_agent",
+    description="SAQ/PP/CS assessment generation. Use for generating Short Answer Questions, Practical Performance, and Case Studies.",
+    prompt="Assessment Agent for assessment generation.",
+)
+
+BROCHURE_AGENT = AgentDefinition(
+    name="brochure_agent",
+    description="Course brochure creation. Use for generating marketing brochures from course data or URLs.",
+    prompt="Brochure Agent for brochure creation.",
+)
+
+DOCUMENT_AGENT = AgentDefinition(
+    name="document_agent",
+    description="Document verification and validation. Use for extracting entities and verifying documents.",
+    prompt="Document Agent for document verification.",
+)
+
+
+def get_orchestrator_options(
+    mcp_config: Optional[Dict[str, bool]] = None,
+) -> ClaudeAgentOptions:
+    """
+    Get ClaudeAgentOptions for the orchestrator.
 
     Args:
-        model_name: Model to use for the orchestrator (default: GPT-4o)
-        api_provider: API provider to use (OPENROUTER, OPENAI, ANTHROPIC, etc.)
+        mcp_config: MCP server configuration
 
     Returns:
-        Configured orchestrator Agent with handoffs
+        Configured ClaudeAgentOptions
     """
-    # Configure the API provider
-    setup_api_provider(api_provider)
+    if mcp_config is None:
+        mcp_config = COURSEWARE_MCP_CONFIG
 
-    # Import agents here to avoid circular imports
-    from courseware_agents.cp_agent import cp_agent
-    from courseware_agents.courseware_agent import courseware_agent
-    from courseware_agents.assessment_agent import assessment_agent
-    from courseware_agents.brochure_agent import brochure_agent
-    from courseware_agents.document_agent import document_agent
+    mcp_servers = get_mcp_servers_config(**mcp_config)
 
-    # Get model ID
-    model_id = get_model_for_agent(model_name)
-
-    # Create orchestrator with handoffs
-    orchestrator = Agent(
-        name="Courseware Orchestrator",
-        instructions=ORCHESTRATOR_INSTRUCTIONS,
-        model=model_id,
-        handoffs=[
-            handoff(
-                cp_agent,
-                tool_name_override="transfer_to_cp_agent",
-                tool_description_override="Transfer to CP Agent for Course Proposal generation from TSC documents"
-            ),
-            handoff(
-                courseware_agent,
-                tool_name_override="transfer_to_courseware_agent",
-                tool_description_override="Transfer to Courseware Agent for AP/FG/LG/LP document generation"
-            ),
-            handoff(
-                assessment_agent,
-                tool_name_override="transfer_to_assessment_agent",
-                tool_description_override="Transfer to Assessment Agent for SAQ/PP/CS assessment generation"
-            ),
-            handoff(
-                brochure_agent,
-                tool_name_override="transfer_to_brochure_agent",
-                tool_description_override="Transfer to Brochure Agent for course brochure creation"
-            ),
-            handoff(
-                document_agent,
-                tool_name_override="transfer_to_document_agent",
-                tool_description_override="Transfer to Document Agent for document verification and validation"
-            ),
-        ],
+    return ClaudeAgentOptions(
+        allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Task", "WebFetch"],
+        agents={
+            "cp_agent": CP_AGENT,
+            "courseware_agent": COURSEWARE_AGENT,
+            "assessment_agent": ASSESSMENT_AGENT,
+            "brochure_agent": BROCHURE_AGENT,
+            "document_agent": DOCUMENT_AGENT,
+        },
+        mcp_servers=mcp_servers,
     )
 
-    return orchestrator
 
-
-# For convenience, also provide the individual agents
-def get_cp_agent():
-    """Get the CP Agent instance"""
-    from courseware_agents.cp_agent import cp_agent
-    return cp_agent
-
-
-def get_courseware_agent():
-    """Get the Courseware Agent instance"""
-    from courseware_agents.courseware_agent import courseware_agent
-    return courseware_agent
-
-
-def get_assessment_agent():
-    """Get the Assessment Agent instance"""
-    from courseware_agents.assessment_agent import assessment_agent
-    return assessment_agent
-
-
-def get_brochure_agent():
-    """Get the Brochure Agent instance"""
-    from courseware_agents.brochure_agent import brochure_agent
-    return brochure_agent
-
-
-def get_document_agent():
-    """Get the Document Agent instance"""
-    from courseware_agents.document_agent import document_agent
-    return document_agent
-
-
-def create_orchestrator_with_mcp(
-    model_name: str = "GPT-4o",
-    mcp_servers: Optional[List[Any]] = None
-) -> Agent:
-    """
-    Create the orchestrator with MCP server support.
-
-    MCP servers enable standardized access to:
-    - Filesystem: Document read/write operations
-    - PostgreSQL: Company database queries
-    - SQLite: API configuration access
-    - Fetch: Web scraping operations
-    - Memory: Persistent agent memory
-
-    Args:
-        model_name: Model to use for the orchestrator
-        mcp_servers: List of initialized MCP servers
-
-    Returns:
-        Orchestrator Agent with MCP servers attached
-
-    Example:
-        from courseware_agents import mcp_context, COURSEWARE_MCP_CONFIG
-        from agents import Runner
-
-        async def run_with_mcp():
-            async with mcp_context(**COURSEWARE_MCP_CONFIG) as servers:
-                orchestrator = create_orchestrator_with_mcp(mcp_servers=servers)
-                result = await Runner.run(orchestrator, "Generate courseware")
-                print(result.final_output)
-    """
-    # Ensure OpenRouter is configured
-    setup_openrouter()
-
-    # Import agents here to avoid circular imports
-    from courseware_agents.cp_agent import cp_agent
-    from courseware_agents.courseware_agent import courseware_agent
-    from courseware_agents.assessment_agent import assessment_agent
-    from courseware_agents.brochure_agent import brochure_agent
-    from courseware_agents.document_agent import document_agent
-
-    # Get model ID
-    model_id = get_model_for_agent(model_name)
-
-    # Build agent kwargs
-    agent_kwargs = {
-        "name": "Courseware Orchestrator",
-        "instructions": ORCHESTRATOR_INSTRUCTIONS,
-        "model": model_id,
-        "handoffs": [
-            handoff(
-                cp_agent,
-                tool_name_override="transfer_to_cp_agent",
-                tool_description_override="Transfer to CP Agent for Course Proposal generation from TSC documents"
-            ),
-            handoff(
-                courseware_agent,
-                tool_name_override="transfer_to_courseware_agent",
-                tool_description_override="Transfer to Courseware Agent for AP/FG/LG/LP document generation"
-            ),
-            handoff(
-                assessment_agent,
-                tool_name_override="transfer_to_assessment_agent",
-                tool_description_override="Transfer to Assessment Agent for SAQ/PP/CS assessment generation"
-            ),
-            handoff(
-                brochure_agent,
-                tool_name_override="transfer_to_brochure_agent",
-                tool_description_override="Transfer to Brochure Agent for course brochure creation"
-            ),
-            handoff(
-                document_agent,
-                tool_name_override="transfer_to_document_agent",
-                tool_description_override="Transfer to Document Agent for document verification and validation"
-            ),
-        ],
-    }
-
-    # Add MCP servers if provided
-    if mcp_servers:
-        agent_kwargs["mcp_servers"] = mcp_servers
-
-    return Agent(**agent_kwargs)
-
-
-async def run_orchestrator_with_mcp(
+async def run_orchestrator(
     prompt: str,
-    model_name: str = "GPT-4o",
-    enable_filesystem: bool = True,
-    enable_postgres: bool = False,
-    enable_fetch: bool = True,
-):
+    mcp_config: Optional[Dict[str, bool]] = None,
+) -> AsyncGenerator[Any, None]:
     """
-    Run the orchestrator with MCP servers in a managed context.
-
-    This is a convenience function that handles MCP server lifecycle automatically.
+    Run the orchestrator with Claude Agent SDK.
 
     Args:
         prompt: User prompt to process
-        model_name: Model to use for the orchestrator
-        enable_filesystem: Enable filesystem MCP server
-        enable_postgres: Enable PostgreSQL MCP server
-        enable_fetch: Enable web fetch MCP server
+        mcp_config: MCP server configuration
 
-    Returns:
-        Runner result with final output
+    Yields:
+        Messages from the orchestrator
 
     Example:
-        result = await run_orchestrator_with_mcp(
-            "Generate a Course Proposal from my TSC document",
-            enable_postgres=True  # Enable if company data access needed
-        )
-        print(result.final_output)
+        async for message in run_orchestrator("Generate a Course Proposal"):
+            print(message)
     """
-    from agents import Runner
-    from courseware_agents.mcp_config import mcp_context
+    setup_anthropic_api()
 
-    async with mcp_context(
-        enable_filesystem=enable_filesystem,
-        enable_postgres=enable_postgres,
-        enable_fetch=enable_fetch,
-    ) as servers:
-        orchestrator = create_orchestrator_with_mcp(
-            model_name=model_name,
-            mcp_servers=servers
-        )
-        result = await Runner.run(orchestrator, prompt)
-        return result
+    options = get_orchestrator_options(mcp_config)
+
+    async for message in query(
+        prompt=prompt,
+        options=options,
+    ):
+        yield message
+
+
+async def run_orchestrator_simple(
+    prompt: str,
+    mcp_config: Optional[Dict[str, bool]] = None,
+) -> str:
+    """
+    Run the orchestrator and return the final result.
+
+    Args:
+        prompt: User prompt to process
+        mcp_config: MCP server configuration
+
+    Returns:
+        Final result as string
+    """
+    result = ""
+    async for message in run_orchestrator(prompt, mcp_config):
+        if hasattr(message, "result"):
+            result = message.result
+        elif hasattr(message, "content"):
+            result = message.content
+    return result
+
+
+# Convenience functions to get individual agent definitions
+def get_cp_agent() -> AgentDefinition:
+    """Get the CP Agent definition."""
+    return CP_AGENT
+
+
+def get_courseware_agent() -> AgentDefinition:
+    """Get the Courseware Agent definition."""
+    return COURSEWARE_AGENT
+
+
+def get_assessment_agent() -> AgentDefinition:
+    """Get the Assessment Agent definition."""
+    return ASSESSMENT_AGENT
+
+
+def get_brochure_agent() -> AgentDefinition:
+    """Get the Brochure Agent definition."""
+    return BROCHURE_AGENT
+
+
+def get_document_agent() -> AgentDefinition:
+    """Get the Document Agent definition."""
+    return DOCUMENT_AGENT

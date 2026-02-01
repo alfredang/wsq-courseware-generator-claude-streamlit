@@ -1,309 +1,228 @@
 """
-Agent Base Module
+Agent Base Module - Claude Agent SDK
 
-This module provides the agent factory function and OpenRouter configuration
-for creating agents with dynamic model selection from the SQLite database.
-Includes MCP (Model Context Protocol) server support for standardized tool integration.
+This module provides utilities for the Claude Agent SDK integration,
+including MCP server configuration and subagent definitions.
 
 Author: Courseware Generator Team
 Date: 26 January 2026
 """
 
 import os
-from typing import List, Any, Optional, Callable, Dict
+from typing import List, Any, Optional, Dict
+from pathlib import Path
 
-# Conditional import for openai-agents package
-# This allows the app to run on Streamlit Cloud even if the package isn't fully available
-AGENTS_AVAILABLE = False
-Agent = None
-set_default_openai_api = None
-
+# Claude Agent SDK imports
 try:
-    from agents import Agent, set_default_openai_api
-    AGENTS_AVAILABLE = True
+    from claude_agent_sdk import query, ClaudeAgentOptions, AgentDefinition
+    CLAUDE_SDK_AVAILABLE = True
 except ImportError as e:
-    print(f"Warning: openai-agents package not available: {e}")
+    print(f"Warning: claude-agent-sdk package not available: {e}")
     print("Agent features will be disabled. The app will run in limited mode.")
+    CLAUDE_SDK_AVAILABLE = False
 
-    # Create a stub Agent class for compatibility
-    class Agent:
-        """Stub Agent class when openai-agents is not available."""
+    # Create stub classes for compatibility
+    class ClaudeAgentOptions:
+        """Stub ClaudeAgentOptions when claude-agent-sdk is not available."""
+        def __init__(self, **kwargs):
+            for key, value in kwargs.items():
+                setattr(self, key, value)
+
+    class AgentDefinition:
+        """Stub AgentDefinition when claude-agent-sdk is not available."""
         def __init__(self, **kwargs):
             self.name = kwargs.get("name", "StubAgent")
-            self.instructions = kwargs.get("instructions", "")
+            self.description = kwargs.get("description", "")
+            self.prompt = kwargs.get("prompt", "")
             self.tools = kwargs.get("tools", [])
-            self.handoffs = kwargs.get("handoffs", [])
-            self.model = kwargs.get("model", "")
-            print(f"Warning: Agent '{self.name}' created as stub - openai-agents not available")
+            print(f"Warning: Agent '{self.name}' created as stub - claude-agent-sdk not available")
 
-    def set_default_openai_api(api_type: str):
-        """Stub function when openai-agents is not available."""
-        pass
+    async def query(*args, **kwargs):
+        """Stub query function when claude-agent-sdk is not available."""
+        yield {"error": "claude-agent-sdk not available"}
 
 
-# Provider base URLs mapping
-PROVIDER_BASE_URLS = {
-    "OPENROUTER": "https://openrouter.ai/api/v1",
-    "OPENAI": "https://api.openai.com/v1",
-    "ANTHROPIC": "https://api.anthropic.com/v1",
-    "GEMINI": "https://generativelanguage.googleapis.com/v1beta",
-    "GROQ": "https://api.groq.com/openai/v1",
-    "GROK": "https://api.x.ai/v1",
-    "DEEPSEEK": "https://api.deepseek.com/v1",
-}
+def get_project_root() -> Path:
+    """Get the project root directory."""
+    return Path(__file__).resolve().parent.parent
 
 
-def setup_api_provider(api_provider: str = "OPENROUTER") -> bool:
+def get_mcp_servers_config(
+    enable_courseware_tools: bool = True,
+    enable_filesystem: bool = True,
+    enable_fetch: bool = True,
+    custom_paths: Optional[List[str]] = None,
+) -> Dict[str, Dict[str, Any]]:
     """
-    Configure the agents library to use the specified API provider.
+    Get MCP server configurations for Claude Agent SDK.
 
     Args:
-        api_provider: The API provider to use (OPENROUTER, OPENAI, ANTHROPIC, etc.)
+        enable_courseware_tools: Enable the custom courseware tools MCP server
+        enable_filesystem: Enable filesystem MCP server
+        enable_fetch: Enable web fetch MCP server
+        custom_paths: Custom paths for filesystem access
 
     Returns:
-        True if configuration successful, False otherwise
+        Dictionary of MCP server configurations
     """
-    try:
-        from settings.api_manager import load_api_keys
-        from openai import AsyncOpenAI
-        from agents import set_default_openai_client
+    project_root = get_project_root()
+    servers = {}
 
-        api_keys = load_api_keys()
-        api_key_name = f"{api_provider}_API_KEY"
-        api_key = api_keys.get(api_key_name, "")
+    # Custom courseware tools MCP server
+    if enable_courseware_tools:
+        servers["courseware-tools"] = {
+            "command": "python",
+            "args": [str(project_root / "courseware_agents" / "run_mcp_server.py")]
+        }
 
-        if not api_key:
-            print(f"Warning: {api_key_name} not found in secrets")
-            return False
+    # Filesystem MCP server
+    if enable_filesystem:
+        paths = custom_paths or [str(project_root)]
+        servers["filesystem"] = {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-filesystem"] + paths
+        }
 
-        # Get base URL for the provider
-        base_url = PROVIDER_BASE_URLS.get(api_provider, "https://openrouter.ai/api/v1")
+    # Web fetch MCP server
+    if enable_fetch:
+        servers["fetch"] = {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-fetch"]
+        }
 
-        # Create AsyncOpenAI client configured for the provider
-        client = AsyncOpenAI(
-            api_key=api_key,
-            base_url=base_url
-        )
-
-        # Set the custom client for the agents library
-        set_default_openai_client(client, use_for_tracing=False)
-
-        # Use chat completions API
-        set_default_openai_api("chat_completions")
-
-        # Also set environment variables as fallback
-        os.environ["OPENAI_API_KEY"] = api_key
-        os.environ["OPENAI_BASE_URL"] = base_url
-
-        return True
-    except Exception as e:
-        print(f"Error setting up {api_provider}: {e}")
-        return False
+    return servers
 
 
-def setup_openrouter() -> bool:
-    """
-    Configure the agents library to use OpenRouter as the API endpoint.
-    This is a convenience wrapper around setup_api_provider for backward compatibility.
-
-    Returns:
-        True if configuration successful, False otherwise
-    """
-    return setup_api_provider("OPENROUTER")
-
-
-def get_model_for_agent(model_name: str = "GPT-4o-Mini") -> str:
-    """
-    Get OpenRouter model ID from the SQLite database.
-
-    Args:
-        model_name: Display name of the model (e.g., "GPT-4o", "DeepSeek-Chat")
-
-    Returns:
-        OpenRouter model ID (e.g., "openai/gpt-4o", "deepseek/deepseek-chat")
-    """
-    try:
-        from settings.api_manager import get_all_available_models
-
-        models = get_all_available_models()
-        if model_name in models:
-            return models[model_name]["config"]["model"]
-    except Exception as e:
-        print(f"Warning: Could not load model config for '{model_name}': {e}")
-
-    # Fallback mappings if database lookup fails
-    fallback_models = {
-        "GPT-4o": "openai/gpt-4o",
-        "GPT-4o-Mini": "openai/gpt-4o-mini",
-        "GPT-5": "openai/gpt-5",
-        "DeepSeek-Chat": "deepseek/deepseek-chat",
-        "DeepSeek-R1": "deepseek/deepseek-r1",
-        "Claude-Sonnet-4": "anthropic/claude-sonnet-4",
-        "Claude-Opus-4.5": "anthropic/claude-opus-4.5",
-        "Gemini-2.5-Flash": "google/gemini-2.5-flash",
-    }
-
-    return fallback_models.get(model_name, "openai/gpt-4o-mini")
-
-
-def create_agent(
+def create_subagent(
     name: str,
-    instructions: str,
-    tools: Optional[List[Any]] = None,
-    handoffs: Optional[List[Agent]] = None,
-    model_name: str = "GPT-4o-Mini",
-    output_type: Optional[type] = None,
-    handoff_description: Optional[str] = None,
-    mcp_servers: Optional[List[Any]] = None,
-    api_provider: str = "OPENROUTER",
-) -> Agent:
+    description: str,
+    prompt: str,
+    tools: Optional[List[str]] = None,
+) -> AgentDefinition:
     """
-    Factory function to create agents with dynamic API provider configuration.
+    Create a subagent definition for Claude Agent SDK.
 
     Args:
-        name: Name of the agent
-        instructions: System instructions for the agent
-        tools: List of tools the agent can use
-        handoffs: List of agents this agent can hand off to
-        model_name: Display name of the model from the database
-        output_type: Optional Pydantic model for structured output
-        handoff_description: Description shown when this agent is a handoff target
-        mcp_servers: Optional list of MCP servers the agent can use
-        api_provider: API provider to use (OPENROUTER, OPENAI, ANTHROPIC, etc.)
+        name: Name of the subagent
+        description: Brief description of the subagent's purpose
+        prompt: System prompt/instructions for the subagent
+        tools: List of built-in tools the subagent can use
 
     Returns:
-        Configured Agent instance
+        AgentDefinition instance
     """
-    # Configure the API provider
-    setup_api_provider(api_provider)
-
-    # Get the model ID from database
-    model_id = get_model_for_agent(model_name)
-
-    # Build agent kwargs
-    agent_kwargs = {
-        "name": name,
-        "instructions": instructions,
-        "model": model_id,
-    }
-
-    if tools:
-        agent_kwargs["tools"] = tools
-
-    if handoffs:
-        agent_kwargs["handoffs"] = handoffs
-
-    if output_type:
-        agent_kwargs["output_type"] = output_type
-
-    if handoff_description:
-        agent_kwargs["handoff_description"] = handoff_description
-
-    if mcp_servers:
-        agent_kwargs["mcp_servers"] = mcp_servers
-
-    return Agent(**agent_kwargs)
-
-
-async def create_agent_with_mcp(
-    name: str,
-    instructions: str,
-    tools: Optional[List[Any]] = None,
-    handoffs: Optional[List[Agent]] = None,
-    model_name: str = "GPT-4o-Mini",
-    output_type: Optional[type] = None,
-    handoff_description: Optional[str] = None,
-    mcp_config: Optional[Dict[str, bool]] = None,
-) -> Agent:
-    """
-    Factory function to create agents with MCP server support.
-
-    This async function initializes MCP servers based on the config and
-    creates an agent with those servers attached.
-
-    Args:
-        name: Name of the agent
-        instructions: System instructions for the agent
-        tools: List of tools the agent can use
-        handoffs: List of agents this agent can hand off to
-        model_name: Display name of the model from the database
-        output_type: Optional Pydantic model for structured output
-        handoff_description: Description shown when this agent is a handoff target
-        mcp_config: MCP server configuration dict with keys:
-            - enable_filesystem: Enable filesystem MCP server
-            - enable_postgres: Enable PostgreSQL MCP server
-            - enable_sqlite: Enable SQLite MCP server
-            - enable_fetch: Enable web fetch MCP server
-            - enable_memory: Enable memory MCP server
-
-    Returns:
-        Configured Agent instance with MCP servers
-
-    Example:
-        async with mcp_context(**COURSEWARE_MCP_CONFIG) as mcp_servers:
-            agent = create_agent(
-                name="My Agent",
-                instructions="...",
-                mcp_servers=mcp_servers
-            )
-    """
-    from courseware_agents.mcp_config import mcp_context, COURSEWARE_MCP_CONFIG
-
-    # Use default config if not provided
-    if mcp_config is None:
-        mcp_config = COURSEWARE_MCP_CONFIG
-
-    # Note: MCP servers require async context management
-    # This function is for reference - use mcp_context directly
-    return create_agent(
+    return AgentDefinition(
         name=name,
-        instructions=instructions,
-        tools=tools,
-        handoffs=handoffs,
-        model_name=model_name,
-        output_type=output_type,
-        handoff_description=handoff_description,
+        description=description,
+        prompt=prompt,
+        tools=tools or ["Read", "Glob", "Grep"]
     )
 
 
-def get_available_models() -> List[str]:
+def get_claude_model(model_name: str = "claude-sonnet-4") -> str:
     """
-    Get list of available model display names.
+    Get the Claude model ID.
+
+    Args:
+        model_name: Display name or short name of the model
 
     Returns:
-        List of model names that can be used with create_agent
+        Full model ID for Claude API
     """
+    model_mapping = {
+        "claude-sonnet-4": "claude-sonnet-4-20250514",
+        "claude-opus-4.5": "claude-opus-4-5-20251101",
+        "claude-haiku-3.5": "claude-3-5-haiku-20241022",
+        "sonnet": "claude-sonnet-4-20250514",
+        "opus": "claude-opus-4-5-20251101",
+        "haiku": "claude-3-5-haiku-20241022",
+    }
+
+    return model_mapping.get(model_name.lower(), model_name)
+
+
+def setup_anthropic_api() -> bool:
+    """
+    Ensure Anthropic API key is configured.
+
+    Returns:
+        True if API key is available, False otherwise
+    """
+    # Check environment variable first
+    if os.environ.get("ANTHROPIC_API_KEY"):
+        return True
+
+    # Try to load from settings
     try:
-        from settings.api_manager import get_all_available_models
-        models = get_all_available_models()
-        return list(models.keys())
-    except Exception:
-        return [
-            "GPT-4o",
-            "GPT-4o-Mini",
-            "DeepSeek-Chat",
-            "Claude-Sonnet-4",
-            "Gemini-2.5-Flash",
-        ]
+        from settings.api_manager import load_api_keys
+        api_keys = load_api_keys()
+        api_key = api_keys.get("ANTHROPIC_API_KEY", "")
+
+        if api_key:
+            os.environ["ANTHROPIC_API_KEY"] = api_key
+            return True
+    except Exception as e:
+        print(f"Warning: Could not load Anthropic API key: {e}")
+
+    return False
 
 
-# Re-export MCP utilities for convenience
-def get_mcp_context():
+def get_default_options(
+    allowed_tools: Optional[List[str]] = None,
+    agents: Optional[Dict[str, AgentDefinition]] = None,
+    mcp_servers: Optional[Dict[str, Dict[str, Any]]] = None,
+    permission_mode: str = "default",
+) -> ClaudeAgentOptions:
     """
-    Get the MCP context manager for initializing MCP servers.
+    Get default ClaudeAgentOptions with common settings.
 
-    Usage:
-        from courseware_agents.base import get_mcp_context
-
-        async with get_mcp_context()(enable_postgres=True) as servers:
-            agent = create_agent(name="Agent", instructions="...", mcp_servers=servers)
-            result = await Runner.run(agent, "Query")
+    Args:
+        allowed_tools: List of allowed built-in tools
+        agents: Dictionary of subagent definitions
+        mcp_servers: MCP server configurations
+        permission_mode: Permission mode for tool execution
 
     Returns:
-        mcp_context async context manager function
+        Configured ClaudeAgentOptions instance
     """
-    from courseware_agents.mcp_config import mcp_context
-    return mcp_context
+    if allowed_tools is None:
+        allowed_tools = ["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Task"]
+
+    if mcp_servers is None:
+        mcp_servers = get_mcp_servers_config()
+
+    return ClaudeAgentOptions(
+        allowed_tools=allowed_tools,
+        agents=agents or {},
+        mcp_servers=mcp_servers,
+        permission_mode=permission_mode,
+    )
+
+
+# Predefined MCP configurations for different use cases
+COURSEWARE_MCP_CONFIG = {
+    "enable_courseware_tools": True,
+    "enable_filesystem": True,
+    "enable_fetch": True,
+}
+
+DOCUMENT_AGENT_MCP_CONFIG = {
+    "enable_courseware_tools": True,
+    "enable_filesystem": True,
+    "enable_fetch": False,
+}
+
+BROCHURE_AGENT_MCP_CONFIG = {
+    "enable_courseware_tools": True,
+    "enable_filesystem": True,
+    "enable_fetch": True,
+}
+
+SLIDES_AGENT_MCP_CONFIG = {
+    "enable_courseware_tools": True,
+    "enable_filesystem": False,
+    "enable_fetch": False,
+}
 
 
 def get_mcp_configs() -> Dict[str, Dict[str, bool]]:
@@ -311,18 +230,11 @@ def get_mcp_configs() -> Dict[str, Dict[str, bool]]:
     Get predefined MCP server configurations.
 
     Returns:
-        Dictionary with configuration presets:
-        - COURSEWARE_MCP_CONFIG: General courseware generation
-        - DOCUMENT_AGENT_MCP_CONFIG: Document verification
-        - BROCHURE_AGENT_MCP_CONFIG: Brochure generation
+        Dictionary with configuration presets
     """
-    from courseware_agents.mcp_config import (
-        COURSEWARE_MCP_CONFIG,
-        DOCUMENT_AGENT_MCP_CONFIG,
-        BROCHURE_AGENT_MCP_CONFIG,
-    )
     return {
         "courseware": COURSEWARE_MCP_CONFIG,
         "document": DOCUMENT_AGENT_MCP_CONFIG,
         "brochure": BROCHURE_AGENT_MCP_CONFIG,
+        "slides": SLIDES_AGENT_MCP_CONFIG,
     }
