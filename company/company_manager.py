@@ -5,7 +5,9 @@ This module provides utilities for managing company selection
 and template fallback functionality across all generation modules.
 """
 
-import streamlit as st
+import os
+from dotenv import load_dotenv
+load_dotenv()
 from typing import Dict, Any, Optional
 from generate_ap_fg_lg_lp.utils.organizations import get_organizations, get_default_organization, replace_company_branding
 

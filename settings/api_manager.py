@@ -2,17 +2,16 @@
 Dynamic API Key and Model Management
 
 This module handles dynamic storage and retrieval of API keys and LLM models.
-- API keys are loaded from .streamlit/secrets.toml (or environment variables)
+- API keys are loaded from environment variables or secrets.toml
 - All model configurations (built-in + custom) are stored in SQLite database
 
 Author: Wong Xin Ping
-Updated: 26 January 2026
+Updated: February 2026
 """
 
-import streamlit as st
 import json
 import os
-from typing import Dict, Any, List
+from typing import Dict, Any, List, Optional
 from dotenv import load_dotenv
 
 # Import SQLite database operations
@@ -43,18 +42,31 @@ load_dotenv()
 # Legacy JSON file paths (for migration)
 LEGACY_CUSTOM_MODELS_FILE = "settings/config/custom_models.json"
 
+# Module-level cache (replaces st.session_state)
+_cache: Dict[str, Any] = {}
+
+# Try to import Streamlit secrets (optional)
+_st_secrets = None
+try:
+    import streamlit as st
+    _st_secrets = st.secrets
+except (ImportError, Exception):
+    pass
+
 
 def _get_secret(key: str, default: str = "") -> str:
-    """Safely get a secret from st.secrets or environment variables"""
+    """Safely get a secret from environment variables or Streamlit secrets"""
     # First try environment variables (from .env file)
     env_value = os.environ.get(key, "")
     if env_value:
         return env_value
-    # Then try streamlit secrets
-    try:
-        return st.secrets.get(key, default)
-    except Exception:
-        return default
+    # Then try streamlit secrets if available
+    if _st_secrets is not None:
+        try:
+            return _st_secrets.get(key, default)
+        except Exception:
+            pass
+    return default
 
 
 def load_api_keys() -> Dict[str, str]:
@@ -75,21 +87,21 @@ def load_api_keys() -> Dict[str, str]:
         # Update configured status in database
         db_update_api_key_configured_status(key_name, bool(key_value))
 
-    # Cache in session state for performance
-    st.session_state['api_keys'] = api_keys
+    # Cache for performance
+    _cache['api_keys'] = api_keys
     return api_keys
 
 
 def save_api_keys(keys: Dict[str, str]) -> bool:
     """
-    Save API keys to session state.
-    Note: Actual persistence should be done by editing .streamlit/secrets.toml
+    Save API keys to cache.
+    Note: Actual persistence should be done by editing secrets.toml or .env
     """
     try:
-        st.session_state['api_keys'] = keys
+        _cache['api_keys'] = keys
         return True
     except Exception as e:
-        st.error(f"Error saving API keys: {e}")
+        print(f"Error saving API keys: {e}")
         return False
 
 
@@ -101,7 +113,7 @@ def get_api_key(provider: str) -> str:
 
 
 def delete_api_key(key_name: str) -> bool:
-    """Clear an API key from session state"""
+    """Clear an API key from cache"""
     try:
         keys = load_api_keys()
         if key_name in keys:
@@ -109,7 +121,7 @@ def delete_api_key(key_name: str) -> bool:
             return save_api_keys(keys)
         return False
     except Exception as e:
-        st.error(f"Error deleting API key: {e}")
+        print(f"Error deleting API key: {e}")
         return False
 
 
@@ -141,8 +153,8 @@ def load_custom_models() -> List[Dict[str, Any]]:
     # Load from SQLite
     models = db_get_all_custom_models()
 
-    # Cache in session state
-    st.session_state['custom_models'] = models
+    # Cache
+    _cache['custom_models'] = models
     return models
 
 
@@ -156,7 +168,7 @@ def save_custom_models(models: List[Dict[str, Any]]) -> bool:
     Save custom models - now handled by individual add/remove operations.
     This function is kept for backward compatibility.
     """
-    st.session_state['custom_models'] = models
+    _cache['custom_models'] = models
     return True
 
 
@@ -172,8 +184,7 @@ def add_custom_model(
     """Add a new custom model to SQLite database"""
     # Check if model already exists
     if db_model_exists(name):
-        st.error(f"Model Display Name '{name}' already exists!")
-        st.error("Please use a different name to distinguish between models.")
+        print(f"Model Display Name '{name}' already exists! Please use a different name.")
         return False
 
     # Add to database
@@ -187,11 +198,9 @@ def add_custom_model(
     )
 
     if success:
-        # Clear session state cache to force reload
-        if 'custom_models' in st.session_state:
-            del st.session_state['custom_models']
-        if 'all_models' in st.session_state:
-            del st.session_state['all_models']
+        # Clear cache to force reload
+        _cache.pop('custom_models', None)
+        _cache.pop('all_models', None)
 
     return success
 
@@ -201,11 +210,9 @@ def remove_custom_model(name: str) -> bool:
     success = db_delete_custom_model(name)
 
     if success:
-        # Clear session state cache to force reload
-        if 'custom_models' in st.session_state:
-            del st.session_state['custom_models']
-        if 'all_models' in st.session_state:
-            del st.session_state['all_models']
+        # Clear cache to force reload
+        _cache.pop('custom_models', None)
+        _cache.pop('all_models', None)
 
     return success
 
@@ -257,7 +264,7 @@ def initialize_api_system():
     db_refresh_builtin_models()
     db_refresh_builtin_api_keys()
 
-    # Load API keys into session state
+    # Load API keys into cache
     load_api_keys()
 
 
@@ -280,7 +287,7 @@ def add_api_key_config(
         key_name = f"{key_name.upper()}_API_KEY"
 
     if db_api_key_config_exists(key_name):
-        st.error(f"API key '{key_name}' already exists!")
+        print(f"API key '{key_name}' already exists!")
         return False
 
     success = db_add_api_key_config(
@@ -291,9 +298,8 @@ def add_api_key_config(
     )
 
     if success:
-        # Clear session state to force reload
-        if 'api_keys' in st.session_state:
-            del st.session_state['api_keys']
+        # Clear cache to force reload
+        _cache.pop('api_keys', None)
 
     return success
 
@@ -303,9 +309,8 @@ def remove_api_key_config(key_name: str) -> bool:
     success = db_delete_api_key_config(key_name)
 
     if success:
-        # Clear session state to force reload
-        if 'api_keys' in st.session_state:
-            del st.session_state['api_keys']
+        # Clear cache to force reload
+        _cache.pop('api_keys', None)
 
     return success
 

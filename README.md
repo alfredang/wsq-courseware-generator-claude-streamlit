@@ -112,46 +112,34 @@ uv pip install -r requirements.txt
 
 ### 3. Configure Secrets
 
-Create `.streamlit/secrets.toml`:
+Create `.env` file in the root directory:
 
-```toml
+```bash
 # API Keys
-OPENAI_API_KEY = "sk-your-openai-key"
-OPENROUTER_API_KEY = "sk-or-your-openrouter-key"
-ANTHROPIC_API_KEY = "sk-ant-your-anthropic-key"
-GEMINI_API_KEY = "your-gemini-key"
+OPENAI_API_KEY=sk-your-openai-key
+OPENROUTER_API_KEY=sk-or-your-openrouter-key
+ANTHROPIC_API_KEY=sk-ant-your-anthropic-key
+GEMINI_API_KEY=your-gemini-key
 
 # Database (for company management)
-DATABASE_URL = "postgresql://user:password@host/database?sslmode=require"
+DATABASE_URL=postgresql://user:password@host/database?sslmode=require
 
 # Admin Authentication
-ADMIN_USERNAME = "admin"
-ADMIN_PASSWORD = "your-secure-password"
+ADMIN_USERNAME=admin
+ADMIN_PASSWORD=your-secure-password
 
-# Google Service Account (for Google Sheets access)
-[GOOGLE_SERVICE_ACCOUNT]
-type = "service_account"
-project_id = "your-project-id"
-private_key_id = "your-key-id"
-private_key = "-----BEGIN PRIVATE KEY-----\n...\n-----END PRIVATE KEY-----\n"
-client_email = "your-service@project.iam.gserviceaccount.com"
-client_id = "your-client-id"
-auth_uri = "https://accounts.google.com/o/oauth2/auth"
-token_uri = "https://oauth2.googleapis.com/token"
+# Chainlit JWT Secret (generate with: chainlit create-secret)
+CHAINLIT_AUTH_SECRET=your-jwt-secret
 ```
 
 ### 4. Run the Application
 
-**Option A: Streamlit (Form-based UI)**
 ```bash
-streamlit run app.py
-```
-Open browser to `http://localhost:8501`
+# Generate JWT secret (first time only)
+chainlit create-secret
 
-**Option B: Chainlit (Chat-based UI)**
-```bash
-cd chainlit_app
-chainlit run app.py --port 8000
+# Run the Chainlit app
+chainlit run app.py
 ```
 Open browser to `http://localhost:8000`
 
@@ -159,52 +147,9 @@ Open browser to `http://localhost:8000`
 
 ## Deployment
 
-### Deploy to Streamlit Cloud
-
-1. **Push to GitHub** (ensure secrets are NOT committed)
-
-2. **Connect to Streamlit Cloud**
-   - Go to [share.streamlit.io](https://share.streamlit.io)
-   - Click "New app"
-   - Select your repository
-   - Set main file: `app.py`
-
-3. **Configure Secrets**
-   - Go to App Settings → Secrets
-   - Paste your `secrets.toml` content:
-   ```toml
-   OPENAI_API_KEY = "sk-..."
-   OPENROUTER_API_KEY = "sk-or-..."
-   ANTHROPIC_API_KEY = "sk-ant-..."
-   DATABASE_URL = "postgresql://..."
-   ADMIN_USERNAME = "admin"
-   ADMIN_PASSWORD = "your-password"
-   ```
-
-4. **Deploy**
-   - Click "Deploy"
-   - Your app will be live at `https://your-app.streamlit.app`
-
-### Deploy to Render / Railway / Heroku
+### Deploy to Render / Railway
 
 1. **Create `Procfile`:**
-   ```
-   web: streamlit run app.py --server.port $PORT --server.headless true
-   ```
-
-2. **Set Environment Variables:**
-   ```
-   OPENAI_API_KEY=sk-...
-   OPENROUTER_API_KEY=sk-or-...
-   ANTHROPIC_API_KEY=sk-ant-...
-   DATABASE_URL=postgresql://...
-   ```
-
-3. **Deploy from GitHub**
-
-### Deploy Chainlit to Cloud
-
-1. **Create `chainlit_app/Procfile`:**
    ```
    web: chainlit run app.py --host 0.0.0.0 --port $PORT
    ```
@@ -213,9 +158,33 @@ Open browser to `http://localhost:8000`
    ```
    CHAINLIT_AUTH_SECRET=your-jwt-secret
    OPENAI_API_KEY=sk-...
+   OPENROUTER_API_KEY=sk-or-...
+   ANTHROPIC_API_KEY=sk-ant-...
+   DATABASE_URL=postgresql://...
+   ADMIN_USERNAME=admin
+   ADMIN_PASSWORD=your-password
    ```
 
-3. **Deploy to Render/Railway**
+3. **Deploy from GitHub**
+
+### Deploy to Docker
+
+1. **Create `Dockerfile`:**
+   ```dockerfile
+   FROM python:3.11-slim
+   WORKDIR /app
+   COPY requirements.txt .
+   RUN pip install -r requirements.txt
+   COPY . .
+   EXPOSE 8000
+   CMD ["chainlit", "run", "app.py", "--host", "0.0.0.0", "--port", "8000"]
+   ```
+
+2. **Build and run:**
+   ```bash
+   docker build -t courseware-generator .
+   docker run -p 8000:8000 --env-file .env courseware-generator
+   ```
 
 ---
 
@@ -233,12 +202,13 @@ Open browser to `http://localhost:8000`
 | **Add Assessment to AP** | Integrate assessments into AP annexes | Template-based |
 | **Check Documents** | Supporting document validation | Gemini API |
 
-### Dual Interface
+### Chat Interface
 
-| Interface | Port | Best For |
-|-----------|------|----------|
-| **Streamlit** | 8501 | Form-based workflows, bulk operations |
-| **Chainlit** | 8000 | Conversational interaction, guided workflows |
+The application uses **Chainlit** for a conversation-first experience:
+- **8 Chat Profiles** for different workflows (CP, Courseware, Assessment, etc.)
+- **Natural language interaction** with AI-powered guidance
+- **File upload support** for document processing
+- **Real-time progress tracking** with step indicators
 
 ### Model Support
 
@@ -285,11 +255,18 @@ The system uses an **orchestrator-based architecture** powered by the Claude Age
 
 ```
 courseware_claude_agents/
-├── app.py                          # Main Streamlit application
-├── chainlit_app/                   # Chainlit chat interface
-│   ├── app.py                      # Chainlit entry point
-│   ├── modules/                    # Chat profile handlers
-│   └── public/                     # Static assets
+├── app.py                          # Main Chainlit application
+├── chainlit_modules/               # Chat profile handlers
+│   ├── course_proposal.py
+│   ├── courseware.py
+│   ├── assessment.py
+│   ├── slides.py
+│   ├── brochure.py
+│   ├── annex_assessment.py
+│   ├── check_documents.py
+│   └── settings.py
+├── .chainlit/                      # Chainlit configuration
+├── public/                         # Static assets (CSS)
 ├── courseware_agents/              # Claude Agent SDK agents
 │   ├── orchestrator.py             # Main orchestrator
 │   ├── cp_agent.py                 # Course Proposal agent
