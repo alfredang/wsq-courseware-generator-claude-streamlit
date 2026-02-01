@@ -1,33 +1,26 @@
-# Core dependencies (Python 3.11)
+# Core dependencies (Python 3.13)
 beautifulsoup4
 docxtpl
 google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
 pydantic>=2.0.0
-streamlit>=1.30.0
 openpyxl
 pandas
 Pillow
 python-docx
 docxcompose
-streamlit-option-menu
 requests
 lxml
 pypdf2
 gspread
 rapidfuzz
-oauth2client
-streamlit-modal
 python-dotenv
 psycopg2-binary
 jinja2
 
-# Claude Agent SDK dependencies
-anthropic>=0.45.0
-claude-agent-sdk>=1.0.0
-mcp>=1.0.0
+# Chainlit (UI Framework)
+chainlit>=2.0.0
 
-# Note: PyMuPDF, xhtml2pdf removed for Streamlit Cloud compatibility
-# PDF reading uses pypdf2 fallback
-# MCP features require Node.js (not available on Streamlit Cloud)
+# Claude API
+anthropic>=0.45.0
