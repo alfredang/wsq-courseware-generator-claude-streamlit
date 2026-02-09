@@ -46,7 +46,6 @@ Date:
 from anthropic import Anthropic
 from utils.helpers import parse_json_content
 from settings.model_configs import get_model_config
-from settings.api_manager import load_api_keys
 import asyncio
 import time
 
@@ -123,39 +122,31 @@ def extract_unique_instructional_methods(course_context):
     return unique_methods
 
 
-def create_llm_client(model_choice: str = "Claude-Sonnet-4"):
+def create_llm_client(model_choice: str = "default"):
     """
     Create an Anthropic client configured with the specified model choice.
 
     Args:
-        model_choice: Model choice string (e.g., "Claude-Sonnet-4", "Claude-Haiku-3.5")
+        model_choice: Model choice string (e.g., "default")
 
     Returns:
         tuple: (Anthropic client instance, model configuration dict)
     """
-    autogen_config = get_model_config(model_choice)
-    config_dict = autogen_config.get("config", {})
+    from utils.claude_model_client import get_claude_model_id
 
-    api_key = config_dict.get("api_key", "")
-    model = config_dict.get("model", "claude-sonnet-4-20250514")
-    temperature = config_dict.get("temperature", 0.2)
+    model = get_claude_model_id(model_choice)
 
-    # Fallback: If no API key in config, get it dynamically
-    if not api_key:
-        api_keys = load_api_keys()
-        api_key = api_keys.get("ANTHROPIC_API_KEY", "")
-
-    client = Anthropic(api_key=api_key)
+    client = Anthropic()  # Auto-reads ANTHROPIC_API_KEY from env
 
     model_config = {
         "model": model,
-        "temperature": temperature,
+        "temperature": 0.2,
     }
 
     return client, model_config
 
 
-async def generate_timetable(context, num_of_days, model_choice: str = "GPT-4o-Mini"):
+async def generate_timetable(context, num_of_days, model_choice: str = "default"):
     """
     Generates a structured lesson plan timetable based on the provided course context using OpenAI SDK.
 

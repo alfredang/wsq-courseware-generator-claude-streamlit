@@ -16,20 +16,11 @@ from typing import Dict, List, Any
 from PIL import Image
 
 from generate_ap_fg_lg_lp.utils.organizations import get_organizations, save_organizations
-from settings.admin_auth import is_authenticated, login_page, show_logout_button
 
 
 def company_management_app():
     """Company Management page"""
     st.title("Company Management")
-
-    # Require authentication
-    if not is_authenticated():
-        login_page()
-        return
-
-    # Show logout button
-    show_logout_button()
 
     manage_company_settings()
 

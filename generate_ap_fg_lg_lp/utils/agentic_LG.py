@@ -54,42 +54,31 @@ from generate_ap_fg_lg_lp.utils.helper import process_logo_image
 LG_TEMPLATE_DIR = "generate_ap_fg_lg_lp/input/Template/LG_TGS-Ref-No_Course-Title_v1.docx"
 
 
-def create_llm_client(model_choice: str = "Claude-Sonnet-4"):
+def create_llm_client(model_choice: str = "default"):
     """
     Create an Anthropic client configured with the specified model choice.
 
     Args:
-        model_choice: Model choice string (e.g., "Claude-Sonnet-4", "Claude-Haiku-3.5")
+        model_choice: Model choice string (e.g., "default")
 
     Returns:
         tuple: (Anthropic client instance, model configuration dict)
     """
-    from settings.model_configs import get_model_config
-    from settings.api_manager import load_api_keys
+    from utils.claude_model_client import get_claude_model_id
 
-    autogen_config = get_model_config(model_choice)
-    config_dict = autogen_config.get("config", {})
+    model = get_claude_model_id(model_choice)
 
-    api_key = config_dict.get("api_key", "")
-    model = config_dict.get("model", "claude-sonnet-4-20250514")
-    temperature = config_dict.get("temperature", 0.2)
-
-    # Fallback: If no API key in config, get it dynamically
-    if not api_key:
-        api_keys = load_api_keys()
-        api_key = api_keys.get("ANTHROPIC_API_KEY", "")
-
-    client = Anthropic(api_key=api_key)
+    client = Anthropic()  # Auto-reads ANTHROPIC_API_KEY from env
 
     model_config = {
         "model": model,
-        "temperature": temperature,
+        "temperature": 0.2,
     }
 
     return client, model_config
 
 
-async def generate_content(context, model_choice: str = "GPT-4o-Mini"):
+async def generate_content(context, model_choice: str = "default"):
     """
     Generates a Course Overview and Learning Outcome description for a Learning Guide.
 
@@ -174,7 +163,7 @@ async def generate_content(context, model_choice: str = "GPT-4o-Mini"):
         return context
 
 
-def generate_learning_guide(context: dict, name_of_organisation: str, model_choice: str = "GPT-4o-Mini") -> str:
+def generate_learning_guide(context: dict, name_of_organisation: str, model_choice: str = "default") -> str:
     """
     Generates a Learning Guide document by populating a DOCX template with course content.
 

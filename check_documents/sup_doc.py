@@ -97,6 +97,11 @@ def get_google_sheet_data():
 
     # Construct the full path to the service account JSON file
     service_account_path = os.path.join(current_dir, "ssg-api-calls-9d65ee02e639.json")
+
+    # Check if service account file exists
+    if not os.path.exists(service_account_path):
+        return []
+
     try:
         # Define the scope
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
@@ -104,20 +109,20 @@ def get_google_sheet_data():
         # Authenticate using the service account JSON file
         credentials = ServiceAccountCredentials.from_json_keyfile_name(service_account_path, scope)
         gc = gspread.authorize(credentials)
-        
+
         spreadsheet = gc.open_by_key("14IjSXJ0pHG23evfULhrLJEFXXsegx3hBNJoNSgRcp1k")
         worksheet = spreadsheet.worksheet("Detailed Data View")
-        
+
         # Get all values first to handle potential duplicate empty headers
         all_values = worksheet.get_all_values()
         if not all_values:
             return []
-        
+
         # Get the header row and handle duplicates
         headers = all_values[0]
         cleaned_headers = []
         header_count = {}
-        
+
         for header in headers:
             if header.strip() == '':
                 # For empty headers, create a unique placeholder
@@ -133,7 +138,7 @@ def get_google_sheet_data():
                 else:
                     header_count[original_header] = 1
                     cleaned_headers.append(original_header)
-        
+
         # Convert to list of dictionaries
         data = []
         for row_values in all_values[1:]:  # Skip header row
@@ -142,7 +147,7 @@ def get_google_sheet_data():
                 if i < len(cleaned_headers):
                     row_dict[cleaned_headers[i]] = value
             data.append(row_dict)
-        
+
         return data
     except Exception as e:
         st.error("Error loading Google Sheet data: " + str(e))
@@ -215,7 +220,7 @@ def app():
     # ------------------------------
     # STREAMLIT UI & PROCESSING
     # ------------------------------
-    st.title("Check Documents")
+    st.title("Courseware Audit")
 
     custom_instructions = st.text_area(
         "✍️ Enter your custom instructions for entity extraction:",

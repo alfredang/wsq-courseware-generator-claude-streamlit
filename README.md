@@ -41,7 +41,7 @@ The **WSQ Courseware Generator** is an enterprise-grade AI platform that automat
 | **Assessment Generation** | Create 9 assessment types (SAQ, PP, CS, PRJ, ASGN, OI, DEM, RP, OQ) |
 | **Slides Generation** | Generate presentation slides with NotebookLM integration |
 | **Brochure Creation** | Design marketing brochures with web scraping |
-| **Document Verification** | Validate supporting documents with entity extraction |
+| **Courseware Audit** | Validate supporting documents with entity extraction |
 
 ### Platform Statistics
 
@@ -67,14 +67,6 @@ The **WSQ Courseware Generator** is an enterprise-grade AI platform that automat
 | **Deployment** | ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white) ![HuggingFace](https://img.shields.io/badge/HuggingFace-Spaces-yellow?style=flat&logo=huggingface&logoColor=white) |
 | **Document Processing** | python-docx, docxtpl, openpyxl, PyPDF2 |
 
-### Claude Models Supported
-
-| Model | Use Case |
-|-------|----------|
-| **Claude Sonnet 4** | Default - Best balance of speed and capability |
-| **Claude Opus 4.5** | Complex tasks requiring deep reasoning |
-| **Claude Haiku 3.5** | Fast tasks requiring quick responses |
-
 ---
 
 ## Architecture Diagram
@@ -90,8 +82,8 @@ The **WSQ Courseware Generator** is an enterprise-grade AI platform that automat
 │  └──────────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ │
 │                    │            │            │            │         │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐                           │
-│  │  Annex   │ │  Check   │ │ Settings │                           │
-│  │Assessment│ │   Docs   │ │ API/Co.  │                           │
+│  │  Annex   │ │Courseware │ │ Company  │                           │
+│  │Assessment│ │  Audit   │ │ Settings │                           │
 │  └────┬─────┘ └────┬─────┘ └──────────┘                           │
 └───────┼────────────┼────────────┼──────────────────────────────────┘
         │            │            │
@@ -146,13 +138,10 @@ wsq-courseware-generator-claude-streamlit/
 ├── add_assessment_to_ap/           # Annex assessments to AP
 │   └── annex_assessment_v2.py      # Annex Streamlit page
 │
-├── check_documents/                # Document verification
-│   └── sup_doc.py                  # Check docs Streamlit page
+├── check_documents/                # Courseware audit
+│   └── sup_doc.py                  # Courseware audit Streamlit page
 │
-├── settings/                       # Configuration & API
-│   ├── settings.py                 # Settings Streamlit page
-│   ├── admin_auth.py               # Admin authentication
-│   ├── api_manager.py              # API key management
+├── settings/                       # Configuration
 │   ├── model_configs.py            # Model configurations
 │   └── api_database.py             # SQLite database
 │
@@ -259,7 +248,7 @@ The platform includes 13 documented skills in the `.claude/skills/` directory, e
 | `generate_assessment` | Create 9 assessment types |
 | `generate_slides` | Generate slides with NotebookLM MCP |
 | `generate_brochure` | Create marketing brochures |
-| `check_documents` | Verify supporting documents |
+| `courseware_audit` | Verify supporting documents |
 | `add_assessment_to_ap` | Annex assessments to AP |
 | `branding` | UI styling guidelines |
 

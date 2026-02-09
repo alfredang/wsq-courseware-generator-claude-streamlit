@@ -83,7 +83,6 @@ from generate_assessment.utils.claude_agentic_RP import generate_rp
 from generate_assessment.utils.claude_agentic_OQ import generate_oq
 from generate_assessment.utils.pydantic_models import FacilitatorGuideExtraction
 from settings.model_configs import get_model_config
-from settings.api_manager import load_api_keys
 from utils.helpers import parse_json_content
 
 ################################################################################
@@ -273,38 +272,31 @@ def extract_master_k_a_list(fg_markdown):
 
     return {"knowledge": master_k, "abilities": master_a}
 
-def create_claude_client(model_choice: str = "Claude-Sonnet-4"):
+def create_claude_client(model_choice: str = "default"):
     """
     Create an Anthropic client configured with the specified model choice.
 
     Args:
-        model_choice: Model choice string (e.g., "Claude-Sonnet-4", "Claude-Opus-4.5")
+        model_choice: Model choice string (e.g., "default")
 
     Returns:
         tuple: (Anthropic client instance, model configuration dict)
     """
-    autogen_config = get_model_config(model_choice)
-    config_dict = autogen_config.get("config", {})
+    from utils.claude_model_client import get_claude_model_id
 
-    api_key = config_dict.get("api_key", "")
-    if not api_key:
-        api_keys = load_api_keys()
-        api_key = api_keys.get("ANTHROPIC_API_KEY", "")
+    model = get_claude_model_id(model_choice)
 
-    model = config_dict.get("model", "claude-sonnet-4-20250514")
-    temperature = config_dict.get("temperature", 0.2)
-
-    client = Anthropic(api_key=api_key)
+    client = Anthropic()  # Auto-reads ANTHROPIC_API_KEY from env
 
     model_config = {
         "model": model,
-        "temperature": temperature,
+        "temperature": 0.2,
     }
 
     return client, model_config
 
 
-async def interpret_fg(fg_data, model_choice: str = "Claude-Sonnet-4"):
+async def interpret_fg(fg_data, model_choice: str = "default"):
     """
     Interprets and extracts structured data from a Facilitator Guide document using Claude/Anthropic SDK.
 
@@ -684,68 +676,8 @@ def app():
     st.subheader("Step 1: Upload Relevant Documents")
     st.write("Upload your Facilitator Guide (.docx) to generate assessments. Trainer Slide Deck (.pdf) is optional for enhanced content.")
 
-    # Load API keys from Settings UI with fallback to secrets
-    api_keys = load_api_keys()
-
-    # Check if model is selected
-    if 'selected_model' not in st.session_state or not st.session_state['selected_model']:
-        st.error("❌ No model selected. Please select a model from the sidebar.")
-        return
-
-    selected_config = get_model_config(st.session_state['selected_model'])
-
-    # Check if model configuration exists
-    if not selected_config:
-        st.error(f"❌ Model configuration not found for: {st.session_state['selected_model']}")
-        st.info("💡 **Solution**: Go to Model Selection in the sidebar and choose a different model")
-        return
-    
-    # Check if config section exists
-    if not selected_config.get("config"):
-        st.error(f"❌ Invalid model configuration for: {st.session_state['selected_model']}")
-        return
-        
-    # Get API key from config or load dynamically based on api_provider
-    api_key = selected_config["config"].get("api_key")
-
-    # If no API key in config, get it dynamically based on api_provider from database
-    if not api_key:
-        api_provider = selected_config.get("api_provider", "OPENROUTER")
-        api_key = api_keys.get(f"{api_provider}_API_KEY", "")
-    
-    if not api_key:
-        api_provider = selected_config.get("api_provider", "OPENROUTER")
-        st.error(f"❌ API key for {st.session_state['selected_model']} ({api_provider}) is not provided.")
-        st.info(f"💡 **Solution**: Go to Settings → LLM Models & API Keys to add {api_provider}_API_KEY")
-        return
-    model_name = selected_config["config"]["model"]
-    temperature = selected_config["config"].get("temperature", 0)
-    base_url = selected_config["config"].get("base_url", None)
-
-    # Extract model_info from the selected configuration (if provided)
-    model_info = selected_config["config"].get("model_info", None)
-
-    # Test API connection before proceeding using Anthropic SDK
-    try:
-        test_client = Anthropic(api_key=api_key)
-        # Simple test to verify connection
-        test_client.messages.create(
-            model="claude-haiku-4-5-20251001",
-            max_tokens=10,
-            messages=[{"role": "user", "content": "test"}]
-        )
-    except Exception as e:
-        st.error(f"❌ Failed to create API client: {e}")
-        if "401" in str(e) or "unauthorized" in str(e).lower() or "authentication" in str(e).lower():
-            st.error("🔑 **API Key Issue**: Invalid or expired API key")
-        elif "quota" in str(e).lower() or "rate" in str(e).lower():
-            st.error("📊 **Quota Issue**: API quota exceeded or rate limit hit")
-        elif "connection" in str(e).lower():
-            st.error("🌐 **Network Issue**: Cannot connect to API service")
-        # Don't return - continue anyway
-
-    # Store the model choice for use in the generation functions
-    model_choice = st.session_state['selected_model']
+    # Model choice - uses Claude Code subscription (no API key needed)
+    model_choice = st.session_state.get('selected_model', 'default')
 
     fg_doc_file = st.file_uploader("Upload Facilitator Guide (.docx)", type=["docx"])
 

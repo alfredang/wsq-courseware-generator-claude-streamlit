@@ -257,7 +257,7 @@ async def generate_pp_for_lo_openai(client, config, course_title, assessment_dur
         return None
 
 
-async def generate_pp(extracted_data, index, model_client, model_choice: str = "DeepSeek-Chat"):
+async def generate_pp(extracted_data, index, model_client, model_choice: str = "default"):
     """
     Generates a full practical performance assessment using OpenAI SDK.
 
@@ -270,7 +270,6 @@ async def generate_pp(extracted_data, index, model_client, model_choice: str = "
     Returns:
         dict: Structured dictionary with course_title, duration, scenario, and questions
     """
-    from settings.api_manager import load_api_keys
     client, config = create_llm_client(model_choice)
     extracted_data = dict(extracted_data)
 

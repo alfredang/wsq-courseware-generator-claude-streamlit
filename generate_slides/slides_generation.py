@@ -888,7 +888,7 @@ def app():
             loop = asyncio.new_event_loop()
             if enable_agentic:
                 from generate_slides.agents.orchestrator import run_agentic_pipeline
-                model_choice = st.session_state.get('selected_model', 'DeepSeek-Chat')
+                model_choice = st.session_state.get('selected_model', 'default')
                 result = loop.run_until_complete(
                     run_agentic_pipeline(
                         content, filename, config, model_choice,

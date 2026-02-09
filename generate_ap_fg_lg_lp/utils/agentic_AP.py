@@ -85,42 +85,31 @@ class EvidenceGatheringPlan(BaseModel):
     assessment_methods: AssessmentMethods
 
 
-def create_llm_client(model_choice: str = "Claude-Sonnet-4"):
+def create_llm_client(model_choice: str = "default"):
     """
     Create an Anthropic client configured with the specified model choice.
 
     Args:
-        model_choice: Model choice string (e.g., "Claude-Sonnet-4", "Claude-Haiku-3.5")
+        model_choice: Model choice string (e.g., "default", "Claude-Haiku-3.5")
 
     Returns:
         tuple: (Anthropic client instance, model configuration dict)
     """
-    from settings.model_configs import get_model_config
-    from settings.api_manager import load_api_keys
+    from utils.claude_model_client import get_claude_model_id
 
-    autogen_config = get_model_config(model_choice)
-    config_dict = autogen_config.get("config", {})
+    model = get_claude_model_id(model_choice)
 
-    api_key = config_dict.get("api_key", "")
-    model = config_dict.get("model", "claude-sonnet-4-20250514")
-    temperature = config_dict.get("temperature", 0.2)
-
-    # Fallback: If no API key in config, get it dynamically
-    if not api_key:
-        api_keys = load_api_keys()
-        api_key = api_keys.get("ANTHROPIC_API_KEY", "")
-
-    client = Anthropic(api_key=api_key)
+    client = Anthropic()  # Auto-reads ANTHROPIC_API_KEY from env
 
     model_config = {
         "model": model,
-        "temperature": temperature,
+        "temperature": 0.2,
     }
 
     return client, model_config
 
 
-async def extract_assessment_evidence(structured_data, model_choice: str = "GPT-4o-Mini"):
+async def extract_assessment_evidence(structured_data, model_choice: str = "default"):
     """
     Extracts structured assessment evidence data from course details using Anthropic SDK.
 
@@ -398,11 +387,9 @@ def generate_assessment_plan(context: dict, name_of_organisation, sfw_dataset_di
     if not is_evidence_extracted(context):
         print("Extracting missing assessment evidence...")
 
-        # Get model choice from session state (set by user in sidebar)
+        # Get model choice from session state
         import streamlit as st
-        model_choice = st.session_state.get('selected_model')
-        if not model_choice:
-            raise ValueError("No model selected. Please select a model from the sidebar.")
+        model_choice = st.session_state.get('selected_model', 'default')
 
         evidence = asyncio.run(extract_assessment_evidence(structured_data=context, model_choice=model_choice))
         context = combine_assessment_methods(context, evidence)

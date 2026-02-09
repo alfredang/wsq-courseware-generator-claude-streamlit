@@ -96,7 +96,7 @@ async def generate_rp_for_lo(client, config, course_title, assessment_duration, 
         return None
 
 
-async def generate_rp(extracted_data: FacilitatorGuideExtraction, index, model_client, model_choice: str = "DeepSeek-Chat"):
+async def generate_rp(extracted_data: FacilitatorGuideExtraction, index, model_client, model_choice: str = "default"):
     client, config = create_llm_client(model_choice)
     extracted_data = dict(extracted_data)
 

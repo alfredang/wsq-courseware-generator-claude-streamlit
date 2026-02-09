@@ -216,12 +216,12 @@ class AnthropicAPIChat:
 
 
 class AnthropicAPIClient:
-    """Fallback client using Anthropic API (API credits)."""
+    """Client using Anthropic API (reads ANTHROPIC_API_KEY from environment)."""
 
-    def __init__(self, api_key: str, **kwargs):
+    def __init__(self, **kwargs):
         if not ANTHROPIC_AVAILABLE:
             raise RuntimeError("Anthropic SDK not available. Install with: pip install anthropic")
-        self._anthropic = Anthropic(api_key=api_key)
+        self._anthropic = Anthropic()  # Auto-reads ANTHROPIC_API_KEY from env
         self.chat = AnthropicAPIChat(self._anthropic)
 
 
@@ -262,20 +262,20 @@ USE_SUBSCRIPTION = False
 # Main Factory Function
 # =============================================================================
 
-def create_llm_client(model_choice: str = "Claude-Sonnet-4"):
+def create_llm_client(model_choice: str = "default"):
     """
     Create a Claude client configured with the specified model choice.
 
-    Uses Claude subscription (Pro/Max) by default. Falls back to API if SDK unavailable.
+    Uses ANTHROPIC_API_KEY from environment variable.
 
     Args:
-        model_choice: Model choice string (e.g., "Claude-Sonnet-4", "Claude-Opus-4.5")
+        model_choice: Model choice string (e.g., "default", "Claude-Opus-4.5")
 
     Returns:
         tuple: (Client instance, model configuration dict)
 
     Example:
-        >>> client, config = create_llm_client("Claude-Sonnet-4")
+        >>> client, config = create_llm_client("default")
         >>> response = client.chat.completions.create(
         ...     model=config["model"],
         ...     temperature=config["temperature"],
@@ -297,17 +297,9 @@ def create_llm_client(model_choice: str = "Claude-Sonnet-4"):
         client = ClaudeSubscriptionClient(model=model_id)
         return client, model_config
 
-    # Fallback to API
+    # Use Anthropic API (reads ANTHROPIC_API_KEY from environment automatically)
     if ANTHROPIC_AVAILABLE:
-        print(f"Using Anthropic API for {model_choice} (API credits)")
-        from settings.api_manager import load_api_keys
-        api_keys = load_api_keys()
-        api_key = api_keys.get("ANTHROPIC_API_KEY", "")
-
-        if not api_key:
-            raise ValueError("ANTHROPIC_API_KEY not found. Set USE_SUBSCRIPTION=True or add API key.")
-
-        client = AnthropicAPIClient(api_key=api_key)
+        client = AnthropicAPIClient()
         return client, model_config
 
     raise RuntimeError("No Claude client available. Install claude-agent-sdk or anthropic.")

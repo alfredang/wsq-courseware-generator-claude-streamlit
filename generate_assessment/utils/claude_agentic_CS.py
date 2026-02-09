@@ -252,7 +252,7 @@ async def generate_cs_for_lo_openai(client, config, course_title, assessment_dur
         return None
 
 
-async def generate_cs(extracted_data: FacilitatorGuideExtraction, index, model_client, model_choice: str = "DeepSeek-Chat"):
+async def generate_cs(extracted_data: FacilitatorGuideExtraction, index, model_client, model_choice: str = "default"):
     """
     Generates a full case study assessment using OpenAI SDK.
 
@@ -265,7 +265,6 @@ async def generate_cs(extracted_data: FacilitatorGuideExtraction, index, model_c
     Returns:
         dict: Structured dictionary with course_title, duration, scenario, and questions
     """
-    from settings.api_manager import load_api_keys
     client, config = create_llm_client(model_choice)
     extracted_data = dict(extracted_data)
 

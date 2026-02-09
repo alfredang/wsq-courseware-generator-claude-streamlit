@@ -306,40 +306,31 @@ def parse_cp_document(uploaded_file):
 ############################################################
 # 2. Interpret Course Proposal Data
 ############################################################
-def create_claude_client(model_choice: str = "Claude-Sonnet-4"):
+def create_claude_client(model_choice: str = "default"):
     """
     Create an Anthropic client configured with the specified model choice.
 
     Args:
-        model_choice: Model choice string (e.g., "Claude-Sonnet-4", "Claude-Opus-4.5")
+        model_choice: Model choice string (e.g., "default")
 
     Returns:
         tuple: (Anthropic client instance, model configuration dict)
     """
-    autogen_config = get_model_config(model_choice)
-    config_dict = autogen_config.get("config", {})
+    from utils.claude_model_client import get_claude_model_id
 
-    api_key = config_dict.get("api_key", "")
-    model = config_dict.get("model", "claude-sonnet-4-20250514")
-    temperature = config_dict.get("temperature", 0.2)
+    model = get_claude_model_id(model_choice)
 
-    # Fallback: If no API key in config, get it dynamically
-    if not api_key:
-        from settings.api_manager import load_api_keys
-        api_keys = load_api_keys()
-        api_key = api_keys.get("ANTHROPIC_API_KEY", "")
-
-    client = Anthropic(api_key=api_key)
+    client = Anthropic()  # Auto-reads ANTHROPIC_API_KEY from env
 
     model_config = {
         "model": model,
-        "temperature": temperature,
+        "temperature": 0.2,
     }
 
     return client, model_config
 
 
-async def interpret_cp(raw_data: dict, model_choice: str = "Claude-Sonnet-4") -> dict:
+async def interpret_cp(raw_data: dict, model_choice: str = "default") -> dict:
     """
     Interprets and extracts structured data from a raw Course Proposal (CP) document using Claude/Anthropic SDK.
 
@@ -819,27 +810,16 @@ def app():
                         st.rerun()
 
     # ================================================================
-    # Step 3 (Optional): Upload Updated SFW Dataset
+    # Step 3: Select Document(s) to Generate using Checkboxes
     # ================================================================
-    st.subheader("Step 3 (Optional): Upload Updated Skills Framework (SFw) Dataset")
-    sfw_file = st.file_uploader("Upload Updated SFw Dataset (Excel File)", type=["xlsx"])
-    if sfw_file:
-        sfw_data_dir = save_uploaded_file(sfw_file, 'input/dataset')
-        st.success(f"Updated SFw dataset saved to {sfw_data_dir}")
-    else:
-        sfw_data_dir = "generate_ap_fg_lg_lp/input/dataset/Sfw_dataset-2022-03-30 copy.xlsx"
-
-    # ================================================================
-    # Step 4: Select Document(s) to Generate using Checkboxes
-    # ================================================================
-    st.subheader("Step 4: Select Document(s) to Generate")
+    st.subheader("Step 3: Select Document(s) to Generate")
     generate_lg = st.checkbox("Learning Guide (LG)", value=True)
     generate_ap = st.checkbox("Assessment Plan (AP)", value=True)
     generate_lp = st.checkbox("Lesson Plan (LP)", value=True)
     generate_fg = st.checkbox("Facilitator's Guide (FG)", value=True)
 
     # ================================================================
-    # Step 5: Generate Documents
+    # Step 4: Generate Documents
     # ================================================================
     if st.button("Generate Documents"):
         if cp_file is not None and selected_org:
@@ -849,31 +829,8 @@ def app():
             st.session_state['asr_output'] = None
             st.session_state['lp_output'] = None
             st.session_state['fg_output'] = None
-            # Use the selected model choice for all OpenAI SDK calls
-            if 'selected_model' not in st.session_state or not st.session_state['selected_model']:
-                st.error("❌ No model selected. Please select a model from the sidebar.")
-                return
-
-            model_choice = st.session_state['selected_model']
-            selected_config = get_model_config(model_choice)
-
-            # Get API key from config or load dynamically based on api_provider
-            api_key = selected_config["config"].get("api_key")
-
-            # Fallback: If no API key in config, get it dynamically based on api_provider
-            if not api_key:
-                from settings.api_manager import load_api_keys
-                api_provider = selected_config.get("api_provider", "OPENROUTER")
-                api_keys = load_api_keys()
-                api_key = api_keys.get(f"{api_provider}_API_KEY", "")
-
-            if not api_key:
-                api_provider = selected_config.get("api_provider", "OPENROUTER")
-                st.error(f"❌ API key for {model_choice} ({api_provider}) is not provided.")
-                st.info(f"💡 **Solution**: Go to Settings → API & Models to add {api_provider}_API_KEY")
-                return
-            model_name = selected_config["config"]["model"]
-            base_url = selected_config["config"].get("base_url", None)
+            # Model choice - uses Claude Code subscription (no API key needed)
+            model_choice = st.session_state.get('selected_model', 'default')
 
             # Step 1: Parse the CP document
             try:

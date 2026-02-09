@@ -154,7 +154,7 @@ async def generate_saq_for_k_openai(client, config, course_title, assessment_dur
         return None
 
 
-async def generate_saq(extracted_data: FacilitatorGuideExtraction, index, model_client, model_choice: str = "DeepSeek-Chat"):
+async def generate_saq(extracted_data: FacilitatorGuideExtraction, index, model_client, model_choice: str = "default"):
     """
     Generates a full set of short-answer questions (SAQs) using OpenAI SDK.
 
