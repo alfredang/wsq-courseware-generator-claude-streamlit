@@ -33,7 +33,7 @@ Usage:
     - Import the helper functions when additional course data or logo processing is required.
       Example:
           from generate_ap_fg_lg_lp.utils.helper import retrieve_excel_data, process_logo_image
-          context = retrieve_excel_data(context, "generate_ap_fg_lg_lp/input/dataset/Sfw_dataset-2022-03-30 copy.xlsx")
+          context = retrieve_excel_data(context, ".claude/skills/generate_courseware/data/Sfw_dataset.xlsx")
           logo_image = process_logo_image(doc, "Organisation Name")
 
 Author:

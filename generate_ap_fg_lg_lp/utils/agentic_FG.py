@@ -42,7 +42,7 @@ import tempfile
 from docxtpl import DocxTemplate
 from generate_ap_fg_lg_lp.utils.helper import retrieve_excel_data, process_logo_image
 
-FG_TEMPLATE_DIR = "generate_ap_fg_lg_lp/input/Template/FG_TGS-Ref-No_Course-Title_v1.docx"
+FG_TEMPLATE_DIR = ".claude/skills/generate_facilitator_guide/templates/FG_TGS-Ref-No_Course-Title_v1.docx"
 
 def generate_facilitators_guide(context: dict, name_of_organisation: str, sfw_dataset_dir=None) -> str:
     """
@@ -105,7 +105,7 @@ def generate_facilitators_guide(context: dict, name_of_organisation: str, sfw_da
 
     # Use the provided template directory or default
     if sfw_dataset_dir is None:
-        sfw_dataset_dir = "generate_ap_fg_lg_lp/input/dataset/Sfw_dataset-2022-03-30 copy.xlsx"
+        sfw_dataset_dir = ".claude/skills/generate_courseware/data/Sfw_dataset.xlsx"
 
     # Try to retrieve excel data if dataset file exists, otherwise skip
     if os.path.exists(sfw_dataset_dir):

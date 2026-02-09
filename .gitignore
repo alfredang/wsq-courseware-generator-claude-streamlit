@@ -1,6 +1,5 @@
 # Environment
 .env
-CourseProposal/venv
 .venv/
 venv/
 ENV/
@@ -15,9 +14,6 @@ __pycache__/
 
 # Streamlit secrets (DO NOT COMMIT - Add these to Streamlit Cloud UI)
 .streamlit/secrets.toml
-
-# Chainlit secrets
-chainlit_app/.env
 
 # API configuration (local SQLite database and legacy files)
 settings/config/api_config.db
@@ -41,7 +37,6 @@ data/
 *.log
 
 # Input/Output working directories (user-specific data, not part of codebase)
-input/
 output/
 
 # Generated outputs (created at runtime)
@@ -64,6 +59,12 @@ nul
 .claude/*
 !.claude/skills/
 !.claude/commands/
+
+# Allow template files in skills directories
+!.claude/skills/**/templates/*.docx
+!.claude/skills/**/templates/*.xlsx
+!.claude/skills/**/templates/*.pptx
+!.claude/skills/**/data/*.xlsx
 
 # Temporary files
 temp/

@@ -2,7 +2,11 @@
 
 ## Project Overview
 
-**WSQ Courseware Generator** - An AI-powered platform for generating Singapore Workforce Skills Qualifications (WSQ) training materials using Claude AI.
+**WSQ Courseware Generator** - An AI-powered platform for generating Singapore Workforce Skills Qualifications (WSQ) training materials using Claude Agent SDK.
+
+## Architecture
+
+All AI processing uses the **Claude Agent SDK** (`claude-agent-sdk` package). The Streamlit UI handles file upload/download and previews. Agents in `courseware_agents/` handle interpretation, content generation, and entity extraction.
 
 ## Tech Stack
 
@@ -10,51 +14,81 @@
 |-----------|------------|
 | UI Framework | Streamlit 1.30+ |
 | Backend | Python 3.13 |
-| LLM | Claude API (Anthropic) |
-| Database | PostgreSQL (Neon), SQLite (settings) |
-| Deployment | Docker, Hugging Face Spaces |
+| AI Processing | Claude Agent SDK |
+| Database | PostgreSQL (Neon) for companies, SQLite for settings |
+| Templates | docxtpl (Jinja2 DOCX) |
 
 ## Project Structure
 
 ```
 courseware_claude_streamlit/
-├── app.py                    # Main Streamlit application (sidebar, nav, routing)
-├── .streamlit/               # Streamlit configuration
-│   └── config.toml           # Server and theme settings
-├── generate_assessment/      # Assessment generation (9 agents)
-│   ├── assessment_generation.py  # Streamlit page UI
-│   └── utils/                # Claude agent modules (claude_agentic_*.py)
-├── generate_ap_fg_lg_lp/     # Courseware documents (4 agents)
-│   ├── courseware_generation.py  # Streamlit page UI
-│   └── utils/                # Agent + template modules
-├── generate_slides/          # Slides generation
-│   └── slides_generation.py  # Streamlit page UI
-├── generate_brochure/        # Brochure generation
-│   └── brochure_generation.py  # Streamlit page UI
-├── add_assessment_to_ap/     # Annex assessments to AP
-│   └── annex_assessment_v2.py  # Streamlit page UI
-├── check_documents/          # Document verification
-│   └── sup_doc.py            # Streamlit page UI
-├── courseware_agents/        # Shared agent utilities (Claude SDK)
-├── settings/                 # API & model configuration
-│   ├── settings.py           # Settings page UI
-│   ├── admin_auth.py         # Authentication
-│   ├── api_manager.py        # API key management
-│   ├── api_database.py       # SQLite database
-│   └── model_configs.py      # Claude model definitions
-├── company/                  # Company management
-│   ├── company_settings.py   # Company management UI
-│   └── company_manager.py    # Company utilities
-├── skills/                   # NLP skill matching
-├── utils/                    # Shared utilities
-├── docs/                     # Documentation
-├── .claude/                  # Claude Code configuration
-│   ├── settings.local.json   # Local settings
-│   └── skills/               # Skill definitions (13 skills)
-└── public/                   # Static assets
+├── app.py                       # Main Streamlit app (sidebar, nav, routing)
+├── .streamlit/config.toml       # Streamlit configuration
+├── courseware_agents/            # Claude Agent SDK wrappers
+│   ├── __init__.py              # Package exports
+│   ├── base.py                  # Core run_agent() / run_agent_json()
+│   ├── cp_interpreter.py        # Course Proposal interpretation agent
+│   ├── assessment_generator.py  # Assessment question generation agent
+│   ├── timetable_agent.py       # Lesson plan timetable agent
+│   └── entity_extractor.py      # Entity extraction agent
+├── generate_ap_fg_lg_lp/        # Courseware documents (AP, FG, LG)
+│   ├── courseware_generation.py  # Streamlit page
+│   └── utils/                   # Template filling modules
+├── generate_ap_fg_lg_lp/        # Lesson Plan
+│   └── lesson_plan_generation.py
+├── generate_assessment/         # Assessment generation
+│   ├── assessment_generation.py # Streamlit page
+│   └── utils/                   # Template filling modules
+├── generate_slides/             # Slides generation (NotebookLM MCP)
+│   └── slides_generation.py
+├── generate_brochure/           # Brochure generation (web scraping)
+│   └── brochure_generation.py
+├── add_assessment_to_ap/        # Annex assessments to AP
+│   └── annex_assessment_v2.py
+├── courseware_audit/             # Courseware audit / entity extraction
+│   └── sup_doc.py
+├── extract_course_info/         # CP parsing (pure Python, no AI)
+│   └── extract_course_info.py
+├── settings/                    # Settings & authentication
+│   ├── settings.py              # Prompt Templates UI
+│   ├── admin_auth.py            # Admin authentication
+│   ├── api_database.py          # SQLite (admin creds, prompt templates)
+│   └── model_configs.py         # Claude model ID definitions
+├── company/                     # Company management (PostgreSQL)
+│   ├── company_settings.py      # Company management UI
+│   ├── company_manager.py       # Company utilities
+│   └── database.py              # PostgreSQL connection
+├── utils/                       # Shared utilities
+│   ├── claude_model_client.py   # Model ID mapping
+│   └── prompt_loader.py         # Prompt template loader
+├── .claude/skills/              # Claude Code skill definitions
+└── prompt_templates/            # Prompt template markdown files
 ```
 
 ## Key Patterns
+
+### Agent Pattern (Claude Agent SDK)
+All AI processing uses the `courseware_agents` module:
+```python
+import asyncio
+from courseware_agents.cp_interpreter import interpret_cp
+
+# Run agent to interpret Course Proposal
+context = asyncio.run(interpret_cp("output/parsed_cp.md"))
+```
+
+The base agent wrapper (`courseware_agents/base.py`):
+```python
+from claude_agent_sdk import query, ClaudeAgentOptions
+
+async def run_agent(prompt, system_prompt=None, tools=None):
+    options = ClaudeAgentOptions(
+        allowed_tools=tools or ["Read", "Glob", "Grep"],
+        permission_mode="bypassPermissions",
+    )
+    async for message in query(prompt=prompt, options=options):
+        # Process messages...
+```
 
 ### Streamlit Patterns
 - Use `st.session_state` for state management
@@ -62,81 +96,60 @@ courseware_claude_streamlit/
 - Use `st.file_uploader()` for file uploads
 - Use `st.download_button()` for file downloads
 - Use `st.spinner()` for long-running operations
-- Use lazy loading pattern for module pages
+- Lazy loading pattern for module pages
 
-### Agent Pattern
-Each generation module follows this pattern:
-```python
-# agents/<agent_name>.py
-async def run_agent(input_data: dict) -> dict:
-    # 1. Extract data from input
-    # 2. Call Claude API with prompt
-    # 3. Parse and return structured output
-```
-
-### Claude API Usage
-```python
-from anthropic import Anthropic
-
-client = Anthropic()  # Uses ANTHROPIC_API_KEY from env
-
-response = client.messages.create(
-    model="claude-sonnet-4-20250514",
-    max_tokens=4096,
-    messages=[{"role": "user", "content": prompt}]
-)
-```
+### Generation Workflow
+Each generation page follows this pattern:
+1. **Upload** - User uploads CP/FG document
+2. **Parse** - Pure Python parsing (no AI)
+3. **Interpret with Agent** - Claude Agent SDK interprets content → JSON context
+4. **Fill Templates** - docxtpl fills DOCX templates from JSON context
+5. **Download** - User downloads generated documents
 
 ## Environment Variables
 
 ```bash
-ANTHROPIC_API_KEY=sk-ant-...     # Required - Claude API
-DATABASE_URL=postgresql://...     # Required - Neon PostgreSQL
+DATABASE_URL=postgresql://...     # Required - Neon PostgreSQL for company data
 ```
 
 ## Skills System
 
 Skills are defined in `.claude/skills/<skill_name>/`:
 - `SKILL.md` - Command, keywords, response template
-- `README.md` - Developer documentation
-- `examples.md` - Example prompts
-- `reference/` - Technical reference docs for agents
 
-Skills use fuzzy matching via `rapidfuzz` to match user intents.
-
-**Execution**: All skills run using **Claude Code with subscription plan** (not pay-as-you-go API).
+**Execution**: All skills run using **Claude Code with subscription plan**.
 
 ## Document Generation
 
-Generated documents use templates stored in `generate_ap_fg_lg_lp/utils/`:
+Templates stored in `generate_ap_fg_lg_lp/utils/`:
 - Assessment Plan (AP)
 - Facilitator Guide (FG)
 - Learner Guide (LG)
 - Lesson Plan (LP)
 
-Templates use `docxtpl` (Jinja2 syntax) for variable substitution. Slide templates are in `.claude/skills/generate_slides/templates/`.
+Templates use `docxtpl` (Jinja2 syntax) for variable substitution.
 
 ### Lesson Plan Schedule Rules
 
-The Lesson Plan uses a **barrier algorithm** for schedule building. These rules are CRITICAL:
+The Lesson Plan uses a **barrier algorithm** for schedule building:
 
 - **Daily hours**: 9:00 AM - 6:00 PM
 - **Lunch**: Fixed 45 mins at 12:30 PM - 1:15 PM
 - **Assessment**: Fixed 4:00 PM - 6:00 PM on last day only
-- **Topic duration**: Each topic = `instructional_hours * 60 / num_topics` minutes (equal allocation, never compress)
+- **Topic duration**: Each topic = `instructional_hours * 60 / num_topics` minutes
 - **Topic splitting**: Topics CAN split across lunch/day-end barriers. Label: "T2: Name" then "T2: Name (Cont'd)"
-- **Minimum session**: 15 minutes (if remaining < 15 mins before barrier, use Break instead of tiny split)
-- **Breaks**: Fill all gaps so each day is exactly 9am-6pm. No empty/unlabeled slots.
+- **Minimum session**: 15 minutes (if remaining < 15 mins before barrier, use Break)
+- **Breaks**: Fill all gaps so each day is exactly 9am-6pm
 - **Styling**: DOCX uses Calibri font, steel blue (#4472C4) table headers with white text
 
-See `.claude/skills/generate_lesson_plan/SKILL.md` for the full algorithm and reference example.
+See `.claude/skills/generate_lesson_plan/SKILL.md` for the full algorithm.
 
 ## Coding Conventions
 
-- Use `async/await` for all I/O operations
+- Use `async/await` for agent operations
 - Use type hints for function signatures
 - Keep agents modular and single-purpose
-- Store prompts in separate files under `prompts/`
+- Store prompts in `prompt_templates/` directory
 - Use `st.success()` / `st.error()` for user feedback
 
 ## Common Commands
@@ -144,12 +157,6 @@ See `.claude/skills/generate_lesson_plan/SKILL.md` for the full algorithm and re
 ```bash
 # Run locally
 streamlit run app.py
-
-# Build Docker
-docker build -t wsq-courseware .
-
-# Run Docker
-docker run -p 7860:7860 --env-file .env wsq-courseware
 ```
 
 ## Models
@@ -157,5 +164,5 @@ docker run -p 7860:7860 --env-file .env wsq-courseware
 | Model | ID | Use Case |
 |-------|------|----------|
 | Claude Sonnet 4 | `claude-sonnet-4-20250514` | Default - balanced |
-| Claude Opus 4.5 | `claude-opus-4-5-20250130` | Complex reasoning |
+| Claude Opus 4.5 | `claude-opus-4-5-20251101` | Complex reasoning |
 | Claude Haiku 3.5 | `claude-3-5-haiku-20241022` | Fast tasks |

@@ -1,13 +1,14 @@
 import streamlit as st
-from check_documents.gemini_processor import extract_entities
+from courseware_audit.gemini_processor import extract_entities as _extract_entities_placeholder
 import os
+import asyncio
 import tempfile
 from PIL import Image
 import pandas as pd
 import io
 import gspread
 from rapidfuzz import fuzz
-from check_documents.acra_call import run_dataset_verifications, search_dataset_by_filters, search_dataset_by_query
+from courseware_audit.acra_call import run_dataset_verifications, search_dataset_by_filters, search_dataset_by_query
 from PyPDF2 import PdfReader, PdfWriter
 import json
 from typing import Dict, Any, Union
@@ -319,19 +320,32 @@ def app():
     # Step 2: Process Entity Extraction
     # ------------------------------
     if st.session_state.unlocked_files and st.button("🚀 Process Documents"):
+        from courseware_agents.entity_extractor import extract_entities as agent_extract
+
         for filename, file_content in st.session_state.unlocked_files.items():
             st.info(f"Processing entities for {filename}...")
-            # If the file content is a list (i.e. PDF pages), process each page.
+
+            # Convert content to text for the agent
             if isinstance(file_content, list):
-                page_results = []
+                # PDF pages - combine text from all pages
+                page_texts = []
                 for i, page in enumerate(file_content, start=1):
-                    # Pass the PIL image object to extract_entities; since it's already an image, set is_image=False.
-                    result = extract_entities(page, custom_instructions, is_image=False)
-                    page_results.append(result)
-                st.session_state.extracted_data[filename] = page_results
+                    if hasattr(page, 'tobytes'):
+                        page_texts.append(f"[Page {i}: Image content]")
+                    else:
+                        page_texts.append(f"[Page {i}]: {str(page)}")
+                combined_text = "\n\n".join(page_texts)
             else:
-                result = extract_entities(file_content, custom_instructions, is_image=False)
-                st.session_state.extracted_data[filename] = result
+                combined_text = str(file_content)
+
+            try:
+                with st.spinner(f"AI Agent extracting entities from {filename}..."):
+                    result = asyncio.run(agent_extract(combined_text, custom_instructions))
+                    st.session_state.extracted_data[filename] = result
+            except Exception as e:
+                st.error(f"Error processing {filename}: {e}")
+                st.session_state.extracted_data[filename] = {"entities": [], "error": str(e)}
+
         st.success("Entity extraction completed.")
 
     # ------------------------------

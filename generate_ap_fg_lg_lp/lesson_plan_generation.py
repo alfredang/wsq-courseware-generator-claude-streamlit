@@ -2,26 +2,30 @@
 Lesson Plan Generation - Standalone Streamlit Page
 
 Generates a Lesson Plan (LP) document from a Course Proposal upload.
-Features an editable prompt template for the timetable generation.
+Uses Claude Agent SDK for AI-powered timetable generation.
+
+Workflow:
+1. Upload CP document → Parse to text (no AI needed)
+2. Interpret CP with AI Agent → Get structured context
+3. Generate timetable with AI Agent → Get lesson plan schedule
+4. Fill LP template → Download
 """
 
 import streamlit as st
-import asyncio
 import os
+import json
+import asyncio
 import pandas as pd
 
-from generate_ap_fg_lg_lp.courseware_generation import parse_cp_document, interpret_cp
+from generate_ap_fg_lg_lp.courseware_generation import parse_cp_document, apply_tsc_defaults
 from generate_ap_fg_lg_lp.utils.timetable_generator import extract_unique_instructional_methods
 from generate_ap_fg_lg_lp.utils.agentic_LP import generate_lesson_plan
 from generate_ap_fg_lg_lp.utils.organizations import get_organizations
-from anthropic import Anthropic
-from utils.claude_model_client import get_claude_model_id
-from utils.helpers import parse_json_content
 from datetime import datetime
 
 
 # =============================================================================
-# Default Prompt Template
+# Default Prompt Template (editable by user)
 # =============================================================================
 
 DEFAULT_LP_PROMPT = """You are a WSQ timetable generator. Create a lesson plan for {num_of_days} day(s), 0930-1830hrs daily.
@@ -51,60 +55,6 @@ DEFAULT_LP_PROMPT = """You are a WSQ timetable generator. Create a lesson plan f
 
 **OUTPUT JSON:**
 {{"lesson_plan": [{{"Day": "Day 1", "Sessions": [{{"Time": "0930hrs - 0945hrs (15 mins)", "instruction_title": "...", "bullet_points": [...], "Instructional_Methods": "...", "Resources": "..."}}]}}]}}"""
-
-
-# =============================================================================
-# Timetable Generation (with custom prompt support)
-# =============================================================================
-
-async def generate_timetable_with_prompt(context, num_of_days, system_prompt, model_choice="default"):
-    """Generate timetable using a custom system prompt."""
-    model_id = get_claude_model_id(model_choice)
-    client = Anthropic()
-
-    agent_task = f"""
-        1. Take the complete dictionary provided:
-        {context}
-        2. Use the provided JSON dictionary, which includes all the course information, to generate the lesson plan timetable.
-
-        **Instructions:**
-        1. Adhere to all the rules and guidelines.
-        2. Include the timetable data under the key 'lesson_plan' within a JSON dictionary.
-        3. Return the JSON dictionary containing the 'lesson_plan' key.
-    """
-
-    max_retries = 2
-    base_delay = 5
-
-    for attempt in range(max_retries):
-        try:
-            completion = client.messages.create(
-                model=model_id,
-                temperature=0.3,
-                system=system_prompt,
-                messages=[{"role": "user", "content": agent_task}],
-                max_tokens=8192
-            )
-            break
-        except Exception as e:
-            error_str = str(e)
-            if "overloaded" in error_str.lower() or "529" in error_str:
-                if attempt < max_retries - 1:
-                    delay = base_delay * (2 ** attempt)
-                    await asyncio.sleep(delay)
-                    continue
-                else:
-                    raise Exception(f"Model overloaded after {max_retries} attempts.")
-            else:
-                raise e
-
-    response_text = completion.content[0].text
-    result = parse_json_content(response_text)
-
-    if not result or 'lesson_plan' not in result:
-        raise Exception("Generated timetable is missing 'lesson_plan' key.")
-
-    return result
 
 
 # =============================================================================
@@ -148,52 +98,116 @@ def app():
     st.write("Upload your Course Proposal (.docx or .xlsx) to generate a Lesson Plan.")
     cp_file = st.file_uploader("Upload Course Proposal", type=["docx", "xlsx"], key="lp_cp_upload")
 
-    # ----- Step 2: Prompt Template -----
-    st.subheader("Step 2: Prompt Template")
-    st.write("Customize the timetable generation prompt below. The placeholders `{num_of_days}` and `{list_of_im}` will be auto-filled from your Course Proposal.")
-
+    # ----- Prompt Template (editable) -----
     if 'lp_prompt_template' not in st.session_state:
         st.session_state['lp_prompt_template'] = DEFAULT_LP_PROMPT
 
-    prompt_template = st.text_area(
-        "Timetable Generation Prompt:",
-        value=st.session_state['lp_prompt_template'],
-        height=400,
-        key="lp_prompt_editor"
-    )
-    st.session_state['lp_prompt_template'] = prompt_template
+    with st.expander("Timetable Prompt Template (editable)", expanded=False):
+        st.write("Customize the prompt used by the AI agent for timetable generation.")
+        prompt_template = st.text_area(
+            "Timetable Generation Prompt:",
+            value=st.session_state['lp_prompt_template'],
+            height=400,
+            key="lp_prompt_editor"
+        )
+        st.session_state['lp_prompt_template'] = prompt_template
 
-    # ----- Step 3: Generate -----
-    st.subheader("Step 3: Generate Lesson Plan")
+    # ----- Step 2: Interpret CP & Generate Timetable -----
+    st.subheader("Step 2: Generate Timetable with AI Agent")
 
-    if st.button("Generate Lesson Plan", type="primary"):
-        if cp_file is None:
-            st.error("Please upload a Course Proposal document.")
+    col1, col2 = st.columns(2)
+
+    with col1:
+        if st.button("Parse CP & Generate Timetable", type="primary"):
+            if cp_file is None:
+                st.error("Please upload a Course Proposal document.")
+                return
+            if not selected_org:
+                st.error("Please select a company from the sidebar.")
+                return
+
+            # Parse CP
+            try:
+                with st.spinner("Parsing Course Proposal..."):
+                    raw_data = parse_cp_document(cp_file)
+                os.makedirs("output", exist_ok=True)
+                with open("output/parsed_cp.md", "w", encoding="utf-8") as f:
+                    f.write(raw_data)
+                st.success("CP parsed successfully.")
+            except Exception as e:
+                st.error(f"Error parsing CP: {e}")
+                return
+
+            # Interpret CP with agent
+            try:
+                with st.spinner("AI Agent interpreting Course Proposal... (30-60 seconds)"):
+                    from courseware_agents.cp_interpreter import interpret_cp
+                    context = asyncio.run(interpret_cp("output/parsed_cp.md"))
+                    context = apply_tsc_defaults(context)
+                st.success(f"Course data extracted: {context.get('Course_Title', 'Unknown')}")
+            except Exception as e:
+                st.error(f"Error interpreting CP: {e}")
+                return
+
+            # Generate timetable with agent
+            try:
+                with st.spinner("AI Agent generating timetable... (30-60 seconds)"):
+                    from courseware_agents.timetable_agent import generate_timetable
+                    timetable = asyncio.run(generate_timetable("output/context.json"))
+                    context['lesson_plan'] = timetable.get('lesson_plan', timetable)
+                    st.session_state['lp_context'] = context
+                    st.session_state['lp_timetable'] = context['lesson_plan']
+                st.success("Timetable generated successfully!")
+            except Exception as e:
+                st.error(f"Error generating timetable: {e}")
+                return
+
+    with col2:
+        # Alternative: Load pre-generated context JSON
+        context_json_file = st.file_uploader("Or load context JSON", type=["json"], key="lp_context_json_upload")
+        if context_json_file:
+            try:
+                context = json.load(context_json_file)
+                context = apply_tsc_defaults(context)
+                st.session_state['lp_context'] = context
+                if 'lesson_plan' in context:
+                    st.session_state['lp_timetable'] = context['lesson_plan']
+                    st.success(f"Context loaded with timetable: {context.get('Course_Title', 'Unknown')}")
+                else:
+                    st.warning("Context loaded but no `lesson_plan` key found.")
+            except Exception as e:
+                st.error(f"Error loading context JSON: {e}")
+
+    # Also check for existing output/context.json
+    if os.path.exists("output/context.json") and not st.session_state.get('lp_context'):
+        if st.button("Load from output/context.json", key="lp_load_existing"):
+            try:
+                with open("output/context.json", "r", encoding="utf-8") as f:
+                    context = json.load(f)
+                context = apply_tsc_defaults(context)
+                st.session_state['lp_context'] = context
+                if 'lesson_plan' in context:
+                    st.session_state['lp_timetable'] = context['lesson_plan']
+                    st.success(f"Context loaded: {context.get('Course_Title', 'Unknown')}")
+            except Exception as e:
+                st.error(f"Error: {e}")
+
+    # ----- Preview -----
+    if st.session_state.get('lp_timetable'):
+        st.subheader("Timetable Preview")
+        display_timetable_preview(st.session_state['lp_timetable'])
+
+    # ----- Step 3: Generate LP Document -----
+    st.subheader("Step 3: Generate Lesson Plan Document")
+
+    if st.button("Generate Lesson Plan Document"):
+        context = st.session_state.get('lp_context')
+
+        if context is None:
+            st.error("Please generate or load a context first (Step 2).")
             return
-        if not selected_org:
-            st.error("Please select a company from the sidebar.")
-            return
-
-        model_choice = st.session_state.get('selected_model', 'default')
-
-        # Parse CP
-        try:
-            with st.spinner("Parsing Course Proposal..."):
-                raw_data = parse_cp_document(cp_file)
-        except Exception as e:
-            st.error(f"Error parsing Course Proposal: {e}")
-            return
-
-        # Interpret CP with Claude
-        try:
-            with st.spinner("Extracting information from Course Proposal..."):
-                context = asyncio.run(interpret_cp(raw_data=raw_data, model_choice=model_choice))
-        except Exception as e:
-            st.error(f"Error extracting Course Proposal: {e}")
-            return
-
-        if not context:
-            st.error("Failed to extract course data. Please check the document format.")
+        if 'lesson_plan' not in context:
+            st.error("Context is missing the `lesson_plan`. Generate the timetable first.")
             return
 
         # Add metadata
@@ -201,36 +215,11 @@ def app():
         context["Date"] = current_datetime.strftime("%d %b %Y")
         context["Year"] = current_datetime.year
 
-        # Get organization UEN
         org_list = get_organizations()
         selected_org_data = next((org for org in org_list if org["name"] == selected_org), None)
         if selected_org_data:
             context["UEN"] = selected_org_data["uen"]
 
-        # Calculate days
-        duration_str = context.get("Total_Course_Duration_Hours", "")
-        if not duration_str:
-            duration_str = context.get("Total_Training_Hours", "") or context.get("Total_Course_Duration", "") or "16 hrs"
-        hours = int(''.join(filter(str.isdigit, str(duration_str))) or "16")
-        num_of_days = hours / 8
-
-        # Build the final prompt from template
-        list_of_im = extract_unique_instructional_methods(context)
-        final_prompt = prompt_template.replace("{num_of_days}", str(int(num_of_days)))
-        final_prompt = final_prompt.replace("{list_of_im}", str(list_of_im))
-
-        # Generate timetable
-        try:
-            with st.spinner("Generating timetable schedule..."):
-                timetable_data = asyncio.run(
-                    generate_timetable_with_prompt(context, num_of_days, final_prompt, model_choice)
-                )
-                context['lesson_plan'] = timetable_data['lesson_plan']
-        except Exception as e:
-            st.error(f"Error generating timetable: {e}")
-            return
-
-        # Generate LP document
         try:
             with st.spinner("Generating Lesson Plan document..."):
                 lp_output = generate_lesson_plan(context, selected_org)
@@ -241,13 +230,6 @@ def app():
         if lp_output:
             st.success("Lesson Plan generated successfully!")
             st.session_state['lp_standalone_output'] = lp_output
-            st.session_state['lp_timetable'] = timetable_data['lesson_plan']
-            st.session_state['lp_context'] = context
-
-    # ----- Preview -----
-    if st.session_state.get('lp_timetable'):
-        st.subheader("Timetable Preview")
-        display_timetable_preview(st.session_state['lp_timetable'])
 
     # ----- Download -----
     if st.session_state.get('lp_standalone_output'):
@@ -255,7 +237,6 @@ def app():
         if os.path.exists(lp_path):
             ctx = st.session_state.get('lp_context', {})
             course_title = ctx.get('Course_Title', 'Course')
-            # Sanitize filename
             safe_title = ''.join(c if c.isalnum() or c in (' ', '_', '-') else '_' for c in str(course_title))[:50].strip('_')
 
             with open(lp_path, "rb") as f:

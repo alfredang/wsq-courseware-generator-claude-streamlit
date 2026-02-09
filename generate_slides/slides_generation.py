@@ -719,19 +719,17 @@ def app():
     # Configuration Section
     st.subheader("2. Slide Configuration")
 
-    # Agentic Mode toggle
     st.markdown("#### AI-Enhanced Generation")
     enable_agentic = st.checkbox(
         "Enable AI-Enhanced Generation (Agentic Mode)",
         value=True,
-        help="Uses AI agents for intelligent topic analysis, source quality evaluation, "
-             "optimized slide instructions, and post-generation quality validation"
+        help="Uses Claude Agent SDK to analyze your document and enhance slide content before sending to NotebookLM."
     )
 
     if enable_agentic:
-        st.caption("AI agents analyze your document, evaluate research sources, craft optimal instructions, and validate quality.")
+        st.caption("Claude Agent SDK analyzes your document, identifies key topics, and crafts enhanced instructions for NotebookLM.")
     else:
-        st.caption("No LLM API tokens required — NotebookLM handles all AI processing directly.")
+        st.caption("NotebookLM handles all processing directly — no agent analysis.")
 
     # Internet Research toggle (prominent)
     st.markdown("#### Internet Research")
@@ -886,21 +884,24 @@ def app():
         # Run generation pipeline
         try:
             loop = asyncio.new_event_loop()
+
+            # AI-enhanced analysis with Claude Agent SDK
             if enable_agentic:
-                from generate_slides.agents.orchestrator import run_agentic_pipeline
-                model_choice = st.session_state.get('selected_model', 'default')
-                result = loop.run_until_complete(
-                    run_agentic_pipeline(
-                        content, filename, config, model_choice,
-                        progress_callback=update_progress,
-                        max_retries=1 if config.get('enable_validation', True) else 0,
-                    )
+                update_progress("Analyzing document with Claude Agent SDK...", 10)
+                from courseware_agents.slides_agent import analyze_document_for_slides
+                analysis = loop.run_until_complete(
+                    analyze_document_for_slides(content, config)
                 )
-            else:
-                # Original pipeline — no LLM tokens needed
-                result = loop.run_until_complete(
-                    _generate_slides_direct(content, filename, config, progress_callback=update_progress)
-                )
+                if analysis.get("enhanced_prompt"):
+                    config['agent_analysis'] = analysis
+                    config['enhanced_prompt'] = analysis['enhanced_prompt']
+                    update_progress("Agent analysis complete. Generating slides...", 30)
+                else:
+                    update_progress("Agent analysis returned no enhancement. Using direct mode...", 30)
+
+            result = loop.run_until_complete(
+                _generate_slides_direct(content, filename, config, progress_callback=update_progress)
+            )
             loop.close()
         except Exception as e:
             result = {"success": False, "message": f"Error: {str(e)}"}

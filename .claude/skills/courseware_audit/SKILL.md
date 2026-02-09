@@ -1,13 +1,13 @@
-# Check Documents
+# Courseware Audit
 
 ## Command
-`/check_documents` or `check_documents`
+`/courseware_audit` or `courseware_audit`
 
 ## Navigate
-Check Documents
+Courseware Audit
 
 ## Keywords
-check document, validate document, verify document, check files, validate files, review document, document check, file check, supporting document, sup doc, i need to check, verify my files, validate my documents, are my documents correct, check my work
+check document, validate document, verify document, check files, validate files, review document, document check, file check, supporting document, sup doc, i need to check, verify my files, validate my documents, are my documents correct, check my work, courseware audit, audit courseware
 
 ## Description
 Help users validate and check supporting documents for WSQ course submissions.
@@ -16,7 +16,7 @@ Help users validate and check supporting documents for WSQ course submissions.
 This skill runs using **Claude Code with subscription plan**. Do NOT use pay-as-you-go API keys. All AI operations should be executed through the Claude Code CLI environment with an active subscription.
 
 ## Response
-I'll take you to **Check Documents** now.
+I'll take you to **Courseware Audit** now.
 
 Here's what you can do:
 - **Upload** your supporting documents (CP, AP, FG, LG, LP, etc.)
@@ -45,7 +45,7 @@ When users ask about checking, validating, or verifying documents:
 - Validate supporting documents for completeness
 - Check format compliance
 - Cross-reference between documents
-- Direct users to use the "Check Documents" module in the sidebar
+- Direct users to use the "Courseware Audit" module in the sidebar
 
 ## Next Steps
 Once your documents pass validation, you're ready for SSG submission! If you need to fix anything:

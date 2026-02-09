@@ -1,27 +1,15 @@
----
-title: WSQ Courseware Generator
-emoji: 📚
-colorFrom: blue
-colorTo: indigo
-sdk: docker
-pinned: false
-app_port: 7860
----
-
 <div align="center">
 
 # WSQ Courseware Generator
 
 [![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
 [![Streamlit](https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?style=for-the-badge&logo=streamlit&logoColor=white)](https://streamlit.io)
-[![Claude](https://img.shields.io/badge/Claude-Anthropic-D4A574?style=for-the-badge&logo=anthropic&logoColor=white)](https://anthropic.com)
+[![Claude](https://img.shields.io/badge/Claude_Agent_SDK-Anthropic-D4A574?style=for-the-badge&logo=anthropic&logoColor=white)](https://anthropic.com)
 [![License](https://img.shields.io/badge/License-MIT-green?style=for-the-badge)](LICENSE)
-[![Docker](https://img.shields.io/badge/Docker-Ready-2496ED?style=for-the-badge&logo=docker&logoColor=white)](Dockerfile)
-[![Hugging Face](https://img.shields.io/badge/HuggingFace-Spaces-yellow?style=for-the-badge&logo=huggingface&logoColor=white)](https://huggingface.co/spaces)
 
 **AI-Powered Courseware Generation Platform for WSQ Training Providers**
 
-[Live Demo](https://huggingface.co/spaces/tertiaryinfotech/wsq-courseware-generator) · [Report Bug](https://github.com/alfredang/wsq-courseware-generator-claude-streamlit/issues) · [Request Feature](https://github.com/alfredang/wsq-courseware-generator-claude-streamlit/discussions)
+Built with **Claude Agent SDK** — all AI processing runs through Claude Code subscription.
 
 </div>
 
@@ -29,31 +17,18 @@ app_port: 7860
 
 ## About The Project
 
-The **WSQ Courseware Generator** is an enterprise-grade AI platform that automates the creation of Singapore Workforce Skills Qualifications (WSQ) training materials. Using Claude AI agents, it transforms Training & Competency Standards (TSC) documents into complete courseware packages.
-
-![WSQ Courseware Generator](coursewate_genertor.png)
+The **WSQ Courseware Generator** is an AI platform that automates the creation of Singapore Workforce Skills Qualifications (WSQ) training materials. Using Claude Agent SDK agents, it transforms Course Proposal documents into complete courseware packages.
 
 ### Key Features
 
 | Feature | Description |
 |---------|-------------|
 | **Courseware Creation** | Auto-generate Assessment Plans, Facilitator Guides, and Learner Guides |
-| **Lesson Plan Generation** | Generate Lesson Plans with editable prompt template and timetable preview |
+| **Lesson Plan Generation** | Generate Lesson Plans with barrier algorithm scheduling |
 | **Assessment Generation** | Create 9 assessment types (SAQ, PP, CS, PRJ, ASGN, OI, DEM, RP, OQ) |
-| **Slides Generation** | Generate presentation slides with NotebookLM integration |
-| **Brochure Creation** | Design marketing brochures with web scraping |
+| **Slides Generation** | AI-enhanced slides with NotebookLM integration |
+| **Brochure Creation** | Design marketing brochures via web scraping |
 | **Courseware Audit** | Validate supporting documents with entity extraction |
-
-### Platform Statistics
-
-| Metric | Count |
-|--------|-------|
-| AI Agents | 24 |
-| Generation Modules | 7 |
-| Assessment Types | 9 |
-| Courseware Documents | 4 |
-| Prompt Templates | 22 |
-| Skills Documented | 11 |
 
 ---
 
@@ -61,52 +36,49 @@ The **WSQ Courseware Generator** is an enterprise-grade AI platform that automat
 
 | Category | Technology |
 |----------|------------|
-| **Frontend** | ![Streamlit](https://img.shields.io/badge/Streamlit-1.30+-FF4B4B?style=flat&logo=streamlit&logoColor=white) |
-| **Backend** | ![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=flat&logo=python&logoColor=white) |
-| **AI/LLM** | ![Claude](https://img.shields.io/badge/Claude_API-Anthropic-D4A574?style=flat&logo=anthropic&logoColor=white) |
-| **Database** | ![SQLite](https://img.shields.io/badge/SQLite-003B57?style=flat&logo=sqlite&logoColor=white) ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Neon-336791?style=flat&logo=postgresql&logoColor=white) |
-| **Deployment** | ![Docker](https://img.shields.io/badge/Docker-2496ED?style=flat&logo=docker&logoColor=white) ![HuggingFace](https://img.shields.io/badge/HuggingFace-Spaces-yellow?style=flat&logo=huggingface&logoColor=white) |
+| **Frontend** | Streamlit 1.30+ |
+| **Backend** | Python 3.13 |
+| **AI Processing** | Claude Agent SDK |
+| **Database** | SQLite (settings), PostgreSQL/Neon (companies) |
+| **Slides** | NotebookLM MCP Server |
 | **Document Processing** | python-docx, docxtpl, openpyxl, PyPDF2 |
 
 ---
 
-## Architecture Diagram
+## Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                        STREAMLIT UI                                 │
-│           (Sidebar Navigation + Page Routing)                       │
-│                                                                     │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
-│  │   Home   │ │Courseware │ │  Lesson  │ │Assessment│ │  Slides  │ │
-│  │          │ │AP/FG/LG  │ │  Plan    │ │   (9)    │ │          │ │
-│  └──────────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ │
-│                    │            │            │            │         │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐              │
-│  │ Brochure │ │  Annex   │ │Courseware │ │ Company  │              │
-│  │          │ │Assessment│ │  Audit   │ │ Settings │              │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └──────────┘              │
-└───────┼────────────┼────────────┼──────────────────────────────────┘
-        │            │            │
-┌───────▼────────────▼────────────▼──────────────────────────────────┐
-│                      CLAUDE AI AGENTS (24 Total)                    │
-│                                                                     │
-│  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐          │
-│  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐          │
-│  │ CW Agents │ │Assessment │ │  Slides   │ │ Brochure  │          │
-│  │  (3+LP)   │ │  Agents   │ │  Agents   │ │ & Doc     │          │
-│  │           │ │    (9)    │ │    (5)    │ │ Agents    │          │
-│  │ -AP Agent │ │ -SAQ, PP  │ │ -Topic    │ │ -Brochure │          │
-│  │ -FG Agent │ │ -CS, PRJ  │ │ -Source   │ │ -Document │          │
-│  │ -LG Agent │ │ -ASGN, OI │ │ -Quality  │ │ -Entity   │          │
-│  │ -LP Agent │ │ -DEM, RP  │ │ -NotebookLM││ -Verify   │          │
-│  └───────────┘ └───────────┘ └───────────┘ └───────────┘          │
-└─────────────────────────────┬──────────────────────────────────────┘
-                              │
-┌─────────────────────────────▼──────────────────────────────────────┐
-│                    DOCUMENT GENERATION ENGINE                       │
-│          (Templates + python-docx + docxtpl + openpyxl)            │
-└────────────────────────────────────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                      STREAMLIT UI                               │
+│              (File Upload / Preview / Download)                  │
+│                                                                 │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐          │
+│  │ Extract  │ │Courseware │ │  Lesson  │ │Assessment│          │
+│  │Course Info│ │AP/FG/LG  │ │  Plan    │ │  (9 types)│         │
+│  └──────────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘          │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐          │
+│  │  Slides  │ │ Brochure │ │  Annex   │ │Courseware │          │
+│  │(NotebookLM)││(Scraping)│ │Assessment│ │  Audit   │          │
+│  └────┬─────┘ └──────────┘ └──────────┘ └────┬─────┘          │
+└───────┼───────────────────────────────────────┼────────────────┘
+        │                                       │
+┌───────▼───────────────────────────────────────▼────────────────┐
+│                  CLAUDE AGENT SDK (courseware_agents/)           │
+│                                                                 │
+│  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐      │
+│  │ CP Interpreter │ │   Assessment   │ │   Timetable    │      │
+│  │  (cp → JSON)   │ │   Generator    │ │   Generator    │      │
+│  └────────────────┘ └────────────────┘ └────────────────┘      │
+│  ┌────────────────┐ ┌────────────────┐                         │
+│  │    Entity      │ │    Slides      │                         │
+│  │   Extractor    │ │    Agent       │                         │
+│  └────────────────┘ └────────────────┘                         │
+└────────────────────────────┬───────────────────────────────────┘
+                             │
+┌────────────────────────────▼───────────────────────────────────┐
+│                  DOCUMENT GENERATION ENGINE                     │
+│            (docxtpl Templates + python-docx)                   │
+└────────────────────────────────────────────────────────────────┘
 ```
 
 ---
@@ -114,56 +86,63 @@ The **WSQ Courseware Generator** is an enterprise-grade AI platform that automat
 ## Project Structure
 
 ```
-wsq-courseware-generator-claude-streamlit/
+courseware_claude_streamlit/
 ├── app.py                          # Main Streamlit application
-├── Dockerfile                      # Docker configuration
 ├── requirements.txt                # Python dependencies
+├── .streamlit/config.toml          # Streamlit configuration
 │
-├── .streamlit/
-│   └── config.toml                 # Streamlit configuration
-│
-├── generate_assessment/            # Assessment generation
-│   ├── assessment_generation.py    # Assessment Streamlit page
-│   └── utils/                      # 9 assessment agents
+├── courseware_agents/               # Claude Agent SDK agents
+│   ├── base.py                     # Core run_agent() wrapper
+│   ├── cp_interpreter.py           # Course Proposal → JSON
+│   ├── assessment_generator.py     # FG → assessment questions
+│   ├── timetable_agent.py          # Context → lesson plan timetable
+│   ├── entity_extractor.py         # Document → named entities
+│   └── slides_agent.py             # Document → slide instructions
 │
 ├── generate_ap_fg_lg_lp/           # Courseware generation
 │   ├── courseware_generation.py     # AP/FG/LG Streamlit page
-│   ├── lesson_plan_generation.py   # Lesson Plan page (editable prompt)
-│   └── utils/                      # AP, FG, LG, LP agents
+│   ├── lesson_plan_generation.py   # Lesson Plan page
+│   └── utils/                      # Template filling modules
+│
+├── generate_assessment/            # Assessment generation
+│   ├── assessment_generation.py    # Assessment Streamlit page
+│   └── utils/                      # Template filling modules
 │
 ├── generate_slides/                # Slides generation
-│   ├── slides_generation.py        # Slides Streamlit page
-│   └── agents/                     # 5 slides agents
+│   └── slides_generation.py        # NotebookLM + Agent SDK
 │
 ├── generate_brochure/              # Brochure generation
-│   └── brochure_generation.py      # Brochure Streamlit page
+│   └── brochure_generation.py      # Web scraping + template
 │
 ├── add_assessment_to_ap/           # Annex assessments to AP
-│   └── annex_assessment_v2.py      # Annex Streamlit page
+│   └── annex_assessment_v2.py
 │
-├── check_documents/                # Courseware audit
-│   └── sup_doc.py                  # Courseware audit Streamlit page
+├── courseware_audit/                # Courseware audit
+│   └── sup_doc.py                  # Entity extraction page
 │
-├── settings/                       # Configuration
-│   ├── model_configs.py            # Model configurations
-│   └── api_database.py             # SQLite database
+├── extract_course_info/            # CP parsing (pure Python)
+│   └── extract_course_info.py
 │
-├── company/                        # Company management
-│   ├── company_settings.py         # Company management page
-│   └── company_manager.py          # Organization utilities
+├── settings/                       # Settings & authentication
+│   ├── settings.py                 # Prompt Templates UI
+│   ├── admin_auth.py               # Admin authentication
+│   ├── api_database.py             # SQLite database
+│   └── model_configs.py            # Claude model definitions
 │
-├── .claude/                        # Claude Code configuration
-│   ├── commands/                   # CLI commands
-│   │   └── start-app.md            # Start Streamlit app
-│   └── skills/                     # Claude Code skills (13)
-│       ├── branding/
-│       ├── generate_courseware/
-│       ├── generate_assessment/
-│       ├── generate_slides/
-│       └── ...
+├── company/                        # Company management (PostgreSQL)
+│   ├── company_settings.py
+│   ├── company_manager.py
+│   └── database.py
 │
-└── utils/                          # Shared utilities
-    └── helpers.py                  # JSON parsing, etc.
+├── utils/                          # Shared utilities
+│   ├── claude_model_client.py      # Model ID mapping
+│   └── prompt_loader.py            # Prompt template loader
+│
+├── prompt_templates/               # Prompt template markdown files
+│
+└── .claude/                        # Claude Code configuration
+    ├── settings.local.json         # MCP server config (NotebookLM)
+    └── skills/                     # Claude Code skill definitions
 ```
 
 ---
@@ -174,17 +153,16 @@ wsq-courseware-generator-claude-streamlit/
 
 - **Python 3.13+**
 - **uv** (recommended) or pip
-- **Docker** (optional, for containerized deployment)
-- **Anthropic API Key**
+- **Claude Code** with subscription plan
 
-### Local Development
+### Setup
 
 ```bash
 # 1. Clone the repository
 git clone https://github.com/alfredang/wsq-courseware-generator-claude-streamlit.git
 cd wsq-courseware-generator-claude-streamlit
 
-# 2. Create virtual environment with uv
+# 2. Create virtual environment
 uv venv && source .venv/bin/activate
 
 # 3. Install dependencies
@@ -192,76 +170,65 @@ uv pip install -r requirements.txt
 
 # 4. Set up environment variables
 cp .env.example .env
-# Edit .env with your API keys
+# Edit .env with your DATABASE_URL
 
-# 5. Run the application
-uv run streamlit run app.py
+# 5. Authenticate NotebookLM (for slide generation)
+pip install notebooklm-py[browser]
+python -m notebooklm login
 
-# 6. Open browser
-# http://localhost:8501
+# 6. Run the application
+streamlit run app.py
 ```
 
-### Docker Deployment
-
-```bash
-# Build image
-docker build -t wsq-courseware .
-
-# Run container
-docker run -p 7860:7860 --env-file .env wsq-courseware
-```
-
-### Hugging Face Spaces Deployment
-
-1. Go to [huggingface.co/spaces](https://huggingface.co/spaces)
-2. Click **"Create new Space"**
-3. Select **Docker** as SDK
-4. Connect your GitHub repository
-5. Add secrets in Settings:
-   - `ANTHROPIC_API_KEY`
-   - `DATABASE_URL`
-
----
-
-## Environment Variables
+### Environment Variables
 
 | Variable | Required | Description |
 |----------|----------|-------------|
-| `ANTHROPIC_API_KEY` | Yes | Anthropic Claude API key |
-| `DATABASE_URL` | No | PostgreSQL connection string (optional, for persistent storage) |
+| `DATABASE_URL` | Yes | PostgreSQL connection string (Neon) |
+
+---
+
+## Agent System
+
+All AI processing uses the **Claude Agent SDK** via the `courseware_agents/` module:
+
+| Agent | Input | Output |
+|-------|-------|--------|
+| `cp_interpreter` | Parsed Course Proposal | Structured JSON context |
+| `assessment_generator` | FG data + K/A statements | Assessment questions (9 types) |
+| `timetable_agent` | Course context JSON | Lesson plan timetable |
+| `entity_extractor` | Document text | Named entities (PERSON, UEN, etc.) |
+| `slides_agent` | Document text | Enhanced slide instructions |
+
+```python
+import asyncio
+from courseware_agents import interpret_cp, generate_timetable
+
+# Interpret a Course Proposal
+context = asyncio.run(interpret_cp("output/parsed_cp.md"))
+
+# Generate timetable from context
+timetable = asyncio.run(generate_timetable("output/context.json"))
+```
 
 ---
 
 ## Skills System
 
-The platform includes 13 documented skills in the `.claude/skills/` directory, each with:
-
-| File | Purpose |
-|------|---------|
-| `SKILL.md` | Command, keywords, description, response template |
-| `README.md` | Developer documentation |
-| `examples.md` | Example prompts and usage |
-| `reference/` | Technical reference docs for agents |
-
-### Available Skills
+Claude Code skills are defined in `.claude/skills/`:
 
 | Skill | Description |
 |-------|-------------|
-| `generate_courseware` | Generate AP, FG, LG, LP documents |
+| `generate_courseware` | Generate AP, FG, LG documents |
+| `generate_lesson_plan` | Generate Lesson Plans with barrier algorithm |
 | `generate_assessment` | Create 9 assessment types |
 | `generate_slides` | Generate slides with NotebookLM MCP |
 | `generate_brochure` | Create marketing brochures |
 | `courseware_audit` | Verify supporting documents |
-| `add_assessment_to_ap` | Annex assessments to AP |
-| `branding` | UI styling guidelines |
-
-Skills use fuzzy matching via `rapidfuzz` to match user intents to appropriate workflows.
 
 ---
 
 ## Contributing
-
-Contributions are welcome! Feel free to:
 
 1. **Fork** the repository
 2. **Create** a feature branch (`git checkout -b feature/AmazingFeature`)
@@ -293,19 +260,16 @@ Distributed under the MIT License. See `LICENSE` for more information.
 
 ## Acknowledgements
 
-- [Anthropic](https://anthropic.com) — Claude AI API
+- [Anthropic](https://anthropic.com) — Claude Agent SDK
 - [Streamlit](https://streamlit.io) — Web App Framework
-- [Hugging Face](https://huggingface.co) — Model Hosting & Spaces
+- [NotebookLM](https://notebooklm.google.com) — Slide Generation
 - [SkillsFuture Singapore](https://www.skillsfuture.gov.sg/) — WSQ Framework
 - [Neon](https://neon.tech) — Serverless PostgreSQL
-- All contributors and testers who helped improve this project
 
 ---
 
 <div align="center">
 
 **Made with love for Singapore's Training Providers**
-
-Star this repo if you find it useful!
 
 </div>

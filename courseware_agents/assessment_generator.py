@@ -1,0 +1,133 @@
+"""
+Assessment Generator Agent
+
+Reads parsed Facilitator Guide data and generates assessment questions
+(SAQ, PP, CS, PRJ, ASGN, OI, DEM, RP, OQ) using the Claude Agent SDK.
+"""
+
+import json
+import os
+from courseware_agents.base import run_agent_json
+
+SYSTEM_PROMPT = """You are an expert WSQ assessment content generator.
+
+Your task is to read Facilitator Guide (FG) data and generate assessment questions and answers
+for various assessment types. Be thorough, accurate, and create questions that properly test
+the Knowledge (K) and Ability (A) statements.
+
+CRITICAL: Return ONLY a valid JSON object with no additional text.
+
+The JSON must follow this schema:
+{
+    "course_title": "string",
+    "assessment_types": [
+        {
+            "type": "string (e.g., WA (SAQ), PP, CS, PRJ, ASGN, OI, DEM, RP, OQ)",
+            "code": "string (e.g., WA-SAQ)",
+            "duration": "string (e.g., 1 hr)",
+            "questions": [
+                {
+                    "scenario": "string (2-3 sentence realistic scenario)",
+                    "question_statement": "string (clear, direct question)",
+                    "knowledge_id": "string (e.g., K1) - for SAQ only",
+                    "ability_id": ["string (e.g., A1, A2)"] - for PP/CS",
+                    "learning_outcome_id": "string (e.g., LO1) - for SAQ",
+                    "answer": ["string (bullet point answer 1)", "string (bullet point answer 2)"]
+                }
+            ]
+        }
+    ]
+}
+
+ASSESSMENT TYPE RULES:
+1. SAQ (Short Answer Questions): One question per K statement. Questions test knowledge.
+   Each question has a scenario, question, knowledge_id, learning_outcome_id, and 3-5 answer bullet points.
+
+2. PP (Practical Performance): One question per A statement. Questions test practical skills.
+   Each question has a scenario, question, ability_id list, and detailed answer steps.
+
+3. CS (Case Study): One complex case per Learning Unit. Tests ability to apply knowledge.
+   Each case has a detailed scenario, multiple questions, ability_id list, and comprehensive answers.
+
+4. PRJ (Project): One project scenario per course. Tests comprehensive understanding.
+5. ASGN (Assignment): Written tasks testing analytical abilities.
+6. OI (Oral Interview): Interview questions testing verbal understanding.
+7. DEM (Demonstration): Practical demonstration tasks.
+8. RP (Role Play): Role-play scenarios testing interpersonal skills.
+9. OQ (Oral Questioning): Direct oral questions testing knowledge.
+
+QUESTION QUALITY:
+- Scenarios should be realistic and industry-relevant
+- Questions should be clear and unambiguous
+- Answers should be practical and specific (not generic)
+- Each question should map to specific K or A statements
+"""
+
+
+async def generate_assessments(
+    fg_data_path: str,
+    master_ka_path: str = None,
+    output_path: str = None,
+    assessment_types: list = None,
+) -> dict:
+    """
+    Generate assessment questions from Facilitator Guide data.
+
+    Args:
+        fg_data_path: Path to the parsed FG data JSON file.
+        master_ka_path: Path to the K/A master list JSON file.
+        output_path: Path to save the assessment context JSON.
+        assessment_types: List of assessment types to generate (e.g., ["WA (SAQ)", "PP"]).
+                          If None, auto-detect from FG data.
+
+    Returns:
+        Assessment context dict with questions for each type.
+    """
+    if output_path is None:
+        output_path = os.path.join(os.path.dirname(fg_data_path), "assessment_context.json")
+
+    # Read FG data
+    with open(fg_data_path, 'r', encoding='utf-8') as f:
+        fg_data = f.read()
+
+    # Read master K/A list if available
+    master_ka_text = ""
+    if master_ka_path and os.path.exists(master_ka_path):
+        with open(master_ka_path, 'r', encoding='utf-8') as f:
+            master_ka = json.load(f)
+        master_ka_text = "\n\nMASTER K/A LIST:\n"
+        for k in master_ka.get('knowledge', []):
+            master_ka_text += f"  {k['id']}: {k['text']}\n"
+        for a in master_ka.get('abilities', []):
+            master_ka_text += f"  {a['id']}: {a['text']}\n"
+
+    types_instruction = ""
+    if assessment_types:
+        types_instruction = f"\nGenerate assessments ONLY for these types: {', '.join(assessment_types)}"
+    else:
+        types_instruction = "\nAuto-detect assessment types from the FG document and generate questions for all found types."
+
+    prompt = f"""Read the following Facilitator Guide data and generate assessment questions.
+{types_instruction}
+
+--- FACILITATOR GUIDE DATA ---
+{fg_data}
+--- END ---
+{master_ka_text}
+
+Generate comprehensive assessment questions following the schema in your instructions.
+Return ONLY the JSON object."""
+
+    result = await run_agent_json(
+        prompt=prompt,
+        system_prompt=SYSTEM_PROMPT,
+        tools=["Read", "Glob", "Grep"],
+        max_turns=15,
+    )
+
+    # Save to output file
+    os.makedirs(os.path.dirname(output_path), exist_ok=True)
+    with open(output_path, 'w', encoding='utf-8') as f:
+        json.dump(result, f, indent=2, ensure_ascii=False)
+
+    return result

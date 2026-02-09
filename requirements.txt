@@ -23,6 +23,13 @@ asyncpg
 # Streamlit (UI Framework)
 streamlit>=1.30.0
 streamlit-option-menu
+streamlit-modal
 
-# Claude API
+# Claude Agent SDK (agentic AI processing)
+claude-agent-sdk
+
+# Claude API (used by Agent SDK internally)
 anthropic>=0.45.0
+
+# NotebookLM (slide generation)
+notebooklm-py[browser]

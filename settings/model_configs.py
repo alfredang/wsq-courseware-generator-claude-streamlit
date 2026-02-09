@@ -126,25 +126,7 @@ def get_model_config(choice: str) -> Dict[str, Any]:
     if choice in MODEL_CHOICES:
         return MODEL_CHOICES[choice]
 
-    # For unknown models, try database (for custom models only)
-    try:
-        from settings.api_database import get_model_by_name
-        db_model = get_model_by_name(choice)
-        if db_model:
-            return {
-                "name": db_model["name"],
-                "provider": db_model["provider"],
-                "api_provider": db_model.get("api_provider", "ANTHROPIC"),
-                "config": {
-                    "model": db_model["config"]["model"],
-                    "temperature": db_model["config"].get("temperature", 0.2),
-                    "max_tokens": db_model["config"].get("max_tokens", 8192),
-                }
-            }
-    except Exception:
-        pass
-
-    # Final fallback to default
+    # Fallback to default
     return default_config
 
 

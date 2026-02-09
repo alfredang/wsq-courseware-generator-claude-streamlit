@@ -22,7 +22,7 @@ def lazy_import_annex():
     return annex_assessment_v2
 
 def lazy_import_docs():
-    import check_documents.sup_doc as sup_doc
+    import courseware_audit.sup_doc as sup_doc
     return sup_doc
 
 def lazy_import_company_settings():
@@ -37,51 +37,13 @@ def lazy_import_lesson_plan():
     import generate_ap_fg_lg_lp.lesson_plan_generation as lesson_plan_generation
     return lesson_plan_generation
 
+def lazy_import_extract_course_info():
+    import extract_course_info.extract_course_info as extract_course_info
+    return extract_course_info
 
-def display_homepage():
-    """Display homepage with navigation boxes"""
-    st.markdown("""
-        <style>
-            .block-container { padding-top: 1rem; }
-            .card-header { text-align: center; font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem; }
-            .card-desc { text-align: center; font-size: 0.8rem; color: #888; margin-bottom: 0.5rem; }
-        </style>
-    """, unsafe_allow_html=True)
-    st.markdown("<h2 style='text-align: center; font-size: 1.75rem;'>WSQ Courseware Generator with Claude Code</h2>", unsafe_allow_html=True)
-
-    modules = [
-        {"name": "Generate AP/FG/LG", "icon": "📚", "desc": "Generate Courseware Documents", "menu": "Generate AP/FG/LG"},
-        {"name": "Generate Lesson Plan", "icon": "📋", "desc": "Generate Lesson Plan with Schedule", "menu": "Generate Lesson Plan"},
-        {"name": "Generate Assessment", "icon": "✅", "desc": "Create Assessment Materials", "menu": "Generate Assessment"},
-        {"name": "Generate Slides", "icon": "🎯", "desc": "Create Presentation Slides", "menu": "Generate Slides"},
-        {"name": "Generate Brochure", "icon": "📰", "desc": "Design Course Brochures", "menu": "Generate Brochure"},
-        {"name": "Add Assessment to AP", "icon": "📎", "desc": "Attach Assessments to AP", "menu": "Add Assessment to AP"},
-        {"name": "Courseware Audit", "icon": "🔍", "desc": "Validate Supporting Documents", "menu": "Courseware Audit"},
-    ]
-
-    for i in range(0, len(modules), 2):
-        col1, col2 = st.columns(2)
-
-        with col1:
-            m = modules[i]
-            with st.container(border=True):
-                st.markdown(f"<div class='card-header'>{m['icon']} {m['name']}</div>", unsafe_allow_html=True)
-                st.markdown(f"<div class='card-desc'>{m['desc']}</div>", unsafe_allow_html=True)
-                if st.button("Open", key=f"nav_{i}", use_container_width=True):
-                    st.session_state['current_page'] = m['menu']
-                    st.session_state['settings_page'] = None
-                    st.rerun()
-
-        with col2:
-            if i + 1 < len(modules):
-                m = modules[i + 1]
-                with st.container(border=True):
-                    st.markdown(f"<div class='card-header'>{m['icon']} {m['name']}</div>", unsafe_allow_html=True)
-                    st.markdown(f"<div class='card-desc'>{m['desc']}</div>", unsafe_allow_html=True)
-                    if st.button("Open", key=f"nav_{i+1}", use_container_width=True):
-                        st.session_state['current_page'] = m['menu']
-                        st.session_state['settings_page'] = None
-                        st.rerun()
+def lazy_import_settings():
+    import settings.settings as settings_module
+    return settings_module
 
 
 # =============================================================================
@@ -155,7 +117,7 @@ with st.sidebar:
 
     # Navigation menu
     menu_options = [
-        "Home",
+        "Extract Course Info",
         "Generate AP/FG/LG",
         "Generate Lesson Plan",
         "Generate Assessment",
@@ -166,7 +128,7 @@ with st.sidebar:
     ]
 
     menu_icons = [
-        "house",
+        "file-earmark-text",
         "file-earmark-richtext",
         "journal-text",
         "clipboard-check",
@@ -178,7 +140,7 @@ with st.sidebar:
 
     # Initialize current page
     if 'current_page' not in st.session_state:
-        st.session_state['current_page'] = "Home"
+        st.session_state['current_page'] = "Extract Course Info"
 
     current_page = st.session_state['current_page']
     if current_page in menu_options:
@@ -210,6 +172,10 @@ with st.sidebar:
         st.session_state['settings_page'] = "Company Management"
         st.rerun()
 
+    if st.button("Prompt Templates", use_container_width=True):
+        st.session_state['settings_page'] = "Settings"
+        st.rerun()
+
     # Footer
     st.markdown("---")
     st.markdown("""
@@ -235,15 +201,20 @@ if menu_changed:
 # =============================================================================
 
 settings_page = st.session_state.get('settings_page', None)
-page_to_display = st.session_state.get('current_page', 'Home')
+page_to_display = st.session_state.get('current_page', 'Extract Course Info')
 
 if settings_page == "Company Management":
     company_settings = lazy_import_company_settings()
     company_settings.company_management_app()
 
-elif page_to_display == "Home":
+elif settings_page == "Settings":
+    settings_module = lazy_import_settings()
+    settings_module.app()
+
+elif page_to_display == "Extract Course Info":
     st.session_state['settings_page'] = None
-    display_homepage()
+    extract_course_info = lazy_import_extract_course_info()
+    extract_course_info.app()
 
 elif page_to_display == "Generate AP/FG/LG":
     st.session_state['settings_page'] = None

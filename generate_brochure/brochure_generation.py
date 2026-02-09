@@ -128,7 +128,7 @@ except ImportError:
 # Note: WeasyPrint import moved to inside PDF generation function to avoid import errors
 
 # Base directory for brochure template assets (e.g., images)
-TEMPLATE_ASSET_DIR = (Path(__file__).resolve().parent / "brochure_template").resolve()
+TEMPLATE_ASSET_DIR = (Path(__file__).resolve().parent.parent / ".claude" / "skills" / "generate_brochure" / "templates").resolve()
 
 # Helper for xhtml2pdf to resolve relative asset URIs (e.g., images) to filesystem paths
 def _xhtml2pdf_link_callback(uri, rel):
@@ -1599,9 +1599,7 @@ def populate_brochure_template(course_data: CourseData) -> str:
     Returns:
         str: Populated HTML content
     """
-    # Get the correct path to the brochure template
-    current_dir = Path(__file__).parent  # Current module directory
-    template_path = current_dir / "brochure_template" / "brochure.html"
+    template_path = TEMPLATE_ASSET_DIR / "brochure.html"
     
     try:
         with open(template_path, 'r', encoding='utf-8') as f:

@@ -1,14 +1,15 @@
 # Examples
 
 ## Trigger Phrases
-- "/check_documents"
+- "/courseware_audit"
+- "courseware audit"
 - "check documents"
 
 ## Example Prompts
 
 ### Basic Usage
 ```
-User: I want to check documents
+User: I want to audit my courseware
 ```
 
 ### With Context
