@@ -38,6 +38,7 @@ data/
 
 # Input/Output working directories (user-specific data, not part of codebase)
 output/
+.output/
 
 # Generated outputs (created at runtime)
 generate_assessment/output/*
@@ -60,11 +61,12 @@ nul
 !.claude/skills/
 !.claude/commands/
 
-# Allow template files in skills directories
+# Allow template and prompt files in skills directories
 !.claude/skills/**/templates/*.docx
 !.claude/skills/**/templates/*.xlsx
 !.claude/skills/**/templates/*.pptx
 !.claude/skills/**/data/*.xlsx
+!.claude/skills/**/prompts/*.md
 
 # Temporary files
 temp/

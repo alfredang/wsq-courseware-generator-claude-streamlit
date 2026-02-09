@@ -1,9 +1,7 @@
 """
 Settings Database Module
 
-SQLite-based storage for:
-- Admin credentials (authentication)
-- Prompt templates (customizable AI prompts)
+SQLite-based storage for prompt templates (customizable AI prompts).
 
 Author: Claude Code
 Date: February 2026
@@ -11,8 +9,6 @@ Date: February 2026
 
 import sqlite3
 import os
-import hashlib
-import secrets
 from typing import Dict, List, Any, Optional
 from contextlib import contextmanager
 
@@ -46,18 +42,6 @@ def init_database():
     with get_connection() as conn:
         cursor = conn.cursor()
 
-        # Admin credentials table
-        cursor.execute("""
-            CREATE TABLE IF NOT EXISTS admin_credentials (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                username TEXT UNIQUE NOT NULL,
-                password_hash TEXT NOT NULL,
-                salt TEXT,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-
         # Prompt templates table
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS prompt_templates (
@@ -85,166 +69,20 @@ def init_database():
 
         conn.commit()
 
-        # Migrate password hashing if needed
-        _migrate_password_hashing(conn)
-
-    # Seed default admin credentials if not exists
-    _seed_admin_credentials()
-
     # Seed built-in prompt templates if not exists
     _seed_builtin_prompt_templates()
-
-
-def _migrate_password_hashing(conn):
-    """Add salt column if missing (migration from SHA-256 to PBKDF2)"""
-    cursor = conn.cursor()
-    cursor.execute("PRAGMA table_info(admin_credentials)")
-    columns = [col[1] for col in cursor.fetchall()]
-
-    if 'salt' not in columns:
-        try:
-            cursor.execute("ALTER TABLE admin_credentials ADD COLUMN salt TEXT")
-            conn.commit()
-        except Exception:
-            pass
-
-
-# ============ Password Hashing ============
-
-def _hash_password(password: str, salt: str = None) -> tuple:
-    """Hash password using PBKDF2-HMAC-SHA256 with random salt.
-
-    Returns:
-        Tuple of (password_hash, salt)
-    """
-    if salt is None:
-        salt = secrets.token_hex(32)
-    password_hash = hashlib.pbkdf2_hmac(
-        'sha256', password.encode(), salt.encode(), iterations=100_000
-    ).hex()
-    return password_hash, salt
-
-
-def _verify_password(password: str, stored_hash: str, salt: str = None) -> bool:
-    """Verify password against stored hash.
-
-    Supports both legacy SHA-256 (no salt) and PBKDF2 (with salt).
-    """
-    if salt:
-        computed_hash, _ = _hash_password(password, salt)
-        return computed_hash == stored_hash
-    else:
-        # Legacy SHA-256 fallback
-        legacy_hash = hashlib.sha256(password.encode()).hexdigest()
-        return legacy_hash == stored_hash
-
-
-# ============ Admin Credentials Operations ============
-
-def _seed_admin_credentials():
-    """Seed default admin credentials if not exists (only on first run)"""
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM admin_credentials")
-        count = cursor.fetchone()[0]
-
-        if count == 0:
-            username = os.environ.get("ADMIN_USERNAME", "admin")
-            password = os.environ.get("ADMIN_PASSWORD", "")
-
-            if password:
-                password_hash, salt = _hash_password(password)
-                cursor.execute("""
-                    INSERT INTO admin_credentials (username, password_hash, salt)
-                    VALUES (?, ?, ?)
-                """, (username, password_hash, salt))
-                conn.commit()
-
-
-def get_admin_credentials_from_db() -> Optional[Dict[str, str]]:
-    """Get admin credentials from database"""
-    init_database()
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT username, password_hash, salt FROM admin_credentials LIMIT 1")
-        row = cursor.fetchone()
-
-        if row:
-            return {
-                "username": row["username"],
-                "password_hash": row["password_hash"],
-                "salt": row["salt"],
-            }
-        return None
-
-
-def set_admin_credentials(username: str, password: str) -> bool:
-    """Set or update admin credentials in database"""
-    init_database()
-    try:
-        password_hash, salt = _hash_password(password)
-        with get_connection() as conn:
-            cursor = conn.cursor()
-            cursor.execute("DELETE FROM admin_credentials")
-            cursor.execute("""
-                INSERT INTO admin_credentials (username, password_hash, salt)
-                VALUES (?, ?, ?)
-            """, (username, password_hash, salt))
-            return True
-    except Exception as e:
-        print(f"Error setting admin credentials: {e}")
-        return False
-
-
-def verify_admin_password(username: str, password: str) -> bool:
-    """Verify admin credentials against database"""
-    creds = get_admin_credentials_from_db()
-
-    if not creds:
-        _seed_admin_credentials()
-        creds = get_admin_credentials_from_db()
-        if not creds:
-            return False
-
-    if creds["username"] != username:
-        return False
-
-    is_valid = _verify_password(password, creds["password_hash"], creds.get("salt"))
-
-    # Auto-upgrade legacy SHA-256 hash to PBKDF2 on successful login
-    if is_valid and not creds.get("salt"):
-        set_admin_credentials(username, password)
-
-    return is_valid
-
-
-def admin_credentials_exist() -> bool:
-    """Check if admin credentials have been set up"""
-    init_database()
-    with get_connection() as conn:
-        cursor = conn.cursor()
-        cursor.execute("SELECT COUNT(*) FROM admin_credentials")
-        count = cursor.fetchone()[0]
-        return count > 0
 
 
 # ============ Prompt Templates Operations ============
 
 BUILTIN_PROMPT_TEMPLATES = [
-    # --- Courseware ---
+    # --- Courseware (AP/FG/LG) ---
     {
         "category": "courseware",
         "name": "learner_guide",
         "display_name": "[LG] Learner Guide - Content Generation",
         "description": "Generate Course Overview and Learning Outcome descriptions for the Learner Guide",
         "variables": ""
-    },
-    {
-        "category": "courseware",
-        "name": "timetable_generation",
-        "display_name": "[LP] Lesson Plan - Timetable Generation",
-        "description": "Generate WSQ-compliant lesson plan timetables with session scheduling",
-        "variables": "num_of_days, list_of_im"
     },
     {
         "category": "courseware",
@@ -259,6 +97,14 @@ BUILTIN_PROMPT_TEMPLATES = [
         "display_name": "[AP] Assessment Plan - Evidence & Justification",
         "description": "Generate structured justifications for assessment methods including Assessment Record & Summary",
         "variables": "course_title, learning_outcomes, extracted_content, assessment_methods"
+    },
+    # --- Lesson Plan ---
+    {
+        "category": "lesson_plan",
+        "name": "timetable_generation",
+        "display_name": "Timetable/Lesson Plan Generation",
+        "description": "Generate WSQ-compliant lesson plan timetables with session scheduling",
+        "variables": "num_of_days, list_of_im"
     },
     # --- Assessment ---
     {
@@ -324,6 +170,14 @@ BUILTIN_PROMPT_TEMPLATES = [
         "description": "Generate Oral Questioning assessment with probing questions",
         "variables": ""
     },
+    # --- Slides ---
+    {
+        "category": "slides",
+        "name": "slide_generation",
+        "display_name": "Slide Deck Generation",
+        "description": "Instructions for generating presentation slides via NotebookLM",
+        "variables": ""
+    },
     # --- Brochure ---
     {
         "category": "brochure",
@@ -336,17 +190,26 @@ BUILTIN_PROMPT_TEMPLATES = [
 
 
 def _load_prompt_file_content(category: str, name: str) -> str:
-    """Load prompt content from markdown file"""
+    """Load prompt content from markdown file in skills folders."""
     current_file = os.path.abspath(__file__)
     settings_dir = os.path.dirname(current_file)
     project_root = os.path.dirname(settings_dir)
 
-    possible_paths = [
-        os.path.join(project_root, "utils", "prompt_templates", category, f"{name}.md"),
-        os.path.join(project_root, "prompt_templates", category, f"{name}.md"),
-    ]
+    # Search in .claude/skills/*/prompts/ directories
+    skills_dir = os.path.join(project_root, ".claude", "skills")
+    if os.path.isdir(skills_dir):
+        for skill_name in os.listdir(skills_dir):
+            prompt_path = os.path.join(skills_dir, skill_name, "prompts", f"{name}.md")
+            if os.path.exists(prompt_path):
+                try:
+                    with open(prompt_path, 'r', encoding='utf-8') as f:
+                        return f.read()
+                except Exception as e:
+                    print(f"Error reading prompt file {prompt_path}: {e}")
 
-    for prompt_path in possible_paths:
+    # Legacy fallback paths
+    for legacy_dir in ["utils/prompt_templates", "prompt_templates"]:
+        prompt_path = os.path.join(project_root, legacy_dir, category, f"{name}.md")
         if os.path.exists(prompt_path):
             try:
                 with open(prompt_path, 'r', encoding='utf-8') as f:

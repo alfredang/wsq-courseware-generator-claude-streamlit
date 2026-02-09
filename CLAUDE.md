@@ -29,16 +29,15 @@ courseware_claude_streamlit/
 │   ├── base.py                  # Core run_agent() / run_agent_json()
 │   ├── cp_interpreter.py        # Course Proposal interpretation agent
 │   ├── assessment_generator.py  # Assessment question generation agent
-│   ├── timetable_agent.py       # Lesson plan timetable agent
-│   └── entity_extractor.py      # Entity extraction agent
-├── generate_ap_fg_lg_lp/        # Courseware documents (AP, FG, LG)
+│   └── slides_agent.py          # Slide generation analysis agent
+├── generate_ap_fg_lg/           # Courseware documents (AP, FG, LG)
 │   ├── courseware_generation.py  # Streamlit page
 │   └── utils/                   # Template filling modules
-├── generate_ap_fg_lg_lp/        # Lesson Plan
-│   └── lesson_plan_generation.py
+├── generate_lp/                 # Lesson Plan (standalone)
+│   ├── lesson_plan_generation.py # Streamlit page
+│   └── timetable_generator.py   # Pure Python barrier algorithm
 ├── generate_assessment/         # Assessment generation
-│   ├── assessment_generation.py # Streamlit page
-│   └── utils/                   # Template filling modules
+│   └── assessment_generation.py # Streamlit page
 ├── generate_slides/             # Slides generation (NotebookLM MCP)
 │   └── slides_generation.py
 ├── generate_brochure/           # Brochure generation (web scraping)
@@ -49,18 +48,17 @@ courseware_claude_streamlit/
 │   └── sup_doc.py
 ├── extract_course_info/         # CP parsing (pure Python, no AI)
 │   └── extract_course_info.py
-├── settings/                    # Settings & authentication
-│   ├── settings.py              # Prompt Templates UI
-│   ├── admin_auth.py            # Admin authentication
-│   ├── api_database.py          # SQLite (admin creds, prompt templates)
-│   └── model_configs.py         # Claude model ID definitions
+├── settings/                    # Settings
+│   └── api_database.py          # SQLite (prompt templates)
 ├── company/                     # Company management (PostgreSQL)
 │   ├── company_settings.py      # Company management UI
 │   ├── company_manager.py       # Company utilities
 │   └── database.py              # PostgreSQL connection
 ├── utils/                       # Shared utilities
-│   ├── claude_model_client.py   # Model ID mapping
-│   └── prompt_loader.py         # Prompt template loader
+│   ├── agent_runner.py          # Background agent job manager
+│   ├── agent_status.py          # Agent status UI components
+│   ├── helpers.py               # File & JSON utilities
+│   └── prompt_template_editor.py # Prompt template editing UI
 ├── .claude/skills/              # Claude Code skill definitions
 └── prompt_templates/            # Prompt template markdown files
 ```
@@ -121,7 +119,7 @@ Skills are defined in `.claude/skills/<skill_name>/`:
 
 ## Document Generation
 
-Templates stored in `generate_ap_fg_lg_lp/utils/`:
+Templates stored in `generate_ap_fg_lg/utils/`:
 - Assessment Plan (AP)
 - Facilitator Guide (FG)
 - Learner Guide (LG)

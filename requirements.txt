@@ -1,9 +1,6 @@
 # Core dependencies (Python 3.13)
 beautifulsoup4
 docxtpl
-google-api-python-client
-google-auth-httplib2
-google-auth-oauthlib
 pydantic>=2.0.0
 openpyxl
 pandas
@@ -11,14 +8,10 @@ Pillow
 python-docx
 docxcompose
 requests
-lxml
 pypdf2
-gspread
-rapidfuzz
 python-dotenv
 psycopg2-binary
 jinja2
-asyncpg
 
 # Streamlit (UI Framework)
 streamlit>=1.30.0
@@ -27,9 +20,6 @@ streamlit-modal
 
 # Claude Agent SDK (agentic AI processing)
 claude-agent-sdk
-
-# Claude API (used by Agent SDK internally)
-anthropic>=0.45.0
 
 # NotebookLM (slide generation)
 notebooklm-py[browser]

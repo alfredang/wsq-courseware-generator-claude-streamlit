@@ -96,10 +96,13 @@ courseware_claude_streamlit/
 │   ├── assessment_generator.py     # FG → assessment questions
 │   └── slides_agent.py             # Document → slide instructions
 │
-├── generate_ap_fg_lg_lp/           # Courseware generation
+├── generate_ap_fg_lg/              # Courseware generation (AP/FG/LG)
 │   ├── courseware_generation.py     # AP/FG/LG Streamlit page
-│   ├── lesson_plan_generation.py   # Lesson Plan page
-│   └── utils/                      # Template filling & timetable
+│   └── utils/                      # Template filling modules
+│
+├── generate_lp/                    # Lesson Plan generation
+│   ├── lesson_plan_generation.py   # Lesson Plan Streamlit page
+│   └── timetable_generator.py      # Pure Python barrier algorithm
 │
 ├── generate_assessment/            # Assessment generation
 │   └── assessment_generation.py    # Assessment Streamlit page

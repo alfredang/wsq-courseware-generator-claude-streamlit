@@ -28,8 +28,8 @@ The Assessment Plan extracts data from the Course Proposal Excel file, including
 
 ## Templates
 
-- Assessment Plan: `generate_ap_fg_lg_lp/input/Template/AP_TGS-Ref-No_Course-Title_v1.docx`
-- Assessment Summary Report: `generate_ap_fg_lg_lp/input/Template/ASR_TGS-Ref-No_Course-Title_v1.docx`
+- Assessment Plan: `generate_ap_fg_lg/input/Template/AP_TGS-Ref-No_Course-Title_v1.docx`
+- Assessment Summary Report: `generate_ap_fg_lg/input/Template/ASR_TGS-Ref-No_Course-Title_v1.docx`
 
 ## Key Features
 

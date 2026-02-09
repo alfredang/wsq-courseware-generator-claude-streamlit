@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 import streamlit as st
 from typing import Dict, Any, Optional
-from generate_ap_fg_lg_lp.utils.organizations import get_organizations, get_default_organization, replace_company_branding
+from generate_ap_fg_lg.utils.organizations import get_organizations, get_default_organization, replace_company_branding
 
 def get_selected_company() -> Dict[str, Any]:
     """Get the currently selected company from session state"""

@@ -78,13 +78,16 @@ RULES:
 """
 
 
-async def interpret_cp(parsed_cp_path: str, output_path: str = None) -> dict:
+async def interpret_cp(parsed_cp_path: str, output_path: str = None,
+                       course_ref_code: str = None, course_url: str = None) -> dict:
     """
     Interpret a parsed Course Proposal and extract structured course data.
 
     Args:
         parsed_cp_path: Path to the parsed CP text file (output/parsed_cp.md).
         output_path: Path to save the context JSON. Defaults to output/context.json.
+        course_ref_code: Optional TGS reference code to supplement missing data.
+        course_url: Optional course URL to fetch and supplement missing data.
 
     Returns:
         Structured course data as a dict.
@@ -96,6 +99,15 @@ async def interpret_cp(parsed_cp_path: str, output_path: str = None) -> dict:
     with open(parsed_cp_path, 'r', encoding='utf-8') as f:
         cp_text = f.read()
 
+    # Build supplementary info section
+    supplement = ""
+    if course_ref_code:
+        supplement += f"\n\nCourse Reference Code (TGS): {course_ref_code}"
+        supplement += "\nUse this as the TGS_Ref_No value."
+    if course_url:
+        supplement += f"\n\nA course URL has been provided: {course_url}"
+        supplement += "\nUse the WebFetch tool to fetch this URL and extract any missing information (e.g. Course_Fee, TGS_Ref_No, Course_Title, course description, etc.) to supplement the CP data."
+
     prompt = f"""Read the following parsed Course Proposal document and extract ALL structured course information into JSON format.
 
 Follow the JSON schema exactly as specified in your instructions.
@@ -103,13 +115,18 @@ Follow the JSON schema exactly as specified in your instructions.
 --- PARSED COURSE PROPOSAL ---
 {cp_text}
 --- END ---
+{supplement}
 
 Return ONLY the JSON object, no additional text."""
+
+    tools = ["Read", "Glob", "Grep"]
+    if course_url:
+        tools.append("WebFetch")
 
     context = await run_agent_json(
         prompt=prompt,
         system_prompt=SYSTEM_PROMPT,
-        tools=["Read", "Glob", "Grep"],
+        tools=tools,
         max_turns=10,
     )
 

@@ -21,11 +21,11 @@ import json
 import tempfile
 import re
 import hashlib
-import asyncio
 
 from copy import deepcopy
 from docx import Document
-from docxtpl import DocxTemplate
+from docx.shared import Pt, Inches, RGBColor
+from docx.enum.text import WD_ALIGN_PARAGRAPH
 from company.company_manager import get_selected_company, get_company_template
 
 # Try to import pymupdf, fallback to pypdf2
@@ -91,7 +91,7 @@ def extract_pdf_text(pdf_path):
 def parse_fg(fg_path):
     """Parse Facilitator Guide document using python-docx."""
     # Create cache directory
-    cache_dir = "data/fg_cache"
+    cache_dir = ".output/fg_cache"
     os.makedirs(cache_dir, exist_ok=True)
 
     # Generate cache key from file content hash
@@ -238,269 +238,249 @@ def _ensure_list(answer):
 ################################################################################
 # Generate documents (Question and Answer papers) - Template filling only
 ################################################################################
-def generate_documents(context: dict, assessment_type: str, output_dir: str) -> dict:
-    """Fill assessment document templates with pre-generated content."""
+def _build_assessment_doc(context: dict, assessment_type: str, questions: list, include_answers: bool) -> Document:
+    """Build an assessment Word document programmatically."""
+    doc = Document()
+
+    # Set default font
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(11)
+
+    # Title
+    title = doc.add_heading(level=1)
+    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run = title.add_run(f"{'Answer Key' if include_answers else 'Question Paper'} - {assessment_type}")
+    run.font.color.rgb = RGBColor(0x44, 0x72, 0xC4)
+
+    # Course info
+    course_title = context.get('course_title', '')
+    company_name = context.get('company_name', '')
+    duration = context.get('duration', '')
+
+    info_table = doc.add_table(rows=3, cols=2)
+    info_table.style = 'Light Grid Accent 1'
+    info_cells = [
+        ("Course Title", course_title),
+        ("Company", company_name),
+        ("Duration", duration),
+    ]
+    for i, (label, value) in enumerate(info_cells):
+        info_table.cell(i, 0).text = label
+        info_table.cell(i, 1).text = str(value)
+        for cell in [info_table.cell(i, 0), info_table.cell(i, 1)]:
+            for p in cell.paragraphs:
+                for r in p.runs:
+                    r.font.size = Pt(10)
+
+    doc.add_paragraph()
+
+    # Questions
+    for idx, q in enumerate(questions, 1):
+        # Question number heading
+        q_heading = doc.add_heading(level=2)
+        q_heading.add_run(f"Question {idx}")
+
+        # Scenario
+        scenario = q.get('scenario', '')
+        if scenario:
+            p = doc.add_paragraph()
+            run = p.add_run("Scenario: ")
+            run.bold = True
+            run.font.size = Pt(11)
+            run = p.add_run(scenario)
+            run.font.size = Pt(11)
+
+        # Question statement
+        question_text = q.get('question_statement', q.get('question', ''))
+        if question_text:
+            p = doc.add_paragraph()
+            run = p.add_run(question_text)
+            run.font.size = Pt(11)
+
+        # Reference IDs
+        refs = []
+        if q.get('knowledge_id'):
+            refs.append(f"K: {q['knowledge_id']}")
+        if q.get('ability_id'):
+            aids = q['ability_id'] if isinstance(q['ability_id'], list) else [q['ability_id']]
+            refs.append(f"A: {', '.join(aids)}")
+        if q.get('learning_outcome_id'):
+            lo = q['learning_outcome_id']
+            if isinstance(lo, list):
+                lo = ', '.join(lo)
+            refs.append(f"LO: {lo}")
+        if refs:
+            p = doc.add_paragraph()
+            run = p.add_run(f"[{' | '.join(refs)}]")
+            run.font.size = Pt(9)
+            run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+
+        # Answer (only if include_answers)
+        if include_answers:
+            answers = _ensure_list(q.get('answer', []))
+            if answers:
+                p = doc.add_paragraph()
+                run = p.add_run("Answer:")
+                run.bold = True
+                run.font.size = Pt(11)
+                run.font.color.rgb = RGBColor(0x00, 0x70, 0x30)
+                for ans in answers:
+                    bp = doc.add_paragraph(str(ans), style='List Bullet')
+                    for r in bp.runs:
+                        r.font.size = Pt(11)
+        else:
+            # Blank answer space
+            doc.add_paragraph()
+            p = doc.add_paragraph()
+            run = p.add_run("Answer: " + "_" * 60)
+            run.font.size = Pt(11)
+            run.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
+
+        doc.add_paragraph()  # spacing
+
+    return doc
+
+
+def generate_documents(context: dict, assessment_type: str, output_dir: str, company: dict = None) -> dict:
+    """Generate assessment question paper and answer key as Word documents."""
     os.makedirs(output_dir, exist_ok=True)
 
-    # Get company template or fallback to default
-    selected_company = get_selected_company()
-    company_assessment_template = get_company_template("assessment")
-
-    if company_assessment_template:
-        qn_template = company_assessment_template
-        ans_template = company_assessment_template
-    else:
-        TEMPLATES = {
-            "QUESTION": f"generate_assessment/utils/Templates/(Template) {assessment_type} - Course Title - v1.docx",
-            "ANSWER": f"generate_assessment/utils/Templates/(Template) Answer to {assessment_type} - Course Title - v1.docx"
-        }
-        qn_template = TEMPLATES["QUESTION"]
-        ans_template = TEMPLATES["ANSWER"]
-
-    # Add company branding to context
+    selected_company = company if company is not None else get_selected_company()
     context['company_name'] = selected_company.get('name', 'Tertiary Infotech Academy Pte Ltd')
     context['company_uen'] = selected_company.get('uen', '201200696W')
     context['company_address'] = selected_company.get('address', '')
 
-    question_doc = DocxTemplate(qn_template)
-    answer_doc = DocxTemplate(ans_template)
+    questions = context.get("questions", [])
 
-    def format_questions(questions):
-        formatted = []
-        for q in questions:
-            formatted_q = {**q}
-            if "ability_id" in formatted_q:
-                ability_ids = formatted_q["ability_id"]
-                if not isinstance(ability_ids, list):
-                    formatted_q["ability_id"] = [ability_ids] if ability_ids else []
-                elif not ability_ids:
-                    formatted_q["ability_id"] = []
+    # Build question paper (no answers)
+    q_doc = _build_assessment_doc(context, assessment_type, questions, include_answers=False)
+    q_file = tempfile.NamedTemporaryFile(delete=False, suffix=f"_{assessment_type}_Questions.docx")
+    q_file.close()
+    q_doc.save(q_file.name)
 
-            if assessment_type in ["PP", "CS"]:
-                formatted_q.pop("learning_outcome_id", None)
-            else:
-                if "learning_outcome_id" not in formatted_q or not formatted_q["learning_outcome_id"]:
-                    formatted_q["learning_outcome_id"] = ""
-                elif isinstance(formatted_q["learning_outcome_id"], list):
-                    formatted_q["learning_outcome_id"] = ", ".join(formatted_q["learning_outcome_id"])
-
-            formatted.append(formatted_q)
-        return formatted
-
-    def deduplicate_questions(questions):
-        if assessment_type not in ["PP", "CS"]:
-            return questions
-        seen_abilities = set()
-        unique_questions = []
-        for q in questions:
-            ability_ids = q.get("ability_id", [])
-            if isinstance(ability_ids, list):
-                ability_key = tuple(sorted(ability_ids))
-            else:
-                ability_key = (ability_ids,)
-            if ability_key not in seen_abilities:
-                seen_abilities.add(ability_key)
-                unique_questions.append(q)
-        return unique_questions
-
-    deduped_questions = deduplicate_questions(context.get("questions", []))
-    formatted_questions = format_questions(deduped_questions)
-
-    answer_context = {
-        **context,
-        "questions": [
-            {**question, "answer": _ensure_list(question.get("answer"))}
-            for question in formatted_questions
-        ]
-    }
-    question_context = {
-        **context,
-        "questions": [
-            {**question, "answer": None}
-            for question in formatted_questions
-        ]
-    }
-
-    answer_doc.render(answer_context)
-    question_doc.render(question_context)
-
-    question_tempfile = tempfile.NamedTemporaryFile(
-        delete=False, suffix=f"_{assessment_type}_Questions.docx"
-    )
-    question_tempfile.close()
-
-    answer_tempfile = tempfile.NamedTemporaryFile(
-        delete=False, suffix=f"_{assessment_type}_Answers.docx"
-    )
-    answer_tempfile.close()
-
-    question_doc.save(question_tempfile.name)
-    answer_doc.save(answer_tempfile.name)
+    # Build answer key (with answers)
+    a_doc = _build_assessment_doc(context, assessment_type, questions, include_answers=True)
+    a_file = tempfile.NamedTemporaryFile(delete=False, suffix=f"_{assessment_type}_Answers.docx")
+    a_file.close()
+    a_doc.save(a_file.name)
 
     return {
         "ASSESSMENT_TYPE": assessment_type,
-        "QUESTION": question_tempfile.name,
-        "ANSWER": answer_tempfile.name
+        "QUESTION": q_file.name,
+        "ANSWER": a_file.name,
     }
 
 
 ################################################################################
 # Streamlit app
 ################################################################################
+DEFAULT_ASSESSMENT_PROMPT = """Generate assessment questions for the course: {course_title}
+
+Assessment types to generate: {assessment_types}
+
+Use the following course data including Learning Units, K/A statements,
+topics, and assessment method details to create comprehensive questions.
+
+--- COURSE CONTEXT ---
+{course_context}
+--- END ---
+
+{master_ka_list}
+
+Generate comprehensive assessment questions following the schema in your instructions.
+Return ONLY the JSON object."""
+
+
 def app():
     st.title("Generate Assessment")
 
     selected_company = get_selected_company()
+    extracted_info = st.session_state.get('extracted_course_info')
 
-    # Step 1: Upload and Parse FG
-    st.subheader("Step 1: Upload and Parse Facilitator Guide")
-    st.write("Upload your Facilitator Guide (.docx) to parse it. The parsed text will be saved for the Claude Code skill.")
+    # Prompt Templates (editable, collapsed)
+    from utils.prompt_template_editor import render_prompt_templates
+    render_prompt_templates("assessment", "Prompt Templates (Assessment)")
 
-    fg_doc_file = st.file_uploader("Upload Facilitator Guide (.docx)", type=["docx"])
+    # ----- Dependency check -----
+    from utils.agent_runner import submit_agent_job, get_job
+    from utils.agent_status import render_page_job_status
 
-    if fg_doc_file is not None and 'fg_parsed' not in st.session_state:
-        fg_filepath = None
-        try:
-            with st.spinner("Parsing Facilitator Guide..."):
-                import generate_assessment.utils.utils as utils
-                fg_filepath = utils.save_uploaded_file(fg_doc_file, "data")
-                fg_text = parse_fg(fg_filepath)
+    extract_job = get_job("extract_course_info")
+    if extract_job and extract_job.get("status") == "running":
+        st.info("Course info extraction is still running. Please wait for it to complete.")
 
-                # Save parsed FG
-                os.makedirs("output", exist_ok=True)
-                with open("output/parsed_fg.json", "w", encoding="utf-8") as f:
-                    f.write(fg_text)
-
-                # Extract K/A list for reference
-                master_list = extract_master_k_a_list(fg_text)
-                with open("output/fg_master_ka.json", "w", encoding="utf-8") as f:
-                    json.dump(master_list, f, indent=2)
-
-                st.session_state['fg_parsed'] = True
-                st.success("FG parsed successfully.")
-
-                if master_list['knowledge'] or master_list['abilities']:
-                    with st.expander("K/A Statements Found", expanded=False):
-                        st.write(f"**Knowledge:** {len(master_list['knowledge'])} | **Abilities:** {len(master_list['abilities'])}")
-
-        except Exception as e:
-            st.error(f"Error parsing Facilitator Guide: {e}")
-        finally:
-            if fg_filepath and os.path.exists(fg_filepath):
-                os.remove(fg_filepath)
-
-    # Clear parsing flags if file is removed
-    if fg_doc_file is None and 'fg_parsed' in st.session_state:
-        del st.session_state['fg_parsed']
-        if 'fg_data' in st.session_state:
-            del st.session_state['fg_data']
-        if 'assessment_generated_files' in st.session_state:
-            st.session_state['assessment_generated_files'] = {}
-
-    # Step 2: Generate or Load Assessment Context
-    st.subheader("Step 2: Generate Assessment Content")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-        if st.session_state.get('fg_parsed'):
-            if st.button("Generate with AI Agent", type="primary"):
-                try:
-                    with st.spinner("AI Agent generating assessments... This may take 1-2 minutes."):
-                        from courseware_agents.assessment_generator import generate_assessments
-                        result = asyncio.run(generate_assessments(
-                            fg_data_path="output/parsed_fg.json",
-                            master_ka_path="output/fg_master_ka.json",
-                        ))
-                        st.session_state['fg_data'] = result
-                        st.success(f"Assessment content generated: {result.get('course_title', 'Unknown')}")
-                        types = result.get('assessment_types', [])
-                        if types:
-                            st.info(f"Generated {len(types)} assessment type(s): {', '.join(t.get('type', t.get('code', '')) for t in types)}")
-                except Exception as e:
-                    st.error(f"Error generating assessments: {e}")
+    # Generate Assessment
+    if st.button("Generate Assessment", type="primary"):
+        if not extracted_info:
+            st.error("Please extract course info first.")
+        elif extract_job and extract_job.get("status") == "running":
+            st.warning("Please wait for course info extraction to complete.")
         else:
-            st.info("Upload and parse a Facilitator Guide first.")
+            # Pre-capture data for background thread (can't access session_state from thread)
+            _company = dict(selected_company)
+            _extracted_info = dict(extracted_info)
 
-    with col2:
-        st.write("Or load pre-generated context:")
+            def _fill_assessment_templates(result):
+                """Post-process: fill assessment templates in background thread."""
+                if not result or not isinstance(result, dict):
+                    return {"fg_data": result, "generated_files": {}}
 
-    context_json_file = st.file_uploader("Upload assessment context JSON", type=["json"], key="assessment_context_upload")
-
-    # Check for output/assessment_context.json
-    if os.path.exists("output/assessment_context.json") and not context_json_file:
-        st.info("Found `output/assessment_context.json` from Claude Code skill.")
-        if st.button("Load from output/assessment_context.json"):
-            try:
-                with open("output/assessment_context.json", "r", encoding="utf-8") as f:
-                    assessment_data = json.load(f)
-                st.session_state['fg_data'] = assessment_data
-                st.success(f"Assessment context loaded: {assessment_data.get('course_title', 'Unknown Course')}")
-
-                # Show what assessment types are available
-                if 'assessment_types' in assessment_data:
-                    types = assessment_data['assessment_types']
-                    st.info(f"Available assessment types: {', '.join(t.get('type', t.get('code', '')) for t in types)}")
-
-            except Exception as e:
-                st.error(f"Error loading assessment context: {e}")
-
-    if context_json_file:
-        try:
-            assessment_data = json.load(context_json_file)
-            st.session_state['fg_data'] = assessment_data
-            st.success(f"Assessment context loaded: {assessment_data.get('course_title', 'Unknown Course')}")
-        except Exception as e:
-            st.error(f"Error loading context JSON: {e}")
-
-    # Step 3: Generate Assessment Documents
-    st.subheader("Step 3: Generate Assessment Documents")
-
-    fg_data = st.session_state.get('fg_data')
-    if fg_data and isinstance(fg_data, dict):
-        # Check for pre-generated assessment types with questions
-        assessment_types = fg_data.get('assessment_types', [])
-
-        if assessment_types:
-            st.info(f"Found {len(assessment_types)} assessment type(s) ready for template filling.")
-
-            if st.button("Generate Assessment Documents", type="primary"):
-                st.session_state['assessment_generated_files'] = {}
-
+                assessment_types = result.get('assessment_types', [])
+                generated_files = {}
                 for assessment in assessment_types:
                     a_type = assessment.get('type', assessment.get('code', 'Unknown'))
                     questions = assessment.get('questions', [])
-
                     if not questions:
-                        st.warning(f"No questions found for {a_type}. Skipping.")
                         continue
-
                     try:
-                        with st.spinner(f"Generating {a_type} documents..."):
-                            context = {
-                                "course_title": fg_data.get('course_title', ''),
-                                "duration": assessment.get('duration', ''),
-                                "questions": questions,
-                            }
-                            files = generate_documents(context, a_type, "output")
-                            st.session_state['assessment_generated_files'][a_type] = files
+                        doc_context = {
+                            "course_title": result.get('course_title', ''),
+                            "duration": assessment.get('duration', ''),
+                            "questions": questions,
+                        }
+                        files = generate_documents(doc_context, a_type, ".output", company=_company)
+                        generated_files[a_type] = files
                     except Exception as e:
-                        st.error(f"Error generating {a_type}: {e}")
+                        print(f"Error generating {a_type}: {e}")
 
-                if st.session_state['assessment_generated_files']:
-                    st.success("Assessment documents generated successfully!")
-        else:
-            st.info("No assessment types found in context. Make sure the Claude Code skill generated assessment content with questions.")
+                return {"fg_data": result, "generated_files": generated_files}
 
-    # Step 4: Download
+            from courseware_agents.assessment_generator import generate_assessments
+            job = submit_agent_job(
+                key="generate_assessment",
+                label="Generate Assessment",
+                async_fn=generate_assessments,
+                kwargs={"course_context": _extracted_info},
+                post_process=_fill_assessment_templates,
+            )
+
+            if job is None:
+                st.warning("Assessment generation is already running.")
+            else:
+                st.rerun()
+
+    # ----- Agent Status -----
+    def _on_assessment_complete(job):
+        post = job.get("post_results") or {}
+        if post:
+            st.session_state['fg_data'] = post.get("fg_data")
+            st.session_state['assessment_generated_files'] = post.get("generated_files", {})
+
+    job_status = render_page_job_status(
+        "generate_assessment",
+        on_complete=_on_assessment_complete,
+        running_message="AI Agent generating assessments...",
+    )
+
+    # Download
     generated_files = st.session_state.get('assessment_generated_files', {})
     if generated_files and any(
         ((file_paths.get('QUESTION') and os.path.exists(file_paths.get('QUESTION'))) or
         (file_paths.get('ANSWER') and os.path.exists(file_paths.get('ANSWER'))))
         for file_paths in generated_files.values()
     ):
-        st.subheader("Step 4: Download Assessments")
-
         course_title = "Course Title"
         if st.session_state.get('fg_data'):
             course_title = st.session_state['fg_data'].get("course_title", "Course Title")
@@ -528,10 +508,57 @@ def app():
             mime="application/zip"
         )
 
-    # Reset Button
-    if st.button("Reset Course Data", type="primary"):
-        st.session_state['fg_data'] = None
-        st.session_state['assessment_generated_files'] = {}
-        if 'fg_parsed' in st.session_state:
-            del st.session_state['fg_parsed']
-        st.success("Course data has been reset.")
+    # =========================================================================
+    # Add Assessment to AP (Annex)
+    # =========================================================================
+    st.markdown("---")
+    st.subheader("Add Assessment to AP")
+
+    from add_assessment_to_ap.annex_assessment_v2 import merge_documents
+
+    plan_file = st.file_uploader(
+        "Upload Assessment Plan (.docx)",
+        type=["docx"],
+        key="plan_upload",
+        help="Upload the main Assessment Plan document"
+    )
+
+    assessment_types = ["WA (SAQ)", "PP", "CS", "Oral Questioning"]
+    assessment_files = {}
+
+    for a_type in assessment_types:
+        with st.expander(f"{a_type}", expanded=False):
+            col1, col2 = st.columns(2)
+            with col1:
+                q_file = st.file_uploader(
+                    "Question Paper", type=["docx"], key=f"q_{a_type}",
+                    help=f"Upload the question paper for {a_type}"
+                )
+            with col2:
+                a_file = st.file_uploader(
+                    "Answer Paper", type=["docx"], key=f"a_{a_type}",
+                    help=f"Upload the answer paper for {a_type}"
+                )
+            if q_file or a_file:
+                assessment_files[a_type] = {"question": q_file, "answer": a_file}
+
+    if st.button("Generate Merged Document", type="primary", key="merge_btn"):
+        if not plan_file:
+            st.error("Please upload an Assessment Plan document first.")
+        elif not assessment_files:
+            st.error("Please upload at least one Question or Answer paper.")
+        else:
+            try:
+                with st.spinner("Merging documents..."):
+                    merged_doc_bytes = merge_documents(plan_file, assessment_files)
+                st.success("Document merged successfully!")
+                base_name = os.path.splitext(plan_file.name)[0]
+                st.download_button(
+                    label="Download Merged Document",
+                    data=merged_doc_bytes,
+                    file_name=f"{base_name}_with_annex.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key="download_merged"
+                )
+            except Exception as e:
+                st.error(f"Error merging documents: {e}")

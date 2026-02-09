@@ -120,10 +120,10 @@ Both DOCX and PDF follow the same structure:
 
 ## Key Files
 
-- `generate_ap_fg_lg_lp/courseware_generation.py` — Streamlit page UI
-- `generate_ap_fg_lg_lp/utils/agentic_LP.py` — Lesson Plan generation agent
-- `generate_ap_fg_lg_lp/utils/timetable_generator.py` — Timetable/schedule builder
-- `generate_ap_fg_lg_lp/input/Template/LP_TGS-Ref-No_Course-Title_v1.docx` — DOCX template
+- `generate_ap_fg_lg/courseware_generation.py` — Streamlit page UI
+- `generate_ap_fg_lg/utils/agentic_LP.py` — Lesson Plan generation agent
+- `generate_ap_fg_lg/utils/timetable_generator.py` — Timetable/schedule builder
+- `generate_ap_fg_lg/input/Template/LP_TGS-Ref-No_Course-Title_v1.docx` — DOCX template
 
 ## Capabilities
 - Generate Lesson Plan (LP) documents

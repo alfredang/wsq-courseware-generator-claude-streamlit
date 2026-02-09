@@ -28,7 +28,7 @@ The Learner Guide extracts data from the Course Proposal Excel file, including:
 
 ## Template
 
-Uses DOCX template: `generate_ap_fg_lg_lp/input/Template/LG_TGS-Ref-No_Course-Title_v1.docx`
+Uses DOCX template: `generate_ap_fg_lg/input/Template/LG_TGS-Ref-No_Course-Title_v1.docx`
 
 ## Key Features
 

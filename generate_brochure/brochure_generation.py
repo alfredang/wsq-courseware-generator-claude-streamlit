@@ -1,34 +1,3 @@
-"""
-File: brochure_generation.py
-
-===============================================================================
-Brochure Generation v2 Module
-===============================================================================
-Description:
-    This module generates WSQ Course Brochures by web scraping course information
-    from provided URLs and populating the standardized brochure template.
-    Outputs are generated in both PDF and Word document formats.
-
-Main Functionalities:
-    • web_scrape_course_info(url): Scrapes course information from URL
-    • populate_brochure_template(course_data): Fills template with scraped data
-    • generate_brochure_outputs(html_content, course_title): Creates PDF and Word outputs
-    • app(): Streamlit web interface for the brochure generation process
-
-Dependencies:
-    - streamlit
-    - requests
-    - beautifulsoup4
-    - pdfkit or weasyprint
-    - jinja2
-
-Author:
-    Wong Xin Ping
-Date:
-    18 September 2025
-===============================================================================
-"""
-
 import streamlit as st
 import requests
 from bs4 import BeautifulSoup
@@ -2060,9 +2029,10 @@ def app():
     Streamlit web interface for Brochure Generation v2.
     """
     st.title("Generate Brochure")
-    st.markdown("Generate WSQ Course Brochures by web scraping course information from URLs")
-    
-    st.divider()
+
+    # Prompt Templates (editable, collapsed)
+    from utils.prompt_template_editor import render_prompt_templates
+    render_prompt_templates("brochure", "Prompt Templates (Brochure)")
     
     # URL Input Section
     st.subheader("🔗 Course URL")

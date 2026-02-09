@@ -15,7 +15,7 @@ from datetime import datetime
 from typing import Dict, List, Any
 from PIL import Image
 
-from generate_ap_fg_lg_lp.utils.organizations import get_organizations, save_organizations
+from generate_ap_fg_lg.utils.organizations import get_organizations, save_organizations
 
 
 def company_management_app():

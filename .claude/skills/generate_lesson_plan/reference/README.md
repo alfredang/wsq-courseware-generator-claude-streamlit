@@ -28,7 +28,7 @@ The Lesson Plan extracts data from the Course Proposal, including:
 
 ## Template
 
-Uses DOCX template: `generate_ap_fg_lg_lp/input/Template/LP_TGS-Ref-No_Course-Title_v1.docx`
+Uses DOCX template: `generate_ap_fg_lg/input/Template/LP_TGS-Ref-No_Course-Title_v1.docx`
 
 ## Key Features
 

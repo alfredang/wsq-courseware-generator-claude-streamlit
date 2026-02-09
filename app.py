@@ -1,7 +1,7 @@
 # app.py
 import streamlit as st
 from streamlit_option_menu import option_menu
-from generate_ap_fg_lg_lp.utils.organizations import get_organizations, get_default_organization
+from generate_ap_fg_lg.utils.organizations import get_organizations, get_default_organization
 
 
 # Lazy loading functions for better performance
@@ -10,16 +10,12 @@ def lazy_import_assessment():
     return assessment_generation
 
 def lazy_import_courseware():
-    import generate_ap_fg_lg_lp.courseware_generation as courseware_generation
+    import generate_ap_fg_lg.courseware_generation as courseware_generation
     return courseware_generation
 
 def lazy_import_brochure():
     import generate_brochure.brochure_generation as brochure_generation
     return brochure_generation
-
-def lazy_import_annex():
-    import add_assessment_to_ap.annex_assessment_v2 as annex_assessment_v2
-    return annex_assessment_v2
 
 def lazy_import_docs():
     import courseware_audit.sup_doc as sup_doc
@@ -34,16 +30,12 @@ def lazy_import_slides():
     return slides_generation
 
 def lazy_import_lesson_plan():
-    import generate_ap_fg_lg_lp.lesson_plan_generation as lesson_plan_generation
+    import generate_lp.lesson_plan_generation as lesson_plan_generation
     return lesson_plan_generation
 
 def lazy_import_extract_course_info():
     import extract_course_info.extract_course_info as extract_course_info
     return extract_course_info
-
-def lazy_import_settings():
-    import settings.settings as settings_module
-    return settings_module
 
 
 # =============================================================================
@@ -51,10 +43,6 @@ def lazy_import_settings():
 # =============================================================================
 
 st.set_page_config(layout="wide")
-
-# Default model - uses Claude Code subscription
-if 'selected_model' not in st.session_state:
-    st.session_state['selected_model'] = "default"
 
 # Global CSS
 st.markdown("""
@@ -82,6 +70,8 @@ default_org = get_cached_default_organization()
 # =============================================================================
 
 with st.sidebar:
+    st.markdown("## WSQ Courseware Generator")
+
     # Company Selection
     if organizations:
         company_names = [org["name"] for org in organizations]
@@ -123,7 +113,6 @@ with st.sidebar:
         "Generate Assessment",
         "Generate Slides",
         "Generate Brochure",
-        "Add Assessment to AP",
         "Courseware Audit",
     ]
 
@@ -134,7 +123,6 @@ with st.sidebar:
         "clipboard-check",
         "easel",
         "file-earmark-pdf",
-        "folder-symlink",
         "search",
     ]
 
@@ -172,9 +160,9 @@ with st.sidebar:
         st.session_state['settings_page'] = "Company Management"
         st.rerun()
 
-    if st.button("Prompt Templates", use_container_width=True):
-        st.session_state['settings_page'] = "Settings"
-        st.rerun()
+    # Running agents status
+    from utils.agent_status import render_sidebar_agent_status
+    render_sidebar_agent_status()
 
     # Footer
     st.markdown("---")
@@ -207,10 +195,6 @@ if settings_page == "Company Management":
     company_settings = lazy_import_company_settings()
     company_settings.company_management_app()
 
-elif settings_page == "Settings":
-    settings_module = lazy_import_settings()
-    settings_module.app()
-
 elif page_to_display == "Extract Course Info":
     st.session_state['settings_page'] = None
     extract_course_info = lazy_import_extract_course_info()
@@ -240,11 +224,6 @@ elif page_to_display == "Generate Brochure":
     st.session_state['settings_page'] = None
     brochure_generation = lazy_import_brochure()
     brochure_generation.app()
-
-elif page_to_display == "Add Assessment to AP":
-    st.session_state['settings_page'] = None
-    annex_assessment = lazy_import_annex()
-    annex_assessment.app()
 
 elif page_to_display == "Courseware Audit":
     st.session_state['settings_page'] = None

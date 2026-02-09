@@ -1,477 +1,325 @@
+"""
+Courseware Audit Module
+
+Upload AP, FG, LG, LP documents and cross-check consistency of key fields:
+TGS Ref Code, Course Title, Company Name, TSC Ref Code/Title,
+Learning Outcomes, Durations, Topics, Assessment Methods, Instructional Methods.
+"""
+
 import streamlit as st
-from courseware_audit.gemini_processor import extract_entities as _extract_entities_placeholder
 import os
 import asyncio
 import tempfile
-from PIL import Image
-import pandas as pd
-import io
-import gspread
-from rapidfuzz import fuzz
-from courseware_audit.acra_call import run_dataset_verifications, search_dataset_by_filters, search_dataset_by_query
-from PyPDF2 import PdfReader, PdfWriter
 import json
-from typing import Dict, Any, Union
-from oauth2client.service_account import ServiceAccountCredentials
+import pandas as pd
+from docx import Document
 
-# Optional imports - may not be available on all platforms
-FITZ_AVAILABLE = False
+# Optional PDF support
+PYMUPDF_AVAILABLE = False
 try:
-    import fitz  # PyMuPDF for PDF to image conversion
-    FITZ_AVAILABLE = True
+    import pymupdf
+    PYMUPDF_AVAILABLE = True
 except ImportError:
-    pass
+    try:
+        from PyPDF2 import PdfReader
+    except ImportError:
+        pass
 
-# Note: Entity extraction now uses OpenRouter via gemini_processor.py
-# The google.generativeai package is no longer required
 
-# ------------------------------
-# Helper Functions
-# ------------------------------
+DOC_TYPES = ["AP", "FG", "LG", "LP"]
 
-def unlock_pdf(file_bytes: bytes, password: str) -> bytes:
-    """
-    Unlock the PDF using the provided password and return the decrypted bytes.
-    Raises an exception if decryption fails.
-    """
-    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+
+def extract_text_from_docx(file_bytes):
+    """Extract all text from a DOCX file."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
         tmp.write(file_bytes)
         tmp_path = tmp.name
+
     try:
-        reader = PdfReader(tmp_path)
-        if reader.is_encrypted:
-            # decrypt returns an int (0 means failure, 1 means success)
-            if reader.decrypt(password) == 0:
-                raise Exception("File has not been decrypted (incorrect password?)")
-        writer = PdfWriter()
-        for page in reader.pages:
-            writer.add_page(page)
-        decrypted_buffer = io.BytesIO()
-        writer.write(decrypted_buffer)
-        decrypted_buffer.seek(0)
-        return decrypted_buffer.read()
+        doc = Document(tmp_path)
+        parts = []
+        for para in doc.paragraphs:
+            if para.text.strip():
+                parts.append(para.text.strip())
+        for table in doc.tables:
+            for row in table.rows:
+                cells = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+                if cells:
+                    parts.append(" | ".join(cells))
+        return "\n".join(parts)
     finally:
         os.remove(tmp_path)
 
-def convert_pdf_to_images(file_bytes: bytes) -> list:
-    """
-    Convert PDF bytes to a list of PIL images using PyMuPDF.
-    """
-    if not FITZ_AVAILABLE:
-        st.warning("PDF to image conversion not available (PyMuPDF not installed)")
-        return []
-    try:
-        doc = fitz.open("pdf", file_bytes)
-        images = []
-        for page in doc:
-            pix = page.get_pixmap()
-            img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
-            images.append(img)
-        return images
-    except Exception as e:
-        st.error(f"Error converting PDF to images: {e}")
-        return []
 
-# ------------------------------
-# GOOGLE SHEETS FUNCTIONS
-# ------------------------------
-# def get_google_sheet_data():
-#     # Get the current working directory
-#     current_dir = os.path.dirname(os.path.abspath(__file__))
-
-#     # Construct the full path to the service account JSON file
-#     service_account_path = os.path.join(current_dir, "ssg-api-calls-9d65ee02e639.json")
-#     try:
-#         # gc = gspread.service_account(filename="ssg-api-calls-9d65ee02e639.json")
-#         gc = gspread.service_account(filename=service_account_path)        
-#         spreadsheet = gc.open_by_key("14IjSXJ0pHG23evfULhrLJEFXXsegx3hBNJoNSgRcp1k")
-#         worksheet = spreadsheet.worksheet("Detailed Data View")
-#         data = worksheet.get_all_records()
-#         return data
-#     except Exception as e:
-#         st.error("Error loading Google Sheet data: " + str(e))
-#         return []
-
-def get_google_sheet_data():
-    # Get the current working directory
-    current_dir = os.path.dirname(os.path.abspath(__file__))
-
-    # Construct the full path to the service account JSON file
-    service_account_path = os.path.join(current_dir, "ssg-api-calls-9d65ee02e639.json")
-
-    # Check if service account file exists
-    if not os.path.exists(service_account_path):
-        return []
+def extract_text_from_pdf(file_bytes):
+    """Extract text from a PDF file."""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+        tmp.write(file_bytes)
+        tmp_path = tmp.name
 
     try:
-        # Define the scope
-        scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
-
-        # Authenticate using the service account JSON file
-        credentials = ServiceAccountCredentials.from_json_keyfile_name(service_account_path, scope)
-        gc = gspread.authorize(credentials)
-
-        spreadsheet = gc.open_by_key("14IjSXJ0pHG23evfULhrLJEFXXsegx3hBNJoNSgRcp1k")
-        worksheet = spreadsheet.worksheet("Detailed Data View")
-
-        # Get all values first to handle potential duplicate empty headers
-        all_values = worksheet.get_all_values()
-        if not all_values:
-            return []
-
-        # Get the header row and handle duplicates
-        headers = all_values[0]
-        cleaned_headers = []
-        header_count = {}
-
-        for header in headers:
-            if header.strip() == '':
-                # For empty headers, create a unique placeholder
-                empty_count = header_count.get('empty', 0) + 1
-                header_count['empty'] = empty_count
-                cleaned_headers.append(f'empty_col_{empty_count}')
-            else:
-                # For non-empty headers, ensure uniqueness
-                original_header = header.strip()
-                if original_header in header_count:
-                    header_count[original_header] += 1
-                    cleaned_headers.append(f'{original_header}_{header_count[original_header]}')
-                else:
-                    header_count[original_header] = 1
-                    cleaned_headers.append(original_header)
-
-        # Convert to list of dictionaries
-        data = []
-        for row_values in all_values[1:]:  # Skip header row
-            row_dict = {}
-            for i, value in enumerate(row_values):
-                if i < len(cleaned_headers):
-                    row_dict[cleaned_headers[i]] = value
-            data.append(row_dict)
-
-        return data
-    except Exception as e:
-        st.error("Error loading Google Sheet data: " + str(e))
-        return []
-
-def compute_similarity(a: str, b: str) -> float:
-    return fuzz.ratio(a, b)
-
-def find_best_match(extracted_fields: dict, sheet_data: list, threshold: float = 80) -> (dict, float):
-    best_match = None
-    best_score = 0
-    extracted_name = extracted_fields.get("name", "").lower().strip()
-    extracted_uen = extracted_fields.get("uen", "").lower().strip()
-    for row in sheet_data:
-        sheet_name = str(row.get("Trainee Name (as on government ID)", "")).lower().strip()
-        sheet_uen = str(row.get("Employer UEN (mandatory if sponsorship type = employer)", "")).lower().strip()
-        name_similarity = compute_similarity(extracted_name, sheet_name)
-        if extracted_uen:
-            uen_similarity = compute_similarity(extracted_uen, sheet_uen)
-            avg_similarity = (0.6 * name_similarity) + (0.4 * uen_similarity)
+        if PYMUPDF_AVAILABLE:
+            doc = pymupdf.open(tmp_path)
+            parts = []
+            for page in doc:
+                text = page.get_text()
+                if text.strip():
+                    parts.append(text.strip())
+            doc.close()
+            return "\n".join(parts)
         else:
-            avg_similarity = name_similarity
-        if avg_similarity > best_score:
-            best_score = avg_similarity
-            best_match = row
-    if best_score >= threshold:
-        return best_match, best_score
-    else:
-        return None, best_score
+            reader = PdfReader(tmp_path)
+            parts = []
+            for page in reader.pages:
+                text = page.extract_text() or ""
+                if text.strip():
+                    parts.append(text.strip())
+            return "\n".join(parts)
+    finally:
+        os.remove(tmp_path)
 
-def get_extracted_fields(extracted_entities: dict) -> list:
-    """
-    Returns a list of dictionaries (one per individual) with:
-      - name: Trainee name
-      - nric: Masked NRIC (if any)
-      - company: Company name
-      - uen: Company UEN
-    """
-    names = []
-    nrics = []
-    company = ""
-    uen = ""
-    for entity in extracted_entities.get("entities", []):
-        etype = entity.get("type", "").lower()
-        value = entity.get("value", "")
-        if "nric" in etype:
-            nrics.append(value)
-        elif ("person" in etype or ("name" in etype and "company" not in etype)):
-            names.append(value)
-        elif "company" in etype and not company:
-            company = value
-        elif "uen" in etype and not uen:
-            uen = value
-    num = max(len(names), len(nrics))
-    result = []
-    if num == 0:
-        result.append({"name": "", "nric": "", "company": company, "uen": uen})
-    else:
-        for i in range(num):
-            entry = {
-                "name": names[i] if i < len(names) else "",
-                "nric": nrics[i] if i < len(nrics) else "",
-                "company": company,
-                "uen": uen
-            }
-            result.append(entry)
-    return result
+
+def _normalize(val):
+    """Normalize a string for comparison."""
+    if val is None:
+        return ""
+    return str(val).strip().lower()
+
+
+def _compare_strings(values):
+    """Compare string values across documents. Returns (status, detail)."""
+    non_null = {k: v for k, v in values.items() if v and str(v).strip()}
+    if len(non_null) == 0:
+        return "missing", "Not found in any document"
+    if len(non_null) == 1:
+        return "single", f"Only in {list(non_null.keys())[0]}"
+    normalized = {k: _normalize(v) for k, v in non_null.items()}
+    unique_vals = set(normalized.values())
+    if len(unique_vals) == 1:
+        return "match", "Consistent"
+    return "mismatch", "MISMATCH"
+
+
+def _compare_lists(values):
+    """Compare list values across documents. Returns (status, detail)."""
+    non_null = {}
+    for k, v in values.items():
+        if v and isinstance(v, list) and len(v) > 0:
+            non_null[k] = set(_normalize(item) for item in v)
+    if len(non_null) == 0:
+        return "missing", "Not found in any document"
+    if len(non_null) == 1:
+        return "single", f"Only in {list(non_null.keys())[0]}"
+    all_sets = list(non_null.values())
+    if all(s == all_sets[0] for s in all_sets):
+        return "match", "Consistent"
+    return "mismatch", "MISMATCH"
+
+
+def _compare_durations(values):
+    """Compare duration dicts across documents. Returns (status, detail)."""
+    non_null = {}
+    for k, v in values.items():
+        if v and isinstance(v, dict):
+            total = v.get("total_hours") or v.get("training_hours")
+            if total:
+                non_null[k] = _normalize(total)
+    if len(non_null) == 0:
+        return "missing", "Not found in any document"
+    if len(non_null) == 1:
+        return "single", f"Only in {list(non_null.keys())[0]}"
+    unique_vals = set(non_null.values())
+    if len(unique_vals) == 1:
+        return "match", "Consistent"
+    return "mismatch", "MISMATCH"
+
+
+def run_cross_check(audit_results):
+    """Run cross-check comparison across all audit results."""
+    fields = [
+        ("TGS Ref Code", "tgs_ref_code", "string"),
+        ("Course Title", "course_title", "string"),
+        ("Company Name", "company_name", "string"),
+        ("TSC Ref Code", "tsc_ref_code", "string"),
+        ("TSC Title", "tsc_title", "string"),
+        ("Learning Outcomes", "learning_outcomes", "list"),
+        ("Durations", "durations", "duration"),
+        ("Topics", "topics", "list"),
+        ("Assessment Methods", "assessment_methods", "list"),
+        ("Instructional Methods", "instructional_methods", "list"),
+    ]
+
+    results = []
+    for display_name, field_key, field_type in fields:
+        values = {}
+        for doc_label, data in audit_results.items():
+            values[doc_label] = data.get(field_key)
+
+        if field_type == "string":
+            status, detail = _compare_strings(values)
+        elif field_type == "list":
+            status, detail = _compare_lists(values)
+        elif field_type == "duration":
+            status, detail = _compare_durations(values)
+        else:
+            status, detail = "unknown", ""
+
+        # Build row with values from each document
+        row = {"Field": display_name, "Status": detail}
+        for doc_label in audit_results:
+            val = values.get(doc_label)
+            if isinstance(val, list):
+                row[doc_label] = ", ".join(str(v) for v in val) if val else "-"
+            elif isinstance(val, dict):
+                parts = [f"{k}: {v}" for k, v in val.items() if v]
+                row[doc_label] = "; ".join(parts) if parts else "-"
+            else:
+                row[doc_label] = str(val) if val else "-"
+        row["_status"] = status
+        results.append(row)
+
+    return results
+
 
 def app():
-    # ------------------------------
-    # STREAMLIT UI & PROCESSING
-    # ------------------------------
     st.title("Courseware Audit")
 
-    custom_instructions = st.text_area(
-        "✍️ Enter your custom instructions for entity extraction:",
-        "Extract the name of the person this document belongs to, their company, company UEN (if available), masked NRIC, and the date of the document."
-    )
+    # Initialize session state
+    if "audit_docs" not in st.session_state:
+        st.session_state.audit_docs = {}
+    if "audit_results" not in st.session_state:
+        st.session_state.audit_results = {}
+
+    # Upload section
+    st.subheader("Upload Documents")
+    st.write("Upload your courseware documents and assign each a document type for cross-checking.")
 
     uploaded_files = st.file_uploader(
-        "📂 Upload PDF or image files", 
-        type=["pdf", "png", "jpg", "jpeg"], 
-        accept_multiple_files=True
+        "Upload courseware documents",
+        type=["docx", "pdf"],
+        accept_multiple_files=True,
+        key="audit_uploader",
     )
 
-    # Use session state to store unlocked file content and extracted data.
-    if "unlocked_files" not in st.session_state:
-        st.session_state.unlocked_files = {}
-    if "extracted_data" not in st.session_state:
-        st.session_state.extracted_data = {}
-    if "sheet_data" not in st.session_state:
-        st.session_state.sheet_data = get_google_sheet_data()
-
-    # ------------------------------
-    # Step 1: Preprocess Files (Unlock and Convert PDFs)
-    # ------------------------------
     if uploaded_files:
         for uploaded_file in uploaded_files:
-            file_extension = uploaded_file.name.split(".")[-1].lower()
-            # Skip if already processed.
-            if uploaded_file.name in st.session_state.unlocked_files:
-                continue
-            with tempfile.NamedTemporaryFile(delete=False, suffix=f".{file_extension}") as temp_file:
-                temp_file.write(uploaded_file.getvalue())
-                temp_file_path = temp_file.name
+            fname = uploaded_file.name
+            # Auto-detect doc type from filename
+            default_type = 0
+            fname_upper = fname.upper()
+            for i, dt in enumerate(DOC_TYPES):
+                if fname_upper.startswith(dt) or f"_{dt}_" in fname_upper or f"_{dt}." in fname_upper:
+                    default_type = i
+                    break
 
-            file_bytes = None
-            if file_extension == "pdf":
-                try:
-                    reader = PdfReader(temp_file_path)
-                    if reader.is_encrypted:
-                        password_key = f"password_{uploaded_file.name}"
-                        # Only show form if we haven't already stored a password.
-                        if not st.session_state.get(password_key, ""):
-                            with st.form(key=f"form_{uploaded_file.name}"):
-                                password = st.text_input(f"Enter password for {uploaded_file.name}:", type="password")
-                                submitted = st.form_submit_button("Unlock")
-                                if submitted and password:
-                                    st.session_state[password_key] = password
-                        # If password is stored, try to unlock.
-                        if st.session_state.get(password_key, ""):
-                            try:
-                                file_bytes = unlock_pdf(uploaded_file.getvalue(), st.session_state[password_key])
-                                st.success(f"{uploaded_file.name} unlocked successfully.")
-                            except Exception as de:
-                                st.error(f"Error unlocking {uploaded_file.name}: {de}")
-                                os.remove(temp_file_path)
-                                continue  # Skip processing if unlocking fails.
-                        else:
-                            st.warning(f"{uploaded_file.name} is password-protected. Please submit the password to unlock.")
-                            os.remove(temp_file_path)
-                            continue  # Skip until a password is provided.
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.text(fname)
+            with col2:
+                doc_type = st.selectbox(
+                    "Type",
+                    DOC_TYPES,
+                    index=default_type,
+                    key=f"type_{fname}",
+                    label_visibility="collapsed",
+                )
+
+            # Store the file data with its assigned type
+            st.session_state.audit_docs[f"{doc_type}: {fname}"] = {
+                "file": uploaded_file,
+                "type": doc_type,
+                "name": fname,
+            }
+
+    # Run Audit button
+    if st.button("Run Audit", type="primary"):
+        docs = st.session_state.audit_docs
+        if not docs or len(docs) < 2:
+            st.error("Please upload at least 2 documents to cross-check.")
+        else:
+            from courseware_audit.audit_agent import extract_audit_fields
+            from utils.agent_runner import submit_agent_job
+
+            # Pre-extract text from all documents
+            doc_texts = {}
+            for label, doc_info in docs.items():
+                file_obj = doc_info["file"]
+                fname = doc_info["name"]
+                file_bytes = file_obj.getvalue()
+
+                with st.spinner(f"Parsing {fname}..."):
+                    ext = fname.rsplit(".", 1)[-1].lower()
+                    if ext == "docx":
+                        text = extract_text_from_docx(file_bytes)
+                    elif ext == "pdf":
+                        text = extract_text_from_pdf(file_bytes)
                     else:
-                        with open(temp_file_path, "rb") as f:
-                            file_bytes = f.read()
-                except Exception as e:
-                    st.error(f"❌ Error processing PDF {uploaded_file.name}: {e}")
-            elif file_extension in ["png", "jpg", "jpeg"]:
-                try:
-                    image = Image.open(temp_file_path)
-                    img_byte_arr = io.BytesIO()
-                    image.save(img_byte_arr, format=image.format)
-                    file_bytes = img_byte_arr.getvalue()
-                except Exception as e:
-                    st.error(f"❌ Error processing image {uploaded_file.name}: {e}")
-            os.remove(temp_file_path)
-            if file_bytes:
-                if file_extension == "pdf":
+                        text = ""
+                    doc_texts[label] = (text, doc_info["type"])
+
+            # Run audit agent on each document
+            audit_results = {}
+            for label, (text, doc_type) in doc_texts.items():
+                if not text.strip():
+                    st.warning(f"No text extracted from {label}")
+                    continue
+                with st.spinner(f"AI Agent auditing {label}..."):
                     try:
-                        # Convert PDF bytes to a list of PIL images using PyMuPDF.
-                        pages = convert_pdf_to_images(file_bytes)
-                        if pages:
-                            st.session_state.unlocked_files[uploaded_file.name] = pages
-                            st.success(f"{uploaded_file.name} converted to {len(pages)} page(s).")
-                        else:
-                            st.error(f"❌ No pages extracted from {uploaded_file.name}.")
+                        result = asyncio.run(extract_audit_fields(text, doc_type))
+                        audit_results[label] = result
                     except Exception as e:
-                        st.error(f"❌ Error converting PDF {uploaded_file.name} to images: {e}")
-                else:
-                    try:
-                        image = Image.open(io.BytesIO(file_bytes))
-                        st.session_state.unlocked_files[uploaded_file.name] = image
-                    except Exception as e:
-                        st.error(f"❌ Error loading image {uploaded_file.name}: {e}")
+                        st.error(f"Error auditing {label}: {e}")
+                        audit_results[label] = {}
+
+            st.session_state.audit_results = audit_results
+            st.success(f"Audit complete. Analyzed {len(audit_results)} documents.")
+            st.rerun()
+
+    # Display results
+    if st.session_state.audit_results:
+        audit_results = st.session_state.audit_results
+
+        # Raw extraction results per document
+        with st.expander("Extracted Fields (per document)", expanded=False):
+            for label, data in audit_results.items():
+                st.markdown(f"**{label}**")
+                st.json(data)
+
+        # Cross-check comparison table
+        st.subheader("Cross-Check Results")
+        comparison = run_cross_check(audit_results)
+
+        if comparison:
+            df = pd.DataFrame(comparison)
+            # Remove internal status column for display
+            status_col = df.pop("_status")
+
+            def highlight_row(row):
+                idx = row.name
+                status = status_col.iloc[idx]
+                if status == "mismatch":
+                    return ["background-color: #ffcccc"] * len(row)
+                elif status == "match":
+                    return ["background-color: #ccffcc"] * len(row)
+                elif status == "single":
+                    return ["background-color: #fff3cc"] * len(row)
+                return [""] * len(row)
+
+            styled = df.style.apply(highlight_row, axis=1)
+            st.dataframe(styled, use_container_width=True, hide_index=True)
+
+            # Summary
+            statuses = status_col.tolist()
+            mismatches = statuses.count("mismatch")
+            matches = statuses.count("match")
+            missing = statuses.count("missing") + statuses.count("single")
+
+            col1, col2, col3 = st.columns(3)
+            col1.metric("Consistent", matches)
+            col2.metric("Mismatches", mismatches)
+            col3.metric("Missing/Partial", missing)
+
+            if mismatches > 0:
+                st.warning(f"Found {mismatches} field(s) with inconsistencies across documents.")
             else:
-                st.warning(f"⚠️ No readable content for {uploaded_file.name}.")
-
-    # ------------------------------
-    # Step 2: Process Entity Extraction
-    # ------------------------------
-    if st.session_state.unlocked_files and st.button("🚀 Process Documents"):
-        from courseware_agents.entity_extractor import extract_entities as agent_extract
-
-        for filename, file_content in st.session_state.unlocked_files.items():
-            st.info(f"Processing entities for {filename}...")
-
-            # Convert content to text for the agent
-            if isinstance(file_content, list):
-                # PDF pages - combine text from all pages
-                page_texts = []
-                for i, page in enumerate(file_content, start=1):
-                    if hasattr(page, 'tobytes'):
-                        page_texts.append(f"[Page {i}: Image content]")
-                    else:
-                        page_texts.append(f"[Page {i}]: {str(page)}")
-                combined_text = "\n\n".join(page_texts)
-            else:
-                combined_text = str(file_content)
-
-            try:
-                with st.spinner(f"AI Agent extracting entities from {filename}..."):
-                    result = asyncio.run(agent_extract(combined_text, custom_instructions))
-                    st.session_state.extracted_data[filename] = result
-            except Exception as e:
-                st.error(f"Error processing {filename}: {e}")
-                st.session_state.extracted_data[filename] = {"entities": [], "error": str(e)}
-
-        st.success("Entity extraction completed.")
-
-    # ------------------------------
-    # Step 3: Display Results
-    # ------------------------------
-    if st.session_state.extracted_data:
-        st.subheader("📂 View Results by File:")
-        file_names = list(st.session_state.extracted_data.keys())
-        tabs = st.tabs(file_names)
-        for tab, file_name in zip(tabs, file_names):
-            with tab:
-                extracted_data = st.session_state.extracted_data[file_name]
-                if isinstance(extracted_data, list):
-                    st.markdown(f"**{file_name} contains {len(extracted_data)} page(s):**")
-                    page_tabs = st.tabs([f"Page {i+1}" for i in range(len(extracted_data))])
-                    for p_tab, page_result in zip(page_tabs, extracted_data):
-                        with p_tab:
-                            with st.expander("📜 View Raw JSON Data (Page)"):
-                                st.json(page_result)
-                            st.subheader("Extracted Entities")
-                            if page_result.get("entities"):
-                                df = pd.DataFrame(page_result["entities"])
-                                st.dataframe(df)
-                            else:
-                                st.warning("⚠️ No entities found on this page.")
-                else:
-                    with st.expander(f"📜 View Raw JSON Data ({file_name})"):
-                        st.json(extracted_data)
-                    st.subheader(f"Extracted Entities from {file_name}")
-                    if extracted_data.get("entities"):
-                        df = pd.DataFrame(extracted_data["entities"])
-                        st.dataframe(df)
-                    else:
-                        st.warning("⚠️ No entities found. Consider modifying the extraction instructions.")
-                
-                st.markdown("---")
-                st.subheader("🔎 Google Sheets Matching")
-                extracted_fields_list = get_extracted_fields(extracted_data if not isinstance(extracted_data, list) else extracted_data[0])
-                
-                box_style = """
-                    <style>
-                        .custom-box {
-                            border: 2px solid #ddd; 
-                            border-radius: 8px; 
-                            padding: 15px; 
-                            margin: 10px 0; 
-                            background-color: #f9f9f9;
-                            box-shadow: 2px 2px 5px rgba(0, 0, 0, 0.1);
-                        }
-                        .custom-box h3 {
-                            margin-top: 0;
-                            color: #333;
-                            font-size: 18px;
-                        }
-                    </style>
-                """
-                st.markdown(box_style, unsafe_allow_html=True)
-                
-                for idx, person in enumerate(extracted_fields_list, start=1):
-                    st.markdown(f"**Person {idx}:**")
-                    st.markdown(
-                        """
-                        <div class="custom-box">
-                            <h3>📄 Extracted Document Data</h3>
-                            <p><strong>Name:</strong> {name}</p>
-                            <p><strong>Masked NRIC:</strong> {nric}</p>
-                            <p><strong>UEN:</strong> {uen}</p>
-                            <p><strong>Company:</strong> {company}</p>
-                        </div>
-                        """.format(
-                            name=person.get("name", "N/A"),
-                            nric=person.get("nric", "N/A"),
-                            uen=person.get("uen", "N/A"),
-                            company=person.get("company", "N/A")
-                        ),
-                        unsafe_allow_html=True,
-                    )
-                    best_match, score = find_best_match(person, st.session_state.sheet_data, threshold=80)
-                    if best_match:
-                        st.markdown(
-                            """
-                            <div class="custom-box">
-                                <h3>🔎 Best Google Sheets Match (Similarity: {score:.2f}%)</h3>
-                                <p><strong>Trainee Name:</strong> {trainee}</p>
-                                <p><strong>Trainee ID (NRIC):</strong> {nric_sheet}</p>  
-                                <p><strong>Employer UEN:</strong> {employer}</p>                                                  
-                                <p><strong>Sponsorship Type:</strong> {sponsorship}</p>
-                            </div>
-                            """.format(
-                                score=score,
-                                trainee=best_match.get("Trainee Name (as on government ID)", "N/A"),
-                                sponsorship=best_match.get("Sponsorship Type *", "N/A"),
-                                employer=best_match.get("Employer UEN (mandatory if sponsorship type = employer)", "N/A"),
-                                nric_sheet=best_match.get("Trainee ID *", "N/A")
-                            ),
-                            unsafe_allow_html=True,
-                        )
-                        with st.expander("📜 View Google Sheets Row Data"):
-                            st.json(best_match)
-                    else:
-                        st.markdown(
-                            """
-                            <div class="custom-box">
-                                <h3>🔎 Best Google Sheets Match</h3>
-                                <p><strong>No matching row found</strong></p>
-                                <p>Best average similarity: {score:.2f}%</p>
-                            </div>
-                            """.format(score=score),
-                            unsafe_allow_html=True,
-                        )
-                
-                st.markdown("---")
-                st.subheader("ACRA Data API Verification")
-                verification_dfs = []
-                for person in extracted_fields_list:
-                    match, score = find_best_match(person, st.session_state.sheet_data, threshold=80)
-                    if match:
-                        verification_df = run_dataset_verifications(person, match, similarity_threshold=80)
-                        # Keep only desired columns:
-                        verification_df = verification_df[["Verification Type", "Dataset Value", "Input Value", "Dataset"]]
-                        verification_dfs.append(verification_df)
-                if verification_dfs:
-                    df_combined = pd.concat(verification_dfs, ignore_index=True)
-                    def highlight_cell(val):
-                        return 'background-color: lightgreen' if val != "N/A" else ''
-                    styled_df = df_combined.style.applymap(highlight_cell, subset=["Dataset Value"])
-                    st.dataframe(styled_df, use_container_width=True)
-                else:
-                    st.markdown("**No Google Sheet match available to run combined dataset verification.**")
+                st.success("All common fields are consistent across documents.")

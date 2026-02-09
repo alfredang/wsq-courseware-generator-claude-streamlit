@@ -65,34 +65,53 @@ QUESTION QUALITY:
 
 
 async def generate_assessments(
-    fg_data_path: str,
+    fg_data_path: str = None,
     master_ka_path: str = None,
     output_path: str = None,
     assessment_types: list = None,
+    course_context: dict = None,
+    prompt_template: str = None,
 ) -> dict:
     """
-    Generate assessment questions from Facilitator Guide data.
+    Generate assessment questions from course context or Facilitator Guide data.
 
     Args:
-        fg_data_path: Path to the parsed FG data JSON file.
-        master_ka_path: Path to the K/A master list JSON file.
+        fg_data_path: Path to the parsed FG data JSON file (legacy).
+        master_ka_path: Path to the K/A master list JSON file (legacy).
         output_path: Path to save the assessment context JSON.
-        assessment_types: List of assessment types to generate (e.g., ["WA (SAQ)", "PP"]).
-                          If None, auto-detect from FG data.
+        assessment_types: List of assessment types to generate.
+        course_context: Structured course data dict from Extract Course Info.
+        prompt_template: Optional custom prompt template.
 
     Returns:
         Assessment context dict with questions for each type.
     """
     if output_path is None:
-        output_path = os.path.join(os.path.dirname(fg_data_path), "assessment_context.json")
+        output_path = ".output/assessment_context.json"
 
-    # Read FG data
-    with open(fg_data_path, 'r', encoding='utf-8') as f:
-        fg_data = f.read()
+    # Build the source data section
+    if course_context:
+        source_data = json.dumps(course_context, indent=2, ensure_ascii=False)
+        source_label = "COURSE CONTEXT"
+    elif fg_data_path:
+        with open(fg_data_path, 'r', encoding='utf-8') as f:
+            source_data = f.read()
+        source_label = "FACILITATOR GUIDE DATA"
+    else:
+        raise ValueError("Either course_context or fg_data_path must be provided.")
 
-    # Read master K/A list if available
+    # Build K/A list from course context or master file
     master_ka_text = ""
-    if master_ka_path and os.path.exists(master_ka_path):
+    if course_context:
+        learning_units = course_context.get('Learning_Units', [])
+        if learning_units:
+            master_ka_text = "\n\nMASTER K/A LIST:\n"
+            for lu in learning_units:
+                for k in lu.get('K_numbering_description', []):
+                    master_ka_text += f"  {k.get('K_number', '')}: {k.get('Description', '')}\n"
+                for a in lu.get('A_numbering_description', []):
+                    master_ka_text += f"  {a.get('A_number', '')}: {a.get('Description', '')}\n"
+    elif master_ka_path and os.path.exists(master_ka_path):
         with open(master_ka_path, 'r', encoding='utf-8') as f:
             master_ka = json.load(f)
         master_ka_text = "\n\nMASTER K/A LIST:\n"
@@ -101,17 +120,29 @@ async def generate_assessments(
         for a in master_ka.get('abilities', []):
             master_ka_text += f"  {a['id']}: {a['text']}\n"
 
+    # Determine assessment types
     types_instruction = ""
     if assessment_types:
         types_instruction = f"\nGenerate assessments ONLY for these types: {', '.join(assessment_types)}"
+    elif course_context:
+        # Auto-detect from Assessment_Methods_Details
+        methods = course_context.get('Assessment_Methods_Details', [])
+        if methods:
+            detected = [m.get('Method_Abbreviation', m.get('Assessment_Method', '')) for m in methods]
+            types_instruction = f"\nGenerate assessments for these types found in the course: {', '.join(detected)}"
+        else:
+            types_instruction = "\nAuto-detect assessment types from the course data and generate questions for all applicable types."
     else:
-        types_instruction = "\nAuto-detect assessment types from the FG document and generate questions for all found types."
+        types_instruction = "\nAuto-detect assessment types and generate questions for all found types."
 
-    prompt = f"""Read the following Facilitator Guide data and generate assessment questions.
+    if prompt_template:
+        prompt = prompt_template
+    else:
+        prompt = f"""Read the following course data and generate assessment questions.
 {types_instruction}
 
---- FACILITATOR GUIDE DATA ---
-{fg_data}
+--- {source_label} ---
+{source_data}
 --- END ---
 {master_ka_text}
 

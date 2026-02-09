@@ -7,9 +7,12 @@ for display and reuse by other generation modules.
 
 import streamlit as st
 import asyncio
+import os
+import tempfile
 import pandas as pd
 
-from generate_ap_fg_lg_lp.courseware_generation import parse_cp_document, interpret_cp
+from generate_ap_fg_lg.courseware_generation import parse_cp_document
+from courseware_agents.cp_interpreter import interpret_cp
 
 
 def display_course_info(context):
@@ -17,24 +20,21 @@ def display_course_info(context):
 
     # --- Course Overview ---
     st.subheader("Course Overview")
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown(f"**Course Title:** {context.get('Course_Title', 'N/A')}")
-        st.markdown(f"**Course Ref Code (TGS):** {context.get('TGS_Ref_No', 'N/A')}")
-        st.markdown(f"**TSC Code:** {context.get('TSC_Code', 'N/A')}")
-        st.markdown(f"**TSC Title:** {context.get('TSC_Title', 'N/A')}")
-    with col2:
-        st.markdown(f"**Total Course Duration:** {context.get('Total_Course_Duration_Hours', 'N/A')}")
-        st.markdown(f"**Total Training Hours:** {context.get('Total_Training_Hours', 'N/A')}")
-        st.markdown(f"**Total Assessment Hours:** {context.get('Total_Assessment_Hours', 'N/A')}")
-        st.markdown(f"**Proficiency Level:** {context.get('Proficiency_Level', 'N/A')}")
-
-    st.markdown(f"**Skills Framework:** {context.get('Skills_Framework', 'N/A')}")
-    st.markdown(f"**Sector:** {context.get('TSC_Sector', 'N/A')}")
-
-    # --- Course Fee ---
-    course_fee = context.get('Course_Fee', 'N/A')
-    st.markdown(f"**Course Fee:** {course_fee}")
+    overview_data = [
+        {"Field": "Course Title", "Value": context.get('Course_Title', 'N/A')},
+        {"Field": "Course Ref Code (TGS)", "Value": context.get('TGS_Ref_No', 'N/A')},
+        {"Field": "TSC Code", "Value": context.get('TSC_Code', 'N/A')},
+        {"Field": "TSC Title", "Value": context.get('TSC_Title', 'N/A')},
+        {"Field": "Skills Framework", "Value": context.get('Skills_Framework', 'N/A')},
+        {"Field": "Sector", "Value": context.get('TSC_Sector', 'N/A')},
+        {"Field": "Proficiency Level", "Value": context.get('Proficiency_Level', 'N/A')},
+        {"Field": "Total Course Duration", "Value": context.get('Total_Course_Duration_Hours', 'N/A')},
+        {"Field": "Total Training Hours", "Value": context.get('Total_Training_Hours', 'N/A')},
+        {"Field": "Total Assessment Hours", "Value": context.get('Total_Assessment_Hours', 'N/A')},
+        {"Field": "Course Fee", "Value": context.get('Course_Fee', 'N/A')},
+    ]
+    df_overview = pd.DataFrame(overview_data)
+    st.dataframe(df_overview, use_container_width=True, hide_index=True)
 
     st.divider()
 
@@ -139,38 +139,86 @@ def app():
         key="extract_cp_upload"
     )
 
+    # --- Optional fields ---
+    st.markdown("**Optional: Supplement missing info from external sources**")
+    col1, col2 = st.columns(2)
+    with col1:
+        course_ref_code = st.text_input(
+            "Course Ref Code (TGS)",
+            placeholder="e.g. TGS-2024001234",
+            key="extract_course_ref_code"
+        )
+    with col2:
+        course_url = st.text_input(
+            "Course URL",
+            placeholder="e.g. https://www.myskillsfuture.gov.sg/...",
+            key="extract_course_url"
+        )
+
     # --- Extract ---
+    from utils.agent_runner import submit_agent_job, get_job
+    from utils.agent_status import render_page_job_status
+
     if st.button("Extract Course Info", type="primary"):
         if cp_file is None:
             st.error("Please upload a Course Proposal document.")
-            return
+        else:
+            # Parse CP (fast, synchronous)
+            try:
+                with st.spinner("Parsing Course Proposal..."):
+                    raw_data = parse_cp_document(cp_file)
+            except Exception as e:
+                st.error(f"Error parsing Course Proposal: {e}")
+                raw_data = None
 
-        model_choice = st.session_state.get('selected_model', 'default')
+            if raw_data:
+                # Save parsed text to temp file for the agent
+                with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False, encoding='utf-8') as tmp:
+                    tmp.write(raw_data)
+                    parsed_cp_path = tmp.name
+                st.session_state['_extract_cp_temp_path'] = parsed_cp_path
 
-        # Parse CP
-        try:
-            with st.spinner("Parsing Course Proposal..."):
-                raw_data = parse_cp_document(cp_file)
-        except Exception as e:
-            st.error(f"Error parsing Course Proposal: {e}")
-            return
+                # Submit background agent job
+                job = submit_agent_job(
+                    key="extract_course_info",
+                    label="Extract Course Info",
+                    async_fn=interpret_cp,
+                    kwargs={
+                        "parsed_cp_path": parsed_cp_path,
+                        "course_ref_code": course_ref_code or None,
+                        "course_url": course_url or None,
+                    },
+                )
 
-        # Interpret CP with Claude
-        try:
-            with st.spinner("Extracting course information..."):
-                context = asyncio.run(interpret_cp(raw_data=raw_data, model_choice=model_choice))
-        except Exception as e:
-            st.error(f"Error extracting course information: {e}")
-            return
+                if job is None:
+                    st.warning("Course info extraction is already running.")
+                else:
+                    st.rerun()
 
-        if not context:
-            st.error("Failed to extract course data. Please check the document format.")
-            return
+    # --- Agent Status ---
+    def _on_extract_complete(job):
+        result = job["result"]
+        if result:
+            st.session_state['extracted_course_info'] = result
+        # Clean up temp file
+        temp_path = st.session_state.pop('_extract_cp_temp_path', None)
+        if temp_path and os.path.exists(temp_path):
+            os.unlink(temp_path)
 
-        st.success("Course information extracted successfully!")
-        st.session_state['extracted_course_info'] = context
+    job_status = render_page_job_status(
+        "extract_course_info",
+        on_complete=_on_extract_complete,
+        running_message="AI Agent extracting course information... (approximately 40-60 seconds)",
+    )
+
+    if job_status == "running":
+        st.stop()
 
     # --- Display Results ---
     if st.session_state.get('extracted_course_info'):
         st.divider()
         display_course_info(st.session_state['extracted_course_info'])
+
+        # Collapsible JSON context
+        with st.expander("Course Context JSON", expanded=False):
+            st.json(st.session_state['extracted_course_info'])
