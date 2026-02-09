@@ -1,543 +1,439 @@
-"""
-WSQ Courseware Generator - Chainlit Application
-
-Main entry point for the Chainlit-based courseware generation assistant.
-This replaces the Streamlit app.py with a conversation-first interface.
-
-Author: Courseware Generator Team
-Date: February 2026
-"""
-
-import sys
+# app.py
+import streamlit as st
+from streamlit_option_menu import option_menu
+from generate_ap_fg_lg_lp.utils.organizations import get_organizations, get_default_organization
 import os
 
-# Add project root to Python path for imports
-project_root = os.path.dirname(os.path.abspath(__file__))
-if project_root not in sys.path:
-    sys.path.insert(0, project_root)
 
-import chainlit as cl
-from chainlit.input_widget import TextInput, Select, Switch
+# Lazy loading functions for better performance
+def lazy_import_assessment():
+    import generate_assessment.assessment_generation as assessment_generation
+    return assessment_generation
 
-# Import existing modules (reused from Streamlit app)
-from settings.api_manager import load_api_keys, save_api_keys, get_all_available_models
-from settings.api_database import (
-    get_all_models,
-    get_task_model_assignment,
-)
-from company.company_manager import get_selected_company, get_organizations
-from skills import match_skill_by_keywords, get_skill_action, get_workflow_steps
+def lazy_import_courseware():
+    import generate_ap_fg_lg_lp.courseware_generation as courseware_generation
+    return courseware_generation
 
-# Import Chainlit modules
-from chainlit_modules import (
-    course_proposal,
-    courseware,
-    assessment,
-    slides,
-    brochure,
-    annex_assessment,
-    check_documents,
-    settings,
-)
+def lazy_import_brochure():
+    import generate_brochure.brochure_generation as brochure_generation
+    return brochure_generation
+
+def lazy_import_annex():
+    import add_assessment_to_ap.annex_assessment_v2 as annex_assessment_v2
+    return annex_assessment_v2
+
+def lazy_import_course_proposal():
+    import generate_cp.app as course_proposal_app
+    return course_proposal_app
+
+def lazy_import_docs():
+    import check_documents.sup_doc as sup_doc
+    return sup_doc
+
+def lazy_import_settings():
+    import settings.settings as settings_module
+    return settings_module
+
+def lazy_import_company_settings():
+    import company.company_settings as company_settings
+    return company_settings
+
+def lazy_import_slides():
+    import generate_slides.slides_generation as slides_generation
+    return slides_generation
 
 
-# =============================================================================
-# Chat Profiles
-# =============================================================================
+def display_homepage():
+    """Display homepage with navigation boxes"""
+    st.markdown("""
+        <style>
+            .block-container { padding-top: 1rem; }
+            .card-header { text-align: center; font-size: 1.1rem; font-weight: 600; margin-bottom: 0.25rem; }
+            .card-desc { text-align: center; font-size: 0.8rem; color: #888; margin-bottom: 0.5rem; }
+        </style>
+    """, unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; font-size: 1.75rem;'>WSQ Courseware Assistant with Claude Agents</h2>", unsafe_allow_html=True)
 
-@cl.set_chat_profiles
-async def chat_profiles():
-    """
-    Define chat profiles for each module.
-    Each profile represents a different workflow/page from the original Streamlit app.
-    """
-    return [
-        cl.ChatProfile(
-            name="Course Proposal",
-            markdown_description="Generate Course Proposals from TSC documents. Upload a TSC DOCX file to create CP in Excel or Word format.",
-            icon="https://api.iconify.design/mdi:file-document-edit.svg",
-            starters=[
-                cl.Starter(
-                    label="Upload TSC Document",
-                    message="I want to create a course proposal",
-                    icon="https://api.iconify.design/mdi:upload.svg",
-                ),
-                cl.Starter(
-                    label="Excel Format (New CP)",
-                    message="Generate course proposal in Excel format",
-                    icon="https://api.iconify.design/mdi:file-excel.svg",
-                ),
-                cl.Starter(
-                    label="Word Format (Old CP)",
-                    message="Generate course proposal in Word format",
-                    icon="https://api.iconify.design/mdi:file-word.svg",
-                ),
-            ],
-        ),
-        cl.ChatProfile(
-            name="Courseware",
-            markdown_description="Generate courseware documents: Assessment Plan (AP), Facilitator Guide (FG), Learner Guide (LG), and Lesson Plan (LP).",
-            icon="https://api.iconify.design/mdi:book-open-page-variant.svg",
-            starters=[
-                cl.Starter(
-                    label="Generate All Documents",
-                    message="Generate all courseware documents (AP, FG, LG, LP)",
-                    icon="https://api.iconify.design/mdi:file-multiple.svg",
-                ),
-                cl.Starter(
-                    label="Learning Guide Only",
-                    message="Generate Learning Guide",
-                    icon="https://api.iconify.design/mdi:book-education.svg",
-                ),
-                cl.Starter(
-                    label="Facilitator Guide Only",
-                    message="Generate Facilitator Guide",
-                    icon="https://api.iconify.design/mdi:teach.svg",
-                ),
-            ],
-        ),
-        cl.ChatProfile(
-            name="Assessment",
-            markdown_description="Generate assessment materials: SAQ, Case Study, Practical Performance, Project, Assignment, and more.",
-            icon="https://api.iconify.design/mdi:clipboard-check.svg",
-            starters=[
-                cl.Starter(
-                    label="Auto-Detect & Generate",
-                    message="Analyze my Facilitator Guide and generate assessments",
-                    icon="https://api.iconify.design/mdi:auto-fix.svg",
-                ),
-                cl.Starter(
-                    label="Short Answer Questions",
-                    message="Generate Short Answer Questions (SAQ)",
-                    icon="https://api.iconify.design/mdi:format-list-numbered.svg",
-                ),
-                cl.Starter(
-                    label="Case Study",
-                    message="Generate Case Study assessment",
-                    icon="https://api.iconify.design/mdi:briefcase.svg",
-                ),
-            ],
-        ),
-        cl.ChatProfile(
-            name="Slides",
-            markdown_description="Generate presentation slides from course materials using NotebookLM.",
-            icon="https://api.iconify.design/mdi:presentation.svg",
-            starters=[
-                cl.Starter(
-                    label="Upload Course Material",
-                    message="I want to create presentation slides",
-                    icon="https://api.iconify.design/mdi:upload.svg",
-                ),
-                cl.Starter(
-                    label="From Facilitator Guide",
-                    message="Generate slides from Facilitator Guide",
-                    icon="https://api.iconify.design/mdi:file-presentation-box.svg",
-                ),
-            ],
-        ),
-        cl.ChatProfile(
-            name="Brochure",
-            markdown_description="Generate professional course brochures from course data or web URLs.",
-            icon="https://api.iconify.design/mdi:newspaper-variant.svg",
-            starters=[
-                cl.Starter(
-                    label="From Course Proposal",
-                    message="Create brochure from my course proposal",
-                    icon="https://api.iconify.design/mdi:file-document.svg",
-                ),
-                cl.Starter(
-                    label="From URL",
-                    message="Create brochure from a course URL",
-                    icon="https://api.iconify.design/mdi:link.svg",
-                ),
-            ],
-        ),
-        cl.ChatProfile(
-            name="Add to AP",
-            markdown_description="Merge assessment documents into Assessment Plan as annexes.",
-            icon="https://api.iconify.design/mdi:file-link.svg",
-            starters=[
-                cl.Starter(
-                    label="Upload Documents",
-                    message="I want to add assessments to my Assessment Plan",
-                    icon="https://api.iconify.design/mdi:upload-multiple.svg",
-                ),
-            ],
-        ),
-        cl.ChatProfile(
-            name="Check Documents",
-            markdown_description="Verify supporting documents: extract entities, match against training records, verify UEN.",
-            icon="https://api.iconify.design/mdi:file-search.svg",
-            starters=[
-                cl.Starter(
-                    label="Upload Documents",
-                    message="I want to verify my supporting documents",
-                    icon="https://api.iconify.design/mdi:upload.svg",
-                ),
-                cl.Starter(
-                    label="Verify UEN",
-                    message="Verify a company UEN",
-                    icon="https://api.iconify.design/mdi:domain.svg",
-                ),
-            ],
-        ),
-        cl.ChatProfile(
-            name="Settings",
-            markdown_description="Configure API keys, LLM models, and application preferences.",
-            icon="https://api.iconify.design/mdi:cog.svg",
-            starters=[
-                cl.Starter(
-                    label="API Keys",
-                    message="Configure API keys",
-                    icon="https://api.iconify.design/mdi:key.svg",
-                ),
-                cl.Starter(
-                    label="Model Selection",
-                    message="Change default model",
-                    icon="https://api.iconify.design/mdi:brain.svg",
-                ),
-                cl.Starter(
-                    label="View Current Settings",
-                    message="Show my current settings",
-                    icon="https://api.iconify.design/mdi:information.svg",
-                ),
-            ],
-        ),
+    modules = [
+        {"name": "Generate CP", "icon": "📄", "desc": "Create Course Proposals", "menu": "Generate CP"},
+        {"name": "Generate AP/FG/LG/LP", "icon": "📚", "desc": "Generate Courseware Documents", "menu": "Generate AP/FG/LG/LP"},
+        {"name": "Generate Assessment", "icon": "✅", "desc": "Create Assessment Materials", "menu": "Generate Assessment"},
+        {"name": "Generate Slides", "icon": "🎯", "desc": "Create Presentation Slides", "menu": "Generate Slides"},
+        {"name": "Generate Brochure", "icon": "📰", "desc": "Design Course Brochures", "menu": "Generate Brochure"},
+        {"name": "Add Assessment to AP", "icon": "📎", "desc": "Attach Assessments to AP", "menu": "Add Assessment to AP"},
+        {"name": "Check Documents", "icon": "🔍", "desc": "Validate Supporting Documents", "menu": "Check Documents"},
     ]
 
+    for i in range(0, len(modules), 2):
+        col1, col2 = st.columns(2)
+
+        with col1:
+            m = modules[i]
+            with st.container(border=True):
+                st.markdown(f"<div class='card-header'>{m['icon']} {m['name']}</div>", unsafe_allow_html=True)
+                st.markdown(f"<div class='card-desc'>{m['desc']}</div>", unsafe_allow_html=True)
+                if st.button("Open", key=f"nav_{i}", use_container_width=True):
+                    st.session_state['current_page'] = m['menu']
+                    st.session_state['settings_page'] = None
+                    st.rerun()
+
+        with col2:
+            if i + 1 < len(modules):
+                m = modules[i + 1]
+                with st.container(border=True):
+                    st.markdown(f"<div class='card-header'>{m['icon']} {m['name']}</div>", unsafe_allow_html=True)
+                    st.markdown(f"<div class='card-desc'>{m['desc']}</div>", unsafe_allow_html=True)
+                    if st.button("Open", key=f"nav_{i+1}", use_container_width=True):
+                        st.session_state['current_page'] = m['menu']
+                        st.session_state['settings_page'] = None
+                        st.rerun()
+
 
 # =============================================================================
-# Chat Start Handler
+# Page Configuration
 # =============================================================================
 
-@cl.on_chat_start
-async def on_chat_start():
-    """
-    Initialize the chat session based on the selected profile.
-    Each profile triggers a different workflow.
-    """
-    # Get the selected chat profile
-    chat_profile = cl.user_session.get("chat_profile")
-    user = cl.user_session.get("user")
+st.set_page_config(layout="wide")
 
-    # Store user preferences
-    cl.user_session.set("initialized", True)
+# Global CSS
+st.markdown("""
+<style>
+    [data-testid="stSidebar"] { min-width: 350px; max-width: 350px; }
+    [data-testid="stSidebar"] > div:first-child { width: 350px; }
+    [data-testid="stSidebar"] hr { margin: 0.5rem 0 !important; }
+    [data-testid="stSidebar"] [data-baseweb="select"] [aria-disabled="true"] {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+        opacity: 1 !important;
+    }
+    [data-testid="stSidebar"] [data-baseweb="select"] [aria-disabled="true"] div {
+        color: #ffffff !important;
+        -webkit-text-fill-color: #ffffff !important;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-    # Initialize company selection (default to first)
-    organizations = get_organizations()
+# Initialize API system - cached
+@st.cache_resource
+def initialize_apis():
+    try:
+        from settings.api_manager import initialize_api_system
+        initialize_api_system()
+    except ImportError:
+        pass
+
+initialize_apis()
+
+# Ensure built-in models are always up to date
+if 'models_refreshed' not in st.session_state:
+    try:
+        from settings.api_database import refresh_builtin_models
+        refresh_builtin_models()
+        st.session_state['models_refreshed'] = True
+    except Exception:
+        pass
+
+# Get organizations - cached
+@st.cache_data
+def get_cached_organizations():
+    return get_organizations()
+
+@st.cache_data
+def get_cached_default_organization():
+    return get_default_organization()
+
+organizations = get_cached_organizations()
+default_org = get_cached_default_organization()
+
+# =============================================================================
+# Sidebar
+# =============================================================================
+
+with st.sidebar:
+    # Company Selection
     if organizations:
-        cl.user_session.set("selected_company", organizations[0])
+        company_names = [org["name"] for org in organizations]
+
+        # Find Tertiary Infotech as default company
+        default_company_idx = 0
+        for i, name in enumerate(company_names):
+            if "tertiary infotech" in name.lower():
+                default_company_idx = i
+                break
+
+        if 'selected_company_idx' not in st.session_state:
+            st.session_state['selected_company_idx'] = default_company_idx
+
+        # Validate stored index
+        if st.session_state['selected_company_idx'] >= len(organizations):
+            st.session_state['selected_company_idx'] = default_company_idx
+
+        selected_company_idx = st.selectbox(
+            "Select Company:",
+            range(len(company_names)),
+            format_func=lambda x: company_names[x],
+            index=st.session_state['selected_company_idx']
+        )
+
+        st.session_state['selected_company_idx'] = selected_company_idx
+        selected_company = organizations[selected_company_idx]
     else:
-        cl.user_session.set("selected_company", {"name": "Default", "uen": ""})
+        selected_company = default_org
+        st.session_state['selected_company_idx'] = 0
 
-    # Initialize model selection
-    api_keys = load_api_keys()
-    cl.user_session.set("api_keys", api_keys)
+    st.session_state['selected_company'] = selected_company
 
-    # Welcome message based on profile
-    welcome_messages = {
-        "Course Proposal": (
-            "Welcome to **Course Proposal Generator**!\n\n"
-            "I'll help you create a Course Proposal from your TSC document.\n\n"
-            "**To get started:**\n"
-            "1. Upload your TSC document (.docx)\n"
-            "2. Choose output format (Excel or Word)\n"
-            "3. I'll generate your Course Proposal\n\n"
-            "Ready? Upload your TSC document to begin!"
-        ),
-        "Courseware": (
-            "Welcome to **Courseware Generator**!\n\n"
-            "I can generate these documents from your Course Proposal:\n"
-            "- **Assessment Plan (AP)**\n"
-            "- **Facilitator Guide (FG)**\n"
-            "- **Learner Guide (LG)**\n"
-            "- **Lesson Plan (LP)**\n\n"
-            "Upload your approved Course Proposal to get started!"
-        ),
-        "Assessment": (
-            "Welcome to **Assessment Generator**!\n\n"
-            "I support **9 assessment types**:\n"
-            "- SAQ (Short Answer Questions)\n"
-            "- Case Study\n"
-            "- Practical Performance\n"
-            "- Project\n"
-            "- Assignment\n"
-            "- Oral Interview\n"
-            "- Demonstration\n"
-            "- Role Play\n"
-            "- Oral Questioning\n\n"
-            "Upload your Facilitator Guide and I'll auto-detect which assessments to generate!"
-        ),
-        "Slides": (
-            "Welcome to **Slides Generator**!\n\n"
-            "I'll create presentation slides from your course materials using NotebookLM.\n\n"
-            "**Supported inputs:**\n"
-            "- Facilitator Guide (.docx)\n"
-            "- Learner Guide (.docx)\n"
-            "- Course Proposal (.docx)\n"
-            "- PDF documents\n\n"
-            "Upload your course material to begin!"
-        ),
-        "Brochure": (
-            "Welcome to **Brochure Generator**!\n\n"
-            "I'll create a professional course brochure for marketing.\n\n"
-            "**Options:**\n"
-            "1. Generate from Course Proposal data\n"
-            "2. Scrape course info from a URL\n\n"
-            "How would you like to create your brochure?"
-        ),
-        "Add to AP": (
-            "Welcome to **Assessment Plan Merger**!\n\n"
-            "I'll help you add assessment documents as annexes to your Assessment Plan.\n\n"
-            "**You'll need:**\n"
-            "1. Your Assessment Plan (.docx)\n"
-            "2. Assessment question and answer papers\n\n"
-            "Ready? Upload your Assessment Plan first!"
-        ),
-        "Check Documents": (
-            "Welcome to **Document Verification**!\n\n"
-            "I can help you verify supporting documents:\n"
-            "- **Extract entities** (names, companies, UEN)\n"
-            "- **Match against training records**\n"
-            "- **Verify UEN with ACRA**\n\n"
-            "Upload documents (PDF or images) to start verification!"
-        ),
-        "Settings": (
-            "Welcome to **Settings**!\n\n"
-            "Here you can configure:\n"
-            "- **API Keys** (OpenRouter, OpenAI, Anthropic, etc.)\n"
-            "- **Default Model** for each task\n"
-            "- **Company Selection**\n\n"
-            "What would you like to configure?"
-        ),
+    # Model Selection
+    from settings.api_manager import get_all_available_models, get_all_api_key_configs, load_api_keys
+    from settings.api_database import get_all_models as db_get_all_models, get_task_model_assignment
+
+    # Mapping from menu names to task IDs
+    MENU_TO_TASK_ID = {
+        "Home": "global",
+        "Generate CP": "generate_cp",
+        "Generate AP/FG/LG/LP": "generate_courseware",
+        "Generate Assessment": "generate_assessment",
+        "Generate Slides": "generate_slides",
+        "Generate Brochure": "generate_brochure",
+        "Add Assessment to AP": "add_assessment_ap",
+        "Check Documents": "check_documents",
     }
 
-    welcome = welcome_messages.get(
-        chat_profile,
-        "Welcome to **WSQ Courseware Generator**!\n\nSelect a profile from the dropdown to get started."
+    # Get all API key configurations and current keys
+    api_key_configs = get_all_api_key_configs()
+    current_keys = load_api_keys()
+
+    # Build API provider options
+    configured_providers = []
+    unconfigured_providers = []
+    for config in api_key_configs:
+        provider_name = config["key_name"].replace("_API_KEY", "")
+        display = config['display_name']
+        is_configured = bool(current_keys.get(config["key_name"], ""))
+        if is_configured:
+            configured_providers.append((provider_name, display))
+        else:
+            unconfigured_providers.append((provider_name, f"{display} (No API Key)"))
+
+    all_providers = configured_providers + unconfigured_providers
+    provider_names = [p[0] for p in all_providers]
+    provider_display = [p[1] for p in all_providers]
+
+    # Check if current menu has a model assignment
+    current_menu = st.session_state.get('previous_menu_selection', 'Home')
+    task_id = MENU_TO_TASK_ID.get(current_menu, None)
+    task_assignment = get_task_model_assignment(task_id) if task_id else None
+
+    # Fallback to Global Default
+    if not task_assignment:
+        task_assignment = get_task_model_assignment("global")
+
+    if task_assignment:
+        assigned_provider = task_assignment.get("api_provider", "ANTHROPIC")
+        assigned_model = task_assignment.get("model_name", "")
+        st.session_state['selected_api_provider'] = assigned_provider
+        st.session_state['assigned_model_for_task'] = assigned_model
+    else:
+        if 'selected_api_provider' not in st.session_state:
+            st.session_state['selected_api_provider'] = "ANTHROPIC"
+        if 'assigned_model_for_task' in st.session_state:
+            del st.session_state['assigned_model_for_task']
+
+    # Find index of current provider
+    try:
+        default_provider_idx = provider_names.index(st.session_state['selected_api_provider'])
+    except ValueError:
+        default_provider_idx = 0
+
+    if provider_names:
+        selected_provider_idx = st.selectbox(
+            "API Provider:",
+            range(len(provider_names)),
+            format_func=lambda x: provider_display[x],
+            index=default_provider_idx,
+            help="Select which API key to use" + (" (Set by Model Assignment)" if task_assignment else ""),
+            disabled=bool(task_assignment)
+        )
+        selected_provider = provider_names[selected_provider_idx]
+        if not task_assignment:
+            st.session_state['selected_api_provider'] = selected_provider
+
+    # Get models filtered by provider
+    all_db_models = db_get_all_models(include_builtin=True)
+    filtered_models = [m for m in all_db_models
+                       if m.get("api_provider", "ANTHROPIC") == st.session_state['selected_api_provider']
+                       and m.get("is_enabled", True)]
+
+    if not filtered_models:
+        st.warning(f"No models configured for {st.session_state['selected_api_provider']}. Add models in Settings.")
+        model_names = []
+        st.session_state['selected_model'] = None
+        st.session_state['selected_model_config'] = None
+    else:
+        model_names = [m["name"] for m in filtered_models]
+
+        if task_assignment and st.session_state.get('assigned_model_for_task') in model_names:
+            current_idx = model_names.index(st.session_state['assigned_model_for_task'])
+        elif 'user_selected_model' in st.session_state and st.session_state['user_selected_model'] in model_names:
+            current_idx = model_names.index(st.session_state['user_selected_model'])
+        else:
+            current_idx = 0
+
+        selected_model_idx = st.selectbox(
+            "Select Model:",
+            range(len(model_names)),
+            format_func=lambda x: model_names[x],
+            index=current_idx,
+            disabled=bool(task_assignment)
+        )
+
+        if not task_assignment and model_names[selected_model_idx] != model_names[current_idx]:
+            st.session_state['user_selected_model'] = model_names[selected_model_idx]
+
+        st.session_state['selected_model'] = model_names[selected_model_idx]
+
+        all_models = get_all_available_models()
+        if model_names[selected_model_idx] in all_models:
+            st.session_state['selected_model_config'] = all_models[model_names[selected_model_idx]]
+        else:
+            st.session_state['selected_model_config'] = None
+
+    if task_assignment:
+        st.caption(f"📌 Using assigned model for {current_menu}")
+
+    # Navigation menu
+    menu_options = [
+        "Home",
+        "Generate CP",
+        "Generate AP/FG/LG/LP",
+        "Generate Assessment",
+        "Generate Slides",
+        "Generate Brochure",
+        "Add Assessment to AP",
+        "Check Documents",
+    ]
+
+    menu_icons = [
+        "house",
+        "filetype-doc",
+        "file-earmark-richtext",
+        "clipboard-check",
+        "easel",
+        "file-earmark-pdf",
+        "folder-symlink",
+        "search",
+    ]
+
+    # Initialize current page
+    if 'current_page' not in st.session_state:
+        st.session_state['current_page'] = "Home"
+
+    current_page = st.session_state['current_page']
+    if current_page in menu_options:
+        default_idx = menu_options.index(current_page)
+    else:
+        default_idx = 0
+
+    selected = option_menu(
+        "",
+        menu_options,
+        icons=menu_icons,
+        menu_icon="boxes",
+        default_index=default_idx,
+        key="main_nav_menu"
     )
 
-    await cl.Message(content=welcome).send()
+    # Update current page when menu selection changes
+    if selected != current_page:
+        st.session_state['current_page'] = selected
+        st.session_state['settings_page'] = None
+        current_page = selected
+        st.rerun()
 
-    # Trigger profile-specific initialization
-    if chat_profile == "Course Proposal":
-        await course_proposal.on_start()
-    elif chat_profile == "Courseware":
-        await courseware.on_start()
-    elif chat_profile == "Assessment":
-        await assessment.on_start()
-    elif chat_profile == "Slides":
-        await slides.on_start()
-    elif chat_profile == "Brochure":
-        await brochure.on_start()
-    elif chat_profile == "Add to AP":
-        await annex_assessment.on_start()
-    elif chat_profile == "Check Documents":
-        await check_documents.on_start()
-    elif chat_profile == "Settings":
-        await settings.on_start()
+    # Settings section
+    st.markdown("<hr style='margin: 0.5rem 0;'>", unsafe_allow_html=True)
+    st.markdown("<div style='font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem;'>Settings</div>", unsafe_allow_html=True)
 
+    col1, col2 = st.columns(2)
+    with col1:
+        if st.button("API & Models", use_container_width=True):
+            st.session_state['settings_page'] = "API & LLM Models"
+            st.rerun()
+    with col2:
+        if st.button("Companies", use_container_width=True):
+            st.session_state['settings_page'] = "Company Management"
+            st.rerun()
 
-# =============================================================================
-# Message Handler
-# =============================================================================
-
-@cl.on_message
-async def on_message(message: cl.Message):
-    """
-    Handle incoming messages based on the current chat profile.
-    Also supports natural language skill matching and file uploads.
-    """
-    chat_profile = cl.user_session.get("chat_profile")
-    content = message.content.strip()
-
-    # Check for file attachments (spontaneous upload)
-    if message.elements:
-        file_elements = [e for e in message.elements if hasattr(e, 'path')]
-        if file_elements:
-            await handle_file_upload(file_elements)
-            return
-
-    # Check for skill command (e.g., /generate_brochure)
-    skill_action = get_skill_action(content)
-    if skill_action:
-        response = skill_action.get("response", "")
-        navigate = skill_action.get("navigate", "")
-
-        await cl.Message(content=response).send()
-
-        if navigate:
-            await cl.Message(
-                content=f"**Tip:** Switch to the **{navigate}** profile to continue with this task."
-            ).send()
-        return
-
-    # Check for natural language skill match
-    skill_match = match_skill_by_keywords(content)
-    if skill_match:
-        response = skill_match.get("response", "")
-        navigate = skill_match.get("navigate", "")
-
-        await cl.Message(content=response).send()
-
-        if navigate:
-            await cl.Message(
-                content=f"**Tip:** Switch to the **{navigate}** profile to continue."
-            ).send()
-        return
-
-    # Check for workflow request
-    lower_content = content.lower()
-    if any(kw in lower_content for kw in ["workflow", "process", "steps", "what order"]):
-        workflow = get_workflow_steps()
-        await cl.Message(content=workflow).send()
-        return
-
-    # Check for help request
-    if any(kw in lower_content for kw in ["help", "what can you do", "menu", "options"]):
-        help_text = (
-            "I can help you with:\n\n"
-            "- **Course Proposal** - Generate CP from TSC documents\n"
-            "- **Courseware** - Generate AP, FG, LG, LP\n"
-            "- **Assessment** - Create 9 types of assessments\n"
-            "- **Slides** - Generate presentations via NotebookLM\n"
-            "- **Brochure** - Create marketing brochures\n"
-            "- **Add to AP** - Merge assessments into AP\n"
-            "- **Check Documents** - Verify supporting docs\n"
-            "- **Settings** - Configure API keys and models\n\n"
-            "Select a profile from the dropdown above, or tell me what you'd like to do!"
-        )
-        await cl.Message(content=help_text).send()
-        return
-
-    # Route to profile-specific handler
-    handlers = {
-        "Course Proposal": course_proposal.on_message,
-        "Courseware": courseware.on_message,
-        "Assessment": assessment.on_message,
-        "Slides": slides.on_message,
-        "Brochure": brochure.on_message,
-        "Add to AP": annex_assessment.on_message,
-        "Check Documents": check_documents.on_message,
-        "Settings": settings.on_message,
-    }
-
-    handler = handlers.get(chat_profile)
-    if handler:
-        await handler(message)
-    else:
-        await cl.Message(
-            content="Please select a profile from the dropdown to get started."
-        ).send()
-
+    # Footer
+    st.markdown("---")
+    st.markdown("""
+        <div style='text-align: center; color: #888; font-size: 0.8rem;'>
+            Powered by <b>Tertiary Infotech Academy Pte Ltd</b>
+        </div>
+    """, unsafe_allow_html=True)
 
 # =============================================================================
-# Settings Update Handler
+# Menu change tracking
 # =============================================================================
 
-@cl.on_settings_update
-async def on_settings_update(settings_update):
-    """
-    Handle settings updates from ChatSettings forms.
-    """
-    await settings.on_settings_update(settings_update)
+previous_menu = st.session_state.get('previous_menu_selection', None)
+menu_changed = previous_menu is not None and previous_menu != selected
+st.session_state['previous_menu_selection'] = selected
 
-
-# =============================================================================
-# Action Callbacks
-# =============================================================================
-
-# Course Proposal Actions
-@cl.action_callback("cp_excel_format")
-async def on_cp_excel_format(action):
-    await course_proposal.on_format_selected("excel")
-
-
-@cl.action_callback("cp_docx_format")
-async def on_cp_docx_format(action):
-    await course_proposal.on_format_selected("docx")
-
-
-# Assessment Actions
-@cl.action_callback("assessment_generate_all")
-async def on_assessment_generate_all(action):
-    await assessment.on_generate_all()
-
-
-@cl.action_callback("assessment_customize")
-async def on_assessment_customize(action):
-    await assessment.on_customize()
-
-
-# Courseware Actions
-@cl.action_callback("courseware_generate_all")
-async def on_courseware_generate_all(action):
-    await courseware.on_generate_all()
-
-
-@cl.action_callback("courseware_select_docs")
-async def on_courseware_select_docs(action):
-    await courseware.on_select_documents()
-
-
-# Settings Actions
-@cl.action_callback("settings_api_keys")
-async def on_settings_api_keys(action):
-    await settings.show_api_keys()
-
-
-@cl.action_callback("settings_models")
-async def on_settings_models(action):
-    await settings.show_models()
-
-
-@cl.action_callback("settings_company")
-async def on_settings_company(action):
-    await settings.show_company_selection()
-
+if menu_changed:
+    st.session_state['settings_page'] = None
+    st.rerun()
 
 # =============================================================================
-# File Upload Helper
+# Page Routing
 # =============================================================================
 
-async def handle_file_upload(files: list):
-    """
-    Handle file uploads (from message elements).
-    Route to appropriate handler based on chat profile.
-    """
-    chat_profile = cl.user_session.get("chat_profile")
+settings_page = st.session_state.get('settings_page', None)
+page_to_display = st.session_state.get('current_page', 'Home')
 
-    if chat_profile == "Course Proposal":
-        await course_proposal.on_file_upload(files)
-    elif chat_profile == "Courseware":
-        await courseware.on_file_upload(files)
-    elif chat_profile == "Assessment":
-        await assessment.on_file_upload(files)
-    elif chat_profile == "Slides":
-        await slides.on_file_upload(files)
-    elif chat_profile == "Add to AP":
-        await annex_assessment.on_file_upload(files)
-    elif chat_profile == "Check Documents":
-        await check_documents.on_file_upload(files)
-    else:
-        await cl.Message(
-            content=f"Received {len(files)} file(s). Please select a profile to process them."
-        ).send()
+if settings_page == "API & LLM Models":
+    settings_mod = lazy_import_settings()
+    settings_mod.llm_settings_app()
 
+elif settings_page == "Company Management":
+    company_settings = lazy_import_company_settings()
+    company_settings.company_management_app()
 
-# =============================================================================
-# Session Resume Handler
-# =============================================================================
+elif page_to_display == "Home":
+    st.session_state['settings_page'] = None
+    display_homepage()
 
-@cl.on_chat_resume
-async def on_chat_resume(thread):
-    """
-    Handle resuming a previous chat session.
-    Restore session state from the thread.
-    """
-    chat_profile = cl.user_session.get("chat_profile")
+elif page_to_display == "Generate CP":
+    st.session_state['settings_page'] = None
+    course_proposal_app = lazy_import_course_proposal()
+    course_proposal_app.app()
 
-    await cl.Message(
-        content=f"Welcome back! You're continuing in the **{chat_profile}** profile.\n\n"
-                "Your previous session has been restored. How can I help you?"
-    ).send()
+elif page_to_display == "Generate AP/FG/LG/LP":
+    st.session_state['settings_page'] = None
+    courseware_generation = lazy_import_courseware()
+    courseware_generation.app()
+
+elif page_to_display == "Generate Assessment":
+    st.session_state['settings_page'] = None
+    assessment_generation = lazy_import_assessment()
+    assessment_generation.app()
+
+elif page_to_display == "Generate Slides":
+    st.session_state['settings_page'] = None
+    slides_generation = lazy_import_slides()
+    slides_generation.app()
+
+elif page_to_display == "Generate Brochure":
+    st.session_state['settings_page'] = None
+    brochure_generation = lazy_import_brochure()
+    brochure_generation.app()
+
+elif page_to_display == "Add Assessment to AP":
+    st.session_state['settings_page'] = None
+    annex_assessment = lazy_import_annex()
+    annex_assessment.app()
+
+elif page_to_display == "Check Documents":
+    st.session_state['settings_page'] = None
+    sup_doc = lazy_import_docs()
+    sup_doc.app()

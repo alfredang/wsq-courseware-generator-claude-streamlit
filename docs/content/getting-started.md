@@ -39,11 +39,11 @@ pip install -r requirements.txt
 ## 2. Configuration
 
 ### API Keys
-The application supports multiple providers. You can configure them via the UI:
+The application uses the Anthropic Claude API. You can configure it via the UI:
 
-1. Run the app: `streamlit run app.py`
+1. Run the app: `chainlit run app.py`
 2. Navigate to **Settings** → **API Keys**
-3. Input your keys for **OpenRouter**, **OpenAI**, or **Gemini**.
+3. Input your **Anthropic** API key.
 
 ### Database Configuration
 To store company settings and model configurations, ensure your `DATABASE_URL` (PostgreSQL) is set in `.streamlit/secrets.toml` or as an environment variable.
@@ -82,7 +82,7 @@ Your session is saved locally at `~/.notebooklm/storage_state.json`. This file i
 - The login only needs to be done **once** per machine
 - If your session expires, simply run the login script again
 - The slides module also works in **non-agentic mode** (no LLM API tokens needed)
-- **Agentic mode** (AI-enhanced) requires an OpenRouter API key configured in Settings (Gemini 2.0 Flash is free)
+- **Agentic mode** (AI-enhanced) requires an Anthropic API key configured in Settings
 
 ## 4. Running the App
 

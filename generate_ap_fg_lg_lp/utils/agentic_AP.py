@@ -2,7 +2,7 @@
 File: agentic_AP.py
 
 ===============================================================================
-Assessment Plan Generation Module (OpenAI SDK Version)
+Assessment Plan Generation Module (Anthropic SDK Version)
 ===============================================================================
 Description:
     This module is part of the Courseware system and is responsible for generating
@@ -12,11 +12,11 @@ Description:
     course data, and then populates DOCX templates to generate both an Assessment Plan (AP)
     document and an Assessment Summary Report (ASR) document.
 
-    This version uses the OpenAI SDK directly instead of Autogen framework.
+    This version uses the Anthropic SDK directly instead of Autogen framework.
 
 Main Functionalities:
     • extract_assessment_evidence(structured_data, model_choice):
-          Uses OpenAI SDK to extract structured assessment evidence details (e.g.,
+          Uses Anthropic SDK to extract structured assessment evidence details (e.g.,
           type of evidence, submission method, marking process, retention period, and role play
           script requirements) from course learning outcomes and topics.
     • combine_assessment_methods(structured_data, evidence_data):
@@ -39,7 +39,7 @@ Dependencies:
     - Standard Libraries: tempfile, json, asyncio
     - Streamlit: For configuration and accessing API keys via st.secrets.
     - Pydantic: For modeling assessment method data.
-    - OpenAI SDK: For generating structured evidence using AI.
+    - Anthropic SDK: For generating structured evidence using Claude AI.
     - DocxTemplate (from docxtpl): For rendering DOCX templates.
     - Custom Helper Functions: retrieve_excel_data and process_logo_image from generate_ap_fg_lg_lp/utils/helper.
 
@@ -63,7 +63,7 @@ import json
 import asyncio
 from pydantic import BaseModel
 from typing import List, Union, Optional
-from openai import OpenAI
+from anthropic import Anthropic
 from docxtpl import DocxTemplate
 from generate_ap_fg_lg_lp.utils.helper import retrieve_excel_data, process_logo_image
 from utils.helpers import parse_json_content
@@ -85,15 +85,15 @@ class EvidenceGatheringPlan(BaseModel):
     assessment_methods: AssessmentMethods
 
 
-def create_llm_client(model_choice: str = "GPT-4o-Mini"):
+def create_llm_client(model_choice: str = "Claude-Sonnet-4"):
     """
-    Create an OpenAI client configured with the specified model choice.
+    Create an Anthropic client configured with the specified model choice.
 
     Args:
-        model_choice: Model choice string (e.g., "DeepSeek-Chat", "GPT-4o-Mini")
+        model_choice: Model choice string (e.g., "Claude-Sonnet-4", "Claude-Haiku-3.5")
 
     Returns:
-        tuple: (OpenAI client instance, model configuration dict)
+        tuple: (Anthropic client instance, model configuration dict)
     """
     from settings.model_configs import get_model_config
     from settings.api_manager import load_api_keys
@@ -101,26 +101,20 @@ def create_llm_client(model_choice: str = "GPT-4o-Mini"):
     autogen_config = get_model_config(model_choice)
     config_dict = autogen_config.get("config", {})
 
-    base_url = config_dict.get("base_url", "https://openrouter.ai/api/v1")
     api_key = config_dict.get("api_key", "")
-    model = config_dict.get("model", "gpt-4o-mini")
+    model = config_dict.get("model", "claude-sonnet-4-20250514")
     temperature = config_dict.get("temperature", 0.2)
 
-    # Fallback: If no API key in config, get it dynamically based on api_provider
+    # Fallback: If no API key in config, get it dynamically
     if not api_key:
-        api_provider = autogen_config.get("api_provider", "OPENROUTER")
         api_keys = load_api_keys()
-        api_key = api_keys.get(f"{api_provider}_API_KEY", "")
+        api_key = api_keys.get("ANTHROPIC_API_KEY", "")
 
-    client = OpenAI(
-        base_url=base_url,
-        api_key=api_key
-    )
+    client = Anthropic(api_key=api_key)
 
     model_config = {
         "model": model,
         "temperature": temperature,
-        "base_url": base_url
     }
 
     return client, model_config
@@ -128,7 +122,7 @@ def create_llm_client(model_choice: str = "GPT-4o-Mini"):
 
 async def extract_assessment_evidence(structured_data, model_choice: str = "GPT-4o-Mini"):
     """
-    Extracts structured assessment evidence data from course details using OpenAI SDK.
+    Extracts structured assessment evidence data from course details using Anthropic SDK.
 
     This function processes course learning outcomes, topics, and assessment methods
     to generate a structured justification for assessment evidence, submission, marking process,
@@ -246,17 +240,17 @@ async def extract_assessment_evidence(structured_data, model_choice: str = "GPT-
     """
 
     try:
-        completion = client.chat.completions.create(
+        completion = client.messages.create(
             model=config["model"],
             temperature=config["temperature"],
+            system=system_message,
             messages=[
-                {"role": "system", "content": system_message},
                 {"role": "user", "content": evidence_task}
             ],
-            response_format={"type": "json_object"}
+            max_tokens=8192
         )
 
-        response_content = completion.choices[0].message.content
+        response_content = completion.content[0].text
 
         # Parse JSON content from response
         try:

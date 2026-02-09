@@ -12,7 +12,6 @@ from PyPDF2 import PdfReader, PdfWriter
 import json
 from typing import Dict, Any, Union
 from oauth2client.service_account import ServiceAccountCredentials
-from google.oauth2.service_account import Credentials as GoogleCredentials
 
 # Optional imports - may not be available on all platforms
 FITZ_AVAILABLE = False
@@ -93,34 +92,17 @@ def convert_pdf_to_images(file_bytes: bytes) -> list:
 #         return []
 
 def get_google_sheet_data():
+    # Get the current working directory
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+
+    # Construct the full path to the service account JSON file
+    service_account_path = os.path.join(current_dir, "ssg-api-calls-9d65ee02e639.json")
     try:
         # Define the scope
         scope = ["https://spreadsheets.google.com/feeds", "https://www.googleapis.com/auth/drive"]
 
-        # Try to load credentials from Streamlit secrets first, then environment variable
-        credentials = None
-
-        # Option 1: Load from Streamlit secrets (secrets.toml)
-        if hasattr(st, 'secrets') and 'GOOGLE_SERVICE_ACCOUNT' in st.secrets:
-            service_account_info = dict(st.secrets['GOOGLE_SERVICE_ACCOUNT'])
-            credentials = ServiceAccountCredentials.from_json_keyfile_dict(service_account_info, scope)
-
-        # Option 2: Load from environment variable (JSON string)
-        elif os.environ.get('GOOGLE_SERVICE_ACCOUNT_JSON'):
-            service_account_info = json.loads(os.environ['GOOGLE_SERVICE_ACCOUNT_JSON'])
-            credentials = ServiceAccountCredentials.from_json_keyfile_dict(service_account_info, scope)
-
-        # Option 3: Fallback to file (for local development only)
-        else:
-            current_dir = os.path.dirname(os.path.abspath(__file__))
-            service_account_path = os.path.join(current_dir, "ssg-api-calls-9d65ee02e639.json")
-            if os.path.exists(service_account_path):
-                credentials = ServiceAccountCredentials.from_json_keyfile_name(service_account_path, scope)
-            else:
-                raise FileNotFoundError(
-                    "Google service account credentials not found. "
-                    "Set GOOGLE_SERVICE_ACCOUNT in secrets.toml or GOOGLE_SERVICE_ACCOUNT_JSON env var."
-                )
+        # Authenticate using the service account JSON file
+        credentials = ServiceAccountCredentials.from_json_keyfile_name(service_account_path, scope)
         gc = gspread.authorize(credentials)
         
         spreadsheet = gc.open_by_key("14IjSXJ0pHG23evfULhrLJEFXXsegx3hBNJoNSgRcp1k")

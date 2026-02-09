@@ -1,4 +1,4 @@
-# Dockerfile for WSQ Courseware Generator (Chainlit)
+# Dockerfile for WSQ Courseware Generator (Streamlit)
 # Compatible with Hugging Face Spaces (Docker SDK)
 FROM python:3.13-slim
 
@@ -32,5 +32,5 @@ COPY --chown=user . .
 # Expose port (HF Spaces uses 7860)
 EXPOSE 7860
 
-# Run Chainlit
-CMD ["chainlit", "run", "app.py", "--host", "0.0.0.0", "--port", "7860"]
+# Run Streamlit with HF Spaces compatibility
+CMD ["streamlit", "run", "app.py", "--server.port", "7860", "--server.address", "0.0.0.0"]

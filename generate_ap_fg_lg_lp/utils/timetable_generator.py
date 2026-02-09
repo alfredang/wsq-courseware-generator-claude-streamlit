@@ -2,7 +2,7 @@
 File: timetable_generator.py
 
 ===============================================================================
-Timetable Generator Module (OpenAI SDK Version)
+Timetable Generator Module (Anthropic SDK Version)
 ===============================================================================
 Description:
     This module generates a structured lesson plan timetable based on the provided course context.
@@ -11,19 +11,19 @@ Description:
     fixed sessions (such as attendance, breaks, and final assessments), and appropriate use of instructional
     methods over the specified number of days.
 
-    This version uses the OpenAI SDK directly instead of Autogen framework.
+    This version uses the Anthropic SDK directly instead of Autogen framework.
 
 Main Functionalities:
     • extract_unique_instructional_methods(course_context):
           Extracts and processes unique instructional method combinations from each Learning Unit in the
           course context by correcting method names and grouping them into valid pairs.
     • generate_timetable(context, num_of_days, model_choice):
-          Uses OpenAI SDK to generate a complete lesson plan timetable in JSON format.
+          Uses Anthropic SDK to generate a complete lesson plan timetable in JSON format.
           The timetable includes fixed sessions (attendance, breaks, assessment sessions) and topic or
           activity sessions, distributed evenly across the specified number of days.
 
 Dependencies:
-    - openai (OpenAI SDK)
+    - anthropic (Anthropic SDK)
     - common.common (parse_json_content)
     - settings.model_configs (get_model_config)
     - Standard Python Libraries (built-in)
@@ -43,7 +43,7 @@ Date:
 ===============================================================================
 """
 
-from openai import OpenAI
+from anthropic import Anthropic
 from utils.helpers import parse_json_content
 from settings.model_configs import get_model_config
 from settings.api_manager import load_api_keys
@@ -123,39 +123,33 @@ def extract_unique_instructional_methods(course_context):
     return unique_methods
 
 
-def create_llm_client(model_choice: str = "GPT-4o-Mini"):
+def create_llm_client(model_choice: str = "Claude-Sonnet-4"):
     """
-    Create an OpenAI client configured with the specified model choice.
+    Create an Anthropic client configured with the specified model choice.
 
     Args:
-        model_choice: Model choice string (e.g., "DeepSeek-Chat", "GPT-4o-Mini")
+        model_choice: Model choice string (e.g., "Claude-Sonnet-4", "Claude-Haiku-3.5")
 
     Returns:
-        tuple: (OpenAI client instance, model configuration dict)
+        tuple: (Anthropic client instance, model configuration dict)
     """
     autogen_config = get_model_config(model_choice)
     config_dict = autogen_config.get("config", {})
 
-    base_url = config_dict.get("base_url", "https://openrouter.ai/api/v1")
     api_key = config_dict.get("api_key", "")
-    model = config_dict.get("model", "gpt-4o-mini")
+    model = config_dict.get("model", "claude-sonnet-4-20250514")
     temperature = config_dict.get("temperature", 0.2)
 
-    # Fallback: If no API key in config, get it dynamically based on api_provider
+    # Fallback: If no API key in config, get it dynamically
     if not api_key:
-        api_provider = autogen_config.get("api_provider", "OPENROUTER")
         api_keys = load_api_keys()
-        api_key = api_keys.get(f"{api_provider}_API_KEY", "")
+        api_key = api_keys.get("ANTHROPIC_API_KEY", "")
 
-    client = OpenAI(
-        base_url=base_url,
-        api_key=api_key
-    )
+    client = Anthropic(api_key=api_key)
 
     model_config = {
         "model": model,
         "temperature": temperature,
-        "base_url": base_url
     }
 
     return client, model_config
@@ -165,7 +159,7 @@ async def generate_timetable(context, num_of_days, model_choice: str = "GPT-4o-M
     """
     Generates a structured lesson plan timetable based on the provided course context using OpenAI SDK.
 
-    This function uses OpenAI SDK to create a timetable that adheres to WSQ course structure rules.
+    This function uses Anthropic SDK to create a timetable that adheres to WSQ course structure rules.
     It ensures balanced topic distribution across the specified number of days, maintains session timing integrity,
     and applies predefined instructional methods.
 
@@ -235,28 +229,21 @@ async def generate_timetable(context, num_of_days, model_choice: str = "GPT-4o-M
     max_retries = 2
     base_delay = 5  # Reduced delay
 
-    # Use a faster model for timetable generation if available
-    fast_model = config["model"]
-    # If using DeepSeek, try to use a faster alternative
-    if "deepseek" in fast_model.lower():
-        fast_model = "gpt-4o-mini"  # GPT-4o-mini is faster for structured output
-
     for attempt in range(max_retries):
         try:
-            completion = client.chat.completions.create(
-                model=fast_model,
-                temperature=0.3,  # Slightly higher for faster generation
+            completion = client.messages.create(
+                model=config["model"],
+                temperature=0.3,
+                system=system_message,
                 messages=[
-                    {"role": "system", "content": system_message},
                     {"role": "user", "content": agent_task}
                 ],
-                response_format={"type": "json_object"},
-                max_tokens=8192  # Reduced from 16384 - timetable doesn't need that much
+                max_tokens=8192
             )
             break  # Success, exit retry loop
         except Exception as e:
             error_str = str(e)
-            if "503" in error_str or "overloaded" in error_str.lower() or "unavailable" in error_str.lower():
+            if "overloaded" in error_str.lower() or "unavailable" in error_str.lower() or "529" in error_str:
                 if attempt < max_retries - 1:  # Not the last attempt
                     delay = base_delay * (2 ** attempt)  # Exponential backoff
                     print(f"Model overloaded, retrying in {delay} seconds... (attempt {attempt + 1}/{max_retries})")
@@ -265,11 +252,11 @@ async def generate_timetable(context, num_of_days, model_choice: str = "GPT-4o-M
                 else:
                     raise Exception(f"Model overloaded after {max_retries} attempts. Last error: {error_str}")
             else:
-                # Re-raise non-503 errors immediately
+                # Re-raise non-overload errors immediately
                 raise e
 
     try:
-        raw_content = completion.choices[0].message.content
+        raw_content = completion.content[0].text
 
         if not raw_content:
             raise Exception("No content in response from timetable generator")

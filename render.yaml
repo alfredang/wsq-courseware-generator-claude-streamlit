@@ -12,8 +12,6 @@ services:
         value: "3.13"
       - key: ANTHROPIC_API_KEY
         sync: false  # Set manually in Render dashboard
-      - key: GEMINI_API_KEY
-        sync: false
       - key: DATABASE_URL
         sync: false
       - key: CHAINLIT_AUTH_SECRET

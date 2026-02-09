@@ -8,45 +8,65 @@
 
 | Component | Technology |
 |-----------|------------|
-| UI Framework | Chainlit 2.0+ |
+| UI Framework | Streamlit 1.30+ |
 | Backend | Python 3.13 |
 | LLM | Claude API (Anthropic) |
-| Database | PostgreSQL (Neon) |
+| Database | PostgreSQL (Neon), SQLite (settings) |
 | Deployment | Docker, Hugging Face Spaces |
 
 ## Project Structure
 
 ```
-courseware_claude/
-├── app.py                    # Main Chainlit application
-├── chainlit_modules/         # Chat profile handlers
+courseware_claude_streamlit/
+├── app.py                    # Main Streamlit application (sidebar, nav, routing)
+├── .streamlit/               # Streamlit configuration
+│   └── config.toml           # Server and theme settings
 ├── generate_cp/              # Course Proposal generation (10 agents)
+│   ├── app.py                # Streamlit page UI
+│   ├── main.py               # Orchestration pipeline
+│   └── agents/               # Claude agent modules
 ├── generate_assessment/      # Assessment generation (9 agents)
+│   ├── assessment_generation.py  # Streamlit page UI
+│   └── utils/                # Claude agent modules (claude_agentic_*.py)
 ├── generate_ap_fg_lg_lp/     # Courseware documents (4 agents)
-├── generate_slides/          # Slides generation (5 agents)
+│   ├── courseware_generation.py  # Streamlit page UI
+│   └── utils/                # Agent + template modules
+├── generate_slides/          # Slides generation
+│   └── slides_generation.py  # Streamlit page UI
 ├── generate_brochure/        # Brochure generation
+│   └── brochure_generation.py  # Streamlit page UI
 ├── add_assessment_to_ap/     # Annex assessments to AP
+│   └── annex_assessment_v2.py  # Streamlit page UI
 ├── check_documents/          # Document verification
-├── courseware_agents/        # Shared agent utilities
+│   └── sup_doc.py            # Streamlit page UI
+├── courseware_agents/        # Shared agent utilities (Claude SDK)
 ├── settings/                 # API & model configuration
+│   ├── settings.py           # Settings page UI
+│   ├── admin_auth.py         # Authentication
+│   ├── api_manager.py        # API key management
+│   ├── api_database.py       # SQLite database
+│   └── model_configs.py      # Claude model definitions
 ├── company/                  # Company management
+│   ├── company_settings.py   # Company management UI
+│   └── company_manager.py    # Company utilities
 ├── skills/                   # NLP skill matching
 ├── utils/                    # Shared utilities
 ├── docs/                     # Documentation
 ├── .claude/                  # Claude Code configuration
 │   ├── settings.local.json   # Local settings
 │   └── skills/               # Skill definitions (13 skills)
-└── public/                   # Static assets (CSS)
+└── public/                   # Static assets
 ```
 
 ## Key Patterns
 
-### Chainlit Patterns
-- Use `@cl.on_chat_start` for initialization
-- Use `@cl.on_message` for message handling
-- Use `cl.ChatProfile` for module switching
-- Use `cl.user_session` for state management
-- Use `cl.Step()` for long-running operations
+### Streamlit Patterns
+- Use `st.session_state` for state management
+- Use `st.sidebar` with `option_menu` for navigation
+- Use `st.file_uploader()` for file uploads
+- Use `st.download_button()` for file downloads
+- Use `st.spinner()` for long-running operations
+- Use lazy loading pattern for module pages
 
 ### Agent Pattern
 Each generation module follows this pattern:
@@ -76,7 +96,6 @@ response = client.messages.create(
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...     # Required - Claude API
 DATABASE_URL=postgresql://...     # Required - Neon PostgreSQL
-CHAINLIT_AUTH_SECRET=...          # Required - Session encryption
 ```
 
 ## Skills System
@@ -107,13 +126,13 @@ Templates use `docxtpl` (Jinja2 syntax) for variable substitution. Slide templat
 - Use type hints for function signatures
 - Keep agents modular and single-purpose
 - Store prompts in separate files under `prompts/`
-- Use `cl.Message()` for user feedback, not print()
+- Use `st.success()` / `st.error()` for user feedback
 
 ## Common Commands
 
 ```bash
 # Run locally
-uv run chainlit run app.py -w
+streamlit run app.py
 
 # Build Docker
 docker build -t wsq-courseware .

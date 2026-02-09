@@ -18,9 +18,11 @@ rapidfuzz
 python-dotenv
 psycopg2-binary
 jinja2
+asyncpg
 
-# Chainlit (UI Framework)
-chainlit>=2.0.0
+# Streamlit (UI Framework)
+streamlit>=1.30.0
+streamlit-option-menu
 
 # Claude API
 anthropic>=0.45.0

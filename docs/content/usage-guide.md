@@ -17,7 +17,7 @@ If you prefer the modular interface:
 
 ## 3. Managing Models & Settings
 1. Go to **Settings** → **LLM Models**.
-2. Click **Fetch Models** to get the latest list from OpenRouter.
+2. View the available Claude models.
 3. Use the ⭐ icon to set your preferred default models.
 4. Enable or disable specific models to keep your selection list clean.
 

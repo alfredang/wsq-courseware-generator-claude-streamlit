@@ -67,9 +67,10 @@ nul
 *.swp
 *.swo
 
-# Claude Code (keep skills, ignore local settings)
+# Claude Code (keep skills and commands, ignore local settings)
 .claude/*
 !.claude/skills/
+!.claude/commands/
 
 # Temporary files
 temp/

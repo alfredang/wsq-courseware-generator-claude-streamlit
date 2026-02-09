@@ -9,7 +9,7 @@ If you see `ModuleNotFoundError`:
 
 ## API Key Issues
 - **Empty Key**: Check that your `.env` or `.streamlit/secrets.toml` contains the correct variable names.
-- **Authentication Error**: Verify the key is valid on the provider's dashboard (OpenAI, OpenRouter, or Google).
+- **Authentication Error**: Verify the key is valid on the Anthropic console at console.anthropic.com.
 - **Settings UI**: We recommend using the **Settings → API Keys** tab in the app for the most reliable configuration.
 
 ## Document Processing
