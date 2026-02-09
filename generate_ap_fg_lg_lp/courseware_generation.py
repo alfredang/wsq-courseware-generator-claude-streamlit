@@ -678,7 +678,7 @@ def app():
             If any step in the document generation process fails.
     """
 
-    st.title("Generate AP/FG/LG/LP")
+    st.title("Generate AP/FG/LG")
 
     # ================================================================
     # Step 1: Upload Course Proposal (CP) Document
@@ -815,7 +815,6 @@ def app():
     st.subheader("Step 3: Select Document(s) to Generate")
     generate_lg = st.checkbox("Learning Guide (LG)", value=True)
     generate_ap = st.checkbox("Assessment Plan (AP)", value=True)
-    generate_lp = st.checkbox("Lesson Plan (LP)", value=True)
     generate_fg = st.checkbox("Facilitator's Guide (FG)", value=True)
 
     # ================================================================
@@ -827,7 +826,6 @@ def app():
             st.session_state['lg_output'] = None
             st.session_state['ap_output'] = None
             st.session_state['asr_output'] = None
-            st.session_state['lp_output'] = None
             st.session_state['fg_output'] = None
             # Model choice - uses Claude Code subscription (no API key needed)
             model_choice = st.session_state.get('selected_model', 'default')
@@ -895,7 +893,7 @@ def app():
                         st.error(f"Error generating Assessment Documents: {e}")
 
                 # Check if any documents require the timetable
-                needs_timetable = (generate_lp or generate_fg)
+                needs_timetable = generate_fg
 
                 # Generate the timetable if needed and not already generated
                 if needs_timetable and 'lesson_plan' not in context:
@@ -915,18 +913,6 @@ def app():
                         st.error(f"Error generating timetable: {e}")
                         return  # Exit if timetable generation fails
                     
-                # Now generate Lesson Plan
-                if generate_lp:
-                    try:
-                        with st.spinner("Generating Lesson Plan..."):
-                            lp_output = generate_lesson_plan(context, selected_org)
-                        if lp_output:
-                            st.success("Lesson Plan generated successfully!")
-                            st.session_state['lp_output'] = lp_output  # Store output path in session state
-     
-                    except Exception as e:
-                        st.error(f"Error generating Lesson Plan: {e}")
-
                 # Generate Facilitator's Guide
                 if generate_fg:
                     try:
@@ -948,7 +934,6 @@ def app():
         st.session_state.get('lg_output'),
         st.session_state.get('ap_output'),
         st.session_state.get('asr_output'),
-        st.session_state.get('lp_output'),
         st.session_state.get('fg_output')
     ]):
         st.subheader("Download All Generated Documents as ZIP")
@@ -1001,7 +986,6 @@ def app():
                 add_file(st.session_state.get('lg_output'), "LG")
                 add_file(st.session_state.get('ap_output'), "Assessment_Plan")
                 add_file(st.session_state.get('asr_output'), "Assessment_Summary_Record")
-                add_file(st.session_state.get('lp_output'), "LP")
                 add_file(st.session_state.get('fg_output'), "FG")
 
             # Reset the buffer's position to the beginning

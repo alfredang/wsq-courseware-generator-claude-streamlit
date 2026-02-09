@@ -33,6 +33,10 @@ def lazy_import_slides():
     import generate_slides.slides_generation as slides_generation
     return slides_generation
 
+def lazy_import_lesson_plan():
+    import generate_ap_fg_lg_lp.lesson_plan_generation as lesson_plan_generation
+    return lesson_plan_generation
+
 
 def display_homepage():
     """Display homepage with navigation boxes"""
@@ -46,7 +50,8 @@ def display_homepage():
     st.markdown("<h2 style='text-align: center; font-size: 1.75rem;'>WSQ Courseware Generator with Claude Code</h2>", unsafe_allow_html=True)
 
     modules = [
-        {"name": "Generate AP/FG/LG/LP", "icon": "📚", "desc": "Generate Courseware Documents", "menu": "Generate AP/FG/LG/LP"},
+        {"name": "Generate AP/FG/LG", "icon": "📚", "desc": "Generate Courseware Documents", "menu": "Generate AP/FG/LG"},
+        {"name": "Generate Lesson Plan", "icon": "📋", "desc": "Generate Lesson Plan with Schedule", "menu": "Generate Lesson Plan"},
         {"name": "Generate Assessment", "icon": "✅", "desc": "Create Assessment Materials", "menu": "Generate Assessment"},
         {"name": "Generate Slides", "icon": "🎯", "desc": "Create Presentation Slides", "menu": "Generate Slides"},
         {"name": "Generate Brochure", "icon": "📰", "desc": "Design Course Brochures", "menu": "Generate Brochure"},
@@ -151,7 +156,8 @@ with st.sidebar:
     # Navigation menu
     menu_options = [
         "Home",
-        "Generate AP/FG/LG/LP",
+        "Generate AP/FG/LG",
+        "Generate Lesson Plan",
         "Generate Assessment",
         "Generate Slides",
         "Generate Brochure",
@@ -162,6 +168,7 @@ with st.sidebar:
     menu_icons = [
         "house",
         "file-earmark-richtext",
+        "journal-text",
         "clipboard-check",
         "easel",
         "file-earmark-pdf",
@@ -238,10 +245,15 @@ elif page_to_display == "Home":
     st.session_state['settings_page'] = None
     display_homepage()
 
-elif page_to_display == "Generate AP/FG/LG/LP":
+elif page_to_display == "Generate AP/FG/LG":
     st.session_state['settings_page'] = None
     courseware_generation = lazy_import_courseware()
     courseware_generation.app()
+
+elif page_to_display == "Generate Lesson Plan":
+    st.session_state['settings_page'] = None
+    lesson_plan_generation = lazy_import_lesson_plan()
+    lesson_plan_generation.app()
 
 elif page_to_display == "Generate Assessment":
     st.session_state['settings_page'] = None

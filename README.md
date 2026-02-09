@@ -37,7 +37,8 @@ The **WSQ Courseware Generator** is an enterprise-grade AI platform that automat
 
 | Feature | Description |
 |---------|-------------|
-| **Courseware Creation** | Auto-generate Assessment Plans, Facilitator Guides, Learner Guides, and Lesson Plans |
+| **Courseware Creation** | Auto-generate Assessment Plans, Facilitator Guides, and Learner Guides |
+| **Lesson Plan Generation** | Generate Lesson Plans with editable prompt template and timetable preview |
 | **Assessment Generation** | Create 9 assessment types (SAQ, PP, CS, PRJ, ASGN, OI, DEM, RP, OQ) |
 | **Slides Generation** | Generate presentation slides with NotebookLM integration |
 | **Brochure Creation** | Design marketing brochures with web scraping |
@@ -48,7 +49,7 @@ The **WSQ Courseware Generator** is an enterprise-grade AI platform that automat
 | Metric | Count |
 |--------|-------|
 | AI Agents | 24 |
-| Generation Modules | 6 |
+| Generation Modules | 7 |
 | Assessment Types | 9 |
 | Courseware Documents | 4 |
 | Prompt Templates | 22 |
@@ -77,22 +78,23 @@ The **WSQ Courseware Generator** is an enterprise-grade AI platform that automat
 │           (Sidebar Navigation + Page Routing)                       │
 │                                                                     │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
-│  │   Home   │ │Courseware │ │Assessment│ │  Slides  │ │ Brochure │ │
-│  │          │ │AP/FG/LG  │ │   (9)    │ │          │ │          │ │
+│  │   Home   │ │Courseware │ │  Lesson  │ │Assessment│ │  Slides  │ │
+│  │          │ │AP/FG/LG  │ │  Plan    │ │   (9)    │ │          │ │
 │  └──────────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ │
 │                    │            │            │            │         │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐                           │
-│  │  Annex   │ │Courseware │ │ Company  │                           │
-│  │Assessment│ │  Audit   │ │ Settings │                           │
-│  └────┬─────┘ └────┬─────┘ └──────────┘                           │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐              │
+│  │ Brochure │ │  Annex   │ │Courseware │ │ Company  │              │
+│  │          │ │Assessment│ │  Audit   │ │ Settings │              │
+│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └──────────┘              │
 └───────┼────────────┼────────────┼──────────────────────────────────┘
         │            │            │
 ┌───────▼────────────▼────────────▼──────────────────────────────────┐
 │                      CLAUDE AI AGENTS (24 Total)                    │
 │                                                                     │
 │  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐          │
+│  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐          │
 │  │ CW Agents │ │Assessment │ │  Slides   │ │ Brochure  │          │
-│  │    (4)    │ │  Agents   │ │  Agents   │ │ & Doc     │          │
+│  │  (3+LP)   │ │  Agents   │ │  Agents   │ │ & Doc     │          │
 │  │           │ │    (9)    │ │    (5)    │ │ Agents    │          │
 │  │ -AP Agent │ │ -SAQ, PP  │ │ -Topic    │ │ -Brochure │          │
 │  │ -FG Agent │ │ -CS, PRJ  │ │ -Source   │ │ -Document │          │
@@ -125,7 +127,8 @@ wsq-courseware-generator-claude-streamlit/
 │   └── utils/                      # 9 assessment agents
 │
 ├── generate_ap_fg_lg_lp/           # Courseware generation
-│   ├── courseware_generation.py     # Courseware Streamlit page
+│   ├── courseware_generation.py     # AP/FG/LG Streamlit page
+│   ├── lesson_plan_generation.py   # Lesson Plan page (editable prompt)
 │   └── utils/                      # AP, FG, LG, LP agents
 │
 ├── generate_slides/                # Slides generation
