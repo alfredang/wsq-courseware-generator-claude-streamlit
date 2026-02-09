@@ -2,12 +2,12 @@
 
 ## Overview
 
-The Lesson Plan (LP) generation module creates a structured teaching plan document for instructors. It extracts data from the Course Proposal and populates a DOCX template. This module does NOT use AI generation - it performs data extraction and template population only.
+The Lesson Plan (LP) generation module creates a structured teaching plan document for instructors. It extracts data from the Course Proposal, builds a day-by-day schedule using the barrier algorithm, and populates a DOCX template.
 
 ## Pipeline Flow
 
 ```
-Course Proposal (Excel) → Data Extraction → Learning Units Validation → Template Population → LP Document (DOCX)
+Course Proposal → Data Extraction → Learning Units Validation → Schedule Building (Barrier Algorithm) → Template Population → LP Document (DOCX)
 ```
 
 ## Components
@@ -18,12 +18,13 @@ Course Proposal (Excel) → Data Extraction → Learning Units Validation → Te
 
 ## Data Source
 
-The Lesson Plan extracts data from the Course Proposal Excel file, including:
+The Lesson Plan extracts data from the Course Proposal, including:
 - Course Title
 - Learning Units (LU_Title, LO, Topics)
 - K and A Factors
 - Assessment Methods
 - Instructional Methods
+- Training Duration (days, hours)
 
 ## Template
 
@@ -31,8 +32,11 @@ Uses DOCX template: `generate_ap_fg_lg_lp/input/Template/LP_TGS-Ref-No_Course-Ti
 
 ## Key Features
 
-1. **No AI Generation**: Pure data extraction and template population
-2. **Learning Units Validation**: Ensures proper structure for all LUs
-3. **Organization Branding**: Company logo integration
-4. **Assessment Summary**: LO to Assessment Method mapping with abbreviations
-5. **Version Control**: Automatic date stamping and revision tracking
+1. **Barrier Algorithm**: Schedule building with fixed lunch (12:30-1:15 PM) and assessment (4:00-6:00 PM last day) slots
+2. **Topic Splitting**: Topics can split across sessions at natural barriers (lunch, day end)
+3. **Equal Time Allocation**: Each topic gets exactly `instructional_hours * 60 / num_topics` minutes
+4. **Break Filling**: Remaining gaps filled with breaks to fit 9:00 AM - 6:00 PM per day
+5. **Learning Units Validation**: Ensures proper structure for all LUs
+6. **Organization Branding**: Company logo integration
+7. **Assessment Summary**: LO to Assessment Method mapping with abbreviations
+8. **Version Control**: Automatic date stamping and revision tracking

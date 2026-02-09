@@ -116,6 +116,21 @@ Generated documents use templates stored in `generate_ap_fg_lg_lp/utils/`:
 
 Templates use `docxtpl` (Jinja2 syntax) for variable substitution. Slide templates are in `.claude/skills/generate_slides/templates/`.
 
+### Lesson Plan Schedule Rules
+
+The Lesson Plan uses a **barrier algorithm** for schedule building. These rules are CRITICAL:
+
+- **Daily hours**: 9:00 AM - 6:00 PM
+- **Lunch**: Fixed 45 mins at 12:30 PM - 1:15 PM
+- **Assessment**: Fixed 4:00 PM - 6:00 PM on last day only
+- **Topic duration**: Each topic = `instructional_hours * 60 / num_topics` minutes (equal allocation, never compress)
+- **Topic splitting**: Topics CAN split across lunch/day-end barriers. Label: "T2: Name" then "T2: Name (Cont'd)"
+- **Minimum session**: 15 minutes (if remaining < 15 mins before barrier, use Break instead of tiny split)
+- **Breaks**: Fill all gaps so each day is exactly 9am-6pm. No empty/unlabeled slots.
+- **Styling**: DOCX uses Calibri font, steel blue (#4472C4) table headers with white text
+
+See `.claude/skills/generate_lesson_plan/SKILL.md` for the full algorithm and reference example.
+
 ## Coding Conventions
 
 - Use `async/await` for all I/O operations

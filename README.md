@@ -37,7 +37,6 @@ The **WSQ Courseware Generator** is an enterprise-grade AI platform that automat
 
 | Feature | Description |
 |---------|-------------|
-| **Course Proposal Generation** | Extract competency units from TSC and generate structured proposals |
 | **Courseware Creation** | Auto-generate Assessment Plans, Facilitator Guides, Learner Guides, and Lesson Plans |
 | **Assessment Generation** | Create 9 assessment types (SAQ, PP, CS, PRJ, ASGN, OI, DEM, RP, OQ) |
 | **Slides Generation** | Generate presentation slides with NotebookLM integration |
@@ -48,12 +47,12 @@ The **WSQ Courseware Generator** is an enterprise-grade AI platform that automat
 
 | Metric | Count |
 |--------|-------|
-| AI Agents | 34 |
-| Generation Modules | 7 |
+| AI Agents | 24 |
+| Generation Modules | 6 |
 | Assessment Types | 9 |
 | Courseware Documents | 4 |
 | Prompt Templates | 22 |
-| Skills Documented | 13 |
+| Skills Documented | 11 |
 
 ---
 
@@ -86,27 +85,27 @@ The **WSQ Courseware Generator** is an enterprise-grade AI platform that automat
 │           (Sidebar Navigation + Page Routing)                       │
 │                                                                     │
 │  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐ │
-│  │   Home   │ │Generate  │ │Courseware │ │Assessment│ │  Slides  │ │
-│  │          │ │   CP     │ │AP/FG/LG  │ │   (9)    │ │          │ │
+│  │   Home   │ │Courseware │ │Assessment│ │  Slides  │ │ Brochure │ │
+│  │          │ │AP/FG/LG  │ │   (9)    │ │          │ │          │ │
 │  └──────────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ └────┬─────┘ │
 │                    │            │            │            │         │
-│  ┌──────────┐ ┌──────────┐ ┌──────────┐ ┌──────────┐              │
-│  │ Brochure │ │  Annex   │ │  Check   │ │ Settings │              │
-│  │          │ │Assessment│ │   Docs   │ │ API/Co.  │              │
-│  └────┬─────┘ └────┬─────┘ └────┬─────┘ └──────────┘              │
+│  ┌──────────┐ ┌──────────┐ ┌──────────┐                           │
+│  │  Annex   │ │  Check   │ │ Settings │                           │
+│  │Assessment│ │   Docs   │ │ API/Co.  │                           │
+│  └────┬─────┘ └────┬─────┘ └──────────┘                           │
 └───────┼────────────┼────────────┼──────────────────────────────────┘
         │            │            │
 ┌───────▼────────────▼────────────▼──────────────────────────────────┐
-│                      CLAUDE AI AGENTS (34 Total)                    │
+│                      CLAUDE AI AGENTS (24 Total)                    │
 │                                                                     │
 │  ┌───────────┐ ┌───────────┐ ┌───────────┐ ┌───────────┐          │
-│  │ CP Agents │ │ CW Agents │ │Assessment │ │  Slides   │          │
-│  │   (10)    │ │    (4)    │ │  Agents   │ │  Agents   │          │
-│  │           │ │           │ │    (9)    │ │    (5)    │          │
-│  │ -TSC      │ │ -AP Agent │ │ -SAQ, PP  │ │ -Topic    │          │
-│  │ -Extract  │ │ -FG Agent │ │ -CS, PRJ  │ │ -Source   │          │
-│  │ -Research │ │ -LG Agent │ │ -ASGN, OI │ │ -Quality  │          │
-│  │ -Validate │ │ -LP Agent │ │ -DEM, RP  │ │ -NotebookLM│         │
+│  │ CW Agents │ │Assessment │ │  Slides   │ │ Brochure  │          │
+│  │    (4)    │ │  Agents   │ │  Agents   │ │ & Doc     │          │
+│  │           │ │    (9)    │ │    (5)    │ │ Agents    │          │
+│  │ -AP Agent │ │ -SAQ, PP  │ │ -Topic    │ │ -Brochure │          │
+│  │ -FG Agent │ │ -CS, PRJ  │ │ -Source   │ │ -Document │          │
+│  │ -LG Agent │ │ -ASGN, OI │ │ -Quality  │ │ -Entity   │          │
+│  │ -LP Agent │ │ -DEM, RP  │ │ -NotebookLM││ -Verify   │          │
 │  └───────────┘ └───────────┘ └───────────┘ └───────────┘          │
 └─────────────────────────────┬──────────────────────────────────────┘
                               │
@@ -263,7 +262,6 @@ The platform includes 13 documented skills in the `.claude/skills/` directory, e
 | `check_documents` | Verify supporting documents |
 | `add_assessment_to_ap` | Annex assessments to AP |
 | `branding` | UI styling guidelines |
-| `create_github_readme` | Generate README.md files |
 
 Skills use fuzzy matching via `rapidfuzz` to match user intents to appropriate workflows.
 
