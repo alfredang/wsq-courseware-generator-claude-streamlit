@@ -819,7 +819,6 @@ def get_enabled_models_by_provider(api_provider: str) -> List[Dict[str, Any]]:
 AVAILABLE_TASKS = [
     {"task_id": "global", "task_name": "Global Default", "icon": "🌐"},
     {"task_id": "chatbot", "task_name": "Chatbot", "icon": "💬"},
-    {"task_id": "generate_cp", "task_name": "Generate CP", "icon": "📄"},
     {"task_id": "generate_courseware", "task_name": "Generate AP/FG/LG/LP", "icon": "📚"},
     {"task_id": "generate_assessment", "task_name": "Generate Assessment", "icon": "✅"},
     {"task_id": "generate_slides", "task_name": "Generate Slides", "icon": "🎯"},
@@ -919,15 +918,10 @@ def _seed_admin_credentials():
         count = cursor.fetchone()[0]
 
         if count == 0:
-            # Seed admin credentials from environment variables or Streamlit secrets
+            # Seed admin credentials from environment variables
             import os
-            try:
-                import streamlit as st
-                username = os.environ.get("ADMIN_USERNAME") or st.secrets.get("ADMIN_USERNAME", "admin")
-                password = os.environ.get("ADMIN_PASSWORD") or st.secrets.get("ADMIN_PASSWORD", "")
-            except Exception:
-                username = os.environ.get("ADMIN_USERNAME", "admin")
-                password = os.environ.get("ADMIN_PASSWORD", "")
+            username = os.environ.get("ADMIN_USERNAME", "admin")
+            password = os.environ.get("ADMIN_PASSWORD", "")
 
             if password:
                 password_hash = _hash_password(password)
@@ -1033,21 +1027,6 @@ BUILTIN_PROMPT_TEMPLATES = [
         "display_name": "[AP] Assessment Plan - Evidence & Justification",
         "description": "Generate structured justifications for assessment methods (CS, PP, OQ, RP) including Assessment Record & Summary",
         "variables": "course_title, learning_outcomes, extracted_content, assessment_methods"
-    },
-    # --- Course Proposal: CP Interpretation ---
-    {
-        "category": "course_proposal",
-        "name": "cp_interpretation",
-        "display_name": "CP Interpretation",
-        "description": "Extract and structure Course Proposal data for document generation",
-        "variables": "schema"
-    },
-    {
-        "category": "course_proposal",
-        "name": "tsc_agent",
-        "display_name": "TSC Agent",
-        "description": "Parse and correct TSC (Training Standards and Competencies) data",
-        "variables": "tsc_data"
     },
     {
         "category": "assessment",

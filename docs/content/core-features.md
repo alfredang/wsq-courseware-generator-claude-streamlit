@@ -39,7 +39,6 @@ A skill-driven AI assistant available on every page:
 ### Available Skill Commands
 | Command | Description |
 |---------|-------------|
-| `/generate_course_proposal` | Navigate to Course Proposal generation |
 | `/generate_assessment_plan` | Navigate to Assessment Plan generation |
 | `/generate_facilitator_guide` | Navigate to Facilitator Guide generation |
 | `/generate_learner_guide` | Navigate to Learner Guide generation |

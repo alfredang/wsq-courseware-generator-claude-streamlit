@@ -58,7 +58,6 @@ def get_default_organization() -> Dict[str, Any]:
         "logo": "common/logo/tertiary_infotech_pte_ltd.jpg",
         "address": "",
         "templates": {
-            "course_proposal": "",
             "courseware": "",
             "assessment": "",
             "brochure": ""

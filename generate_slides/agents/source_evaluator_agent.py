@@ -12,7 +12,7 @@ import json
 import logging
 from typing import Dict, Any, List
 
-from generate_cp.utils.claude_model_client import create_llm_client
+from utils.claude_model_client import create_llm_client
 from utils.prompt_loader import load_prompt
 
 logger = logging.getLogger(__name__)

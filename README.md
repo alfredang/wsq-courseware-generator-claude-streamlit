@@ -129,12 +129,6 @@ wsq-courseware-generator-claude-streamlit/
 ├── .streamlit/
 │   └── config.toml                 # Streamlit configuration
 │
-├── generate_cp/                    # Course Proposal generation
-│   ├── app.py                      # CP Streamlit page
-│   ├── main.py                     # Main CP pipeline
-│   ├── agents/                     # CP agents (10)
-│   └── utils/                      # Utilities
-│
 ├── generate_assessment/            # Assessment generation
 │   ├── assessment_generation.py    # Assessment Streamlit page
 │   └── utils/                      # 9 assessment agents
@@ -172,7 +166,6 @@ wsq-courseware-generator-claude-streamlit/
 │   │   └── start-app.md            # Start Streamlit app
 │   └── skills/                     # Claude Code skills (13)
 │       ├── branding/
-│       ├── generate_course_proposal/
 │       ├── generate_courseware/
 │       ├── generate_assessment/
 │       ├── generate_slides/
@@ -263,7 +256,6 @@ The platform includes 13 documented skills in the `.claude/skills/` directory, e
 
 | Skill | Description |
 |-------|-------------|
-| `generate_course_proposal` | Generate CP from TSC documents |
 | `generate_courseware` | Generate AP, FG, LG, LP documents |
 | `generate_assessment` | Create 9 assessment types |
 | `generate_slides` | Generate slides with NotebookLM MCP |

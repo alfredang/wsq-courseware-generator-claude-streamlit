@@ -16,16 +16,6 @@ from typing import List, Dict, Optional, Any, Union
 # Import existing schemas from other modules
 # =============================================================================
 
-# Course Proposal schemas
-from generate_cp.models.schemas import (
-    CourseInformation,
-    LearningOutcomes,
-    TSCAndTopics,
-    AssessmentMethods,
-    CourseEnsembleOutput,
-    AssessmentJustification,
-)
-
 # Assessment schemas
 from generate_assessment.utils.pydantic_models import (
     FacilitatorGuideExtraction,
@@ -39,20 +29,6 @@ from generate_assessment.utils.pydantic_models import (
 # =============================================================================
 # Agent Response Schemas
 # =============================================================================
-
-class CPAgentResponse(BaseModel):
-    """Structured response from CP Agent"""
-    status: str = Field(description="success or error")
-    course_data: Optional[CourseEnsembleOutput] = Field(
-        default=None,
-        description="Extracted course proposal data"
-    )
-    document_path: Optional[str] = Field(
-        default=None,
-        description="Path to generated document"
-    )
-    message: str = Field(description="Status message or error details")
-
 
 class CoursewareDocument(BaseModel):
     """Generated courseware document info"""
@@ -207,19 +183,12 @@ class OrchestratorResponse(BaseModel):
 
 __all__ = [
     # Imported schemas
-    "CourseInformation",
-    "LearningOutcomes",
-    "TSCAndTopics",
-    "AssessmentMethods",
-    "CourseEnsembleOutput",
-    "AssessmentJustification",
     "FacilitatorGuideExtraction",
     "LearningUnit",
     "Topic",
     "KnowledgeStatement",
     "AbilityStatement",
     # Agent response schemas
-    "CPAgentResponse",
     "CoursewareDocument",
     "CoursewareAgentResponse",
     "SAQQuestion",

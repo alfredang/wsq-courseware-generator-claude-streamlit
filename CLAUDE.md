@@ -21,10 +21,6 @@ courseware_claude_streamlit/
 ├── app.py                    # Main Streamlit application (sidebar, nav, routing)
 ├── .streamlit/               # Streamlit configuration
 │   └── config.toml           # Server and theme settings
-├── generate_cp/              # Course Proposal generation (10 agents)
-│   ├── app.py                # Streamlit page UI
-│   ├── main.py               # Orchestration pipeline
-│   └── agents/               # Claude agent modules
 ├── generate_assessment/      # Assessment generation (9 agents)
 │   ├── assessment_generation.py  # Streamlit page UI
 │   └── utils/                # Claude agent modules (claude_agentic_*.py)

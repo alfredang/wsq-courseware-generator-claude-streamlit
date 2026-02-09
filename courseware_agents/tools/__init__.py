@@ -8,17 +8,6 @@ Author: Courseware Generator Team
 Date: 26 January 2026
 """
 
-# CP Agent Tools
-from courseware_agents.tools.cp_tools import (
-    parse_tsc_document,
-    run_tsc_parsing_agent,
-    run_extraction_pipeline,
-    run_research_pipeline,
-    run_justification_pipeline,
-    generate_cp_document,
-    save_json_output,
-)
-
 # Courseware Agent Tools
 from courseware_agents.tools.courseware_tools import (
     generate_assessment_plan,
@@ -55,14 +44,6 @@ from courseware_agents.tools.document_tools import (
 )
 
 __all__ = [
-    # CP Tools
-    "parse_tsc_document",
-    "run_tsc_parsing_agent",
-    "run_extraction_pipeline",
-    "run_research_pipeline",
-    "run_justification_pipeline",
-    "generate_cp_document",
-    "save_json_output",
     # Courseware Tools
     "generate_assessment_plan",
     "generate_facilitator_guide",

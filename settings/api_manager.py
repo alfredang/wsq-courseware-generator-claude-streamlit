@@ -45,28 +45,9 @@ LEGACY_CUSTOM_MODELS_FILE = "settings/config/custom_models.json"
 # Module-level cache (replaces st.session_state)
 _cache: Dict[str, Any] = {}
 
-# Try to import Streamlit secrets (optional)
-_st_secrets = None
-try:
-    import streamlit as st
-    _st_secrets = st.secrets
-except (ImportError, Exception):
-    pass
-
-
 def _get_secret(key: str, default: str = "") -> str:
-    """Safely get a secret from environment variables or Streamlit secrets"""
-    # First try environment variables (from .env file)
-    env_value = os.environ.get(key, "")
-    if env_value:
-        return env_value
-    # Then try streamlit secrets if available
-    if _st_secrets is not None:
-        try:
-            return _st_secrets.get(key, default)
-        except Exception:
-            pass
-    return default
+    """Safely get a secret from environment variables"""
+    return os.environ.get(key, default)
 
 
 def load_api_keys() -> Dict[str, str]:

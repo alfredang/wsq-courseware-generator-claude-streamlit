@@ -11,7 +11,7 @@ Date: 2026-01-20
 import re
 import asyncio
 from utils.helpers import parse_json_content
-from generate_cp.utils.claude_model_client import create_llm_client
+from utils.claude_model_client import create_llm_client
 
 
 def clean_markdown(text: str) -> str:

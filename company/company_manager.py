@@ -21,7 +21,7 @@ def get_company_template(template_type: str, company: Optional[Dict[str, Any]] =
     Get company template path with fallback to Tertiary Infotech templates
     
     Args:
-        template_type: Type of template ('course_proposal', 'courseware', 'assessment', 'brochure')
+        template_type: Type of template ('courseware', 'assessment', 'brochure')
         company: Company dict (optional, uses selected company if not provided)
     
     Returns:

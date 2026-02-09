@@ -8,7 +8,6 @@ Built on the Claude Agent SDK with MCP (Model Context Protocol) support.
 
 Agents:
 - Orchestrator: Main coordinator that routes to specialized agents
-- CP Agent: Course Proposal generation
 - Courseware Agent: AP/FG/LG/LP generation
 - Assessment Agent: SAQ/PP/CS generation
 - Brochure Agent: Brochure creation
@@ -59,12 +58,10 @@ try:
         run_orchestrator_simple,
         get_orchestrator_options,
         ORCHESTRATOR_INSTRUCTIONS,
-        CP_AGENT,
         COURSEWARE_AGENT,
         ASSESSMENT_AGENT,
         BROCHURE_AGENT,
         DOCUMENT_AGENT,
-        get_cp_agent,
         get_courseware_agent,
         get_assessment_agent,
         get_brochure_agent,
@@ -76,12 +73,10 @@ except ImportError as e:
     run_orchestrator_simple = None
     get_orchestrator_options = None
     ORCHESTRATOR_INSTRUCTIONS = None
-    CP_AGENT = None
     COURSEWARE_AGENT = None
     ASSESSMENT_AGENT = None
     BROCHURE_AGENT = None
     DOCUMENT_AGENT = None
-    get_cp_agent = None
     get_courseware_agent = None
     get_assessment_agent = None
     get_brochure_agent = None
@@ -89,14 +84,12 @@ except ImportError as e:
 
 # Agent instructions
 try:
-    from courseware_agents.cp_agent import CP_AGENT_INSTRUCTIONS
     from courseware_agents.courseware_agent import COURSEWARE_AGENT_INSTRUCTIONS
     from courseware_agents.assessment_agent import ASSESSMENT_AGENT_INSTRUCTIONS
     from courseware_agents.brochure_agent import BROCHURE_AGENT_INSTRUCTIONS
     from courseware_agents.document_agent import DOCUMENT_AGENT_INSTRUCTIONS
 except ImportError as e:
     print(f"Warning: Could not import agent instructions: {e}")
-    CP_AGENT_INSTRUCTIONS = None
     COURSEWARE_AGENT_INSTRUCTIONS = None
     ASSESSMENT_AGENT_INSTRUCTIONS = None
     BROCHURE_AGENT_INSTRUCTIONS = None
@@ -117,7 +110,6 @@ except ImportError:
 # Import schemas for structured outputs
 try:
     from courseware_agents.schemas import (
-        CPAgentResponse,
         CoursewareAgentResponse,
         AssessmentAgentResponse,
         BrochureAgentResponse,
@@ -126,7 +118,6 @@ try:
     )
 except ImportError as e:
     print(f"Warning: Could not import schemas: {e}")
-    CPAgentResponse = None
     CoursewareAgentResponse = None
     AssessmentAgentResponse = None
     BrochureAgentResponse = None
@@ -149,19 +140,16 @@ __all__ = [
     "get_orchestrator_options",
     "ORCHESTRATOR_INSTRUCTIONS",
     # Agent definitions
-    "CP_AGENT",
     "COURSEWARE_AGENT",
     "ASSESSMENT_AGENT",
     "BROCHURE_AGENT",
     "DOCUMENT_AGENT",
     # Agent getters
-    "get_cp_agent",
     "get_courseware_agent",
     "get_assessment_agent",
     "get_brochure_agent",
     "get_document_agent",
     # Agent instructions
-    "CP_AGENT_INSTRUCTIONS",
     "COURSEWARE_AGENT_INSTRUCTIONS",
     "ASSESSMENT_AGENT_INSTRUCTIONS",
     "BROCHURE_AGENT_INSTRUCTIONS",
@@ -175,7 +163,6 @@ __all__ = [
     "BROCHURE_AGENT_MCP_CONFIG",
     "SLIDES_AGENT_MCP_CONFIG",
     # Schemas
-    "CPAgentResponse",
     "CoursewareAgentResponse",
     "AssessmentAgentResponse",
     "BrochureAgentResponse",

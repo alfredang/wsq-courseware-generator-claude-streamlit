@@ -17,22 +17,8 @@ load_dotenv()
 
 
 def get_database_url() -> str:
-    """Get DATABASE_URL from environment or Streamlit secrets"""
-    # First try environment variable
-    url = os.environ.get("DATABASE_URL", "")
-    if url:
-        return url
-
-    # Try Streamlit secrets
-    try:
-        import streamlit as st
-        url = st.secrets.get("DATABASE_URL", "")
-        if url:
-            return url
-    except:
-        pass
-
-    return ""
+    """Get DATABASE_URL from environment variables"""
+    return os.environ.get("DATABASE_URL", "")
 
 
 def get_connection():
@@ -98,7 +84,6 @@ def get_all_organizations() -> List[Dict[str, Any]]:
                 "address": row["address"] or "",
                 "logo": row["logo"] or "",
                 "templates": row["templates"] if row["templates"] else {
-                    "course_proposal": "",
                     "courseware": "",
                     "assessment": "",
                     "brochure": ""
@@ -136,7 +121,6 @@ def get_organization_by_id(org_id: int) -> Optional[Dict[str, Any]]:
                 "address": row["address"] or "",
                 "logo": row["logo"] or "",
                 "templates": row["templates"] if row["templates"] else {
-                    "course_proposal": "",
                     "courseware": "",
                     "assessment": "",
                     "brochure": ""
@@ -172,7 +156,6 @@ def get_organization_by_name(name: str) -> Optional[Dict[str, Any]]:
                 "address": row["address"] or "",
                 "logo": row["logo"] or "",
                 "templates": row["templates"] if row["templates"] else {
-                    "course_proposal": "",
                     "courseware": "",
                     "assessment": "",
                     "brochure": ""
@@ -191,7 +174,6 @@ def add_organization(org: Dict[str, Any]) -> bool:
         cur = conn.cursor()
 
         templates = org.get("templates", {
-            "course_proposal": "",
             "courseware": "",
             "assessment": "",
             "brochure": ""
@@ -224,7 +206,6 @@ def update_organization(org_id: int, org: Dict[str, Any]) -> bool:
         cur = conn.cursor()
 
         templates = org.get("templates", {
-            "course_proposal": "",
             "courseware": "",
             "assessment": "",
             "brochure": ""
@@ -260,7 +241,6 @@ def update_organization_by_name(name: str, org: Dict[str, Any]) -> bool:
         cur = conn.cursor()
 
         templates = org.get("templates", {
-            "course_proposal": "",
             "courseware": "",
             "assessment": "",
             "brochure": ""
@@ -342,7 +322,6 @@ def migrate_from_json(json_file: str) -> bool:
 
         for org in organizations:
             templates = org.get("templates", {
-                "course_proposal": "",
                 "courseware": "",
                 "assessment": "",
                 "brochure": ""
@@ -403,7 +382,6 @@ def search_organizations(query: str) -> List[Dict[str, Any]]:
                 "address": row["address"] or "",
                 "logo": row["logo"] or "",
                 "templates": row["templates"] if row["templates"] else {
-                    "course_proposal": "",
                     "courseware": "",
                     "assessment": "",
                     "brochure": ""

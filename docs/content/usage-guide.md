@@ -43,7 +43,6 @@ The AI Assistant at the bottom of every page helps with WSQ courseware tasks:
 
 ### Quick Navigation
 Type skill commands to navigate directly to modules:
-- `/generate_course_proposal` - Go to CP generation
 - `/generate_assessment_plan` - Go to Assessment Plan generation
 - `/generate_facilitator_guide` - Go to Facilitator Guide generation
 - `/generate_learner_guide` - Go to Learner Guide generation

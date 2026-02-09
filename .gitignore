@@ -45,15 +45,8 @@ input/
 output/
 
 # Generated outputs (created at runtime)
-generate_cp/output_docs/*.docx
-generate_cp/output_docs/*.xlsx
-generate_cp/json_output/*.json
-!generate_cp/json_output/instructional_methods.json
 generate_assessment/output/*
 common/generated_brochures/*.html
-
-# Keep template files but ignore outputs
-!generate_cp/templates/
 
 # OS files
 .DS_Store

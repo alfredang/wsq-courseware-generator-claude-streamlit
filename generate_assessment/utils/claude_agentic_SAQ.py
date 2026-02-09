@@ -12,7 +12,7 @@ import asyncio
 import json
 from generate_assessment.utils.pydantic_models import FacilitatorGuideExtraction
 from utils.helpers import parse_json_content
-from generate_cp.utils.claude_model_client import create_llm_client
+from utils.claude_model_client import create_llm_client
 
 
 def get_topics_for_all_k_statements(fg_data):

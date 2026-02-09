@@ -11,7 +11,6 @@ Usage:
     prompt = load_prompt("assessment/saq_generation")
 
     # Load with variable substitution
-    prompt = load_prompt("courseware/cp_interpretation", schema=course_schema)
     prompt = load_prompt("courseware/timetable_generation", num_of_days=3, list_of_im=methods)
 """
 
@@ -169,8 +168,7 @@ def list_available_prompt_templates() -> Dict[str, list]:
         >>> list_available_prompt_templates()
         {
             'assessment': ['saq_generation', 'practical_performance', 'case_study'],
-            'courseware': ['cp_interpretation', 'timetable_generation'],
-            'course_proposal': ['tsc_agent', 'research_team'],
+            'courseware': ['timetable_generation'],
             'shared': ['common_instructions']
         }
     """
@@ -229,11 +227,6 @@ def load_assessment_prompt(prompt_name: str, **kwargs) -> str:
 def load_courseware_prompt(prompt_name: str, **kwargs) -> str:
     """Load a courseware-related prompt."""
     return load_prompt(f"courseware/{prompt_name}", **kwargs)
-
-
-def load_course_proposal_prompt(prompt_name: str, **kwargs) -> str:
-    """Load a course proposal-related prompt."""
-    return load_prompt(f"course_proposal/{prompt_name}", **kwargs)
 
 
 def load_shared_prompt(prompt_name: str, **kwargs) -> str:

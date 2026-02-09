@@ -22,10 +22,6 @@ def lazy_import_annex():
     import add_assessment_to_ap.annex_assessment_v2 as annex_assessment_v2
     return annex_assessment_v2
 
-def lazy_import_course_proposal():
-    import generate_cp.app as course_proposal_app
-    return course_proposal_app
-
 def lazy_import_docs():
     import check_documents.sup_doc as sup_doc
     return sup_doc
@@ -55,7 +51,6 @@ def display_homepage():
     st.markdown("<h2 style='text-align: center; font-size: 1.75rem;'>WSQ Courseware Assistant with Claude Agents</h2>", unsafe_allow_html=True)
 
     modules = [
-        {"name": "Generate CP", "icon": "📄", "desc": "Create Course Proposals", "menu": "Generate CP"},
         {"name": "Generate AP/FG/LG/LP", "icon": "📚", "desc": "Generate Courseware Documents", "menu": "Generate AP/FG/LG/LP"},
         {"name": "Generate Assessment", "icon": "✅", "desc": "Create Assessment Materials", "menu": "Generate Assessment"},
         {"name": "Generate Slides", "icon": "🎯", "desc": "Create Presentation Slides", "menu": "Generate Slides"},
@@ -190,7 +185,6 @@ with st.sidebar:
     # Mapping from menu names to task IDs
     MENU_TO_TASK_ID = {
         "Home": "global",
-        "Generate CP": "generate_cp",
         "Generate AP/FG/LG/LP": "generate_courseware",
         "Generate Assessment": "generate_assessment",
         "Generate Slides": "generate_slides",
@@ -304,7 +298,6 @@ with st.sidebar:
     # Navigation menu
     menu_options = [
         "Home",
-        "Generate CP",
         "Generate AP/FG/LG/LP",
         "Generate Assessment",
         "Generate Slides",
@@ -315,7 +308,6 @@ with st.sidebar:
 
     menu_icons = [
         "house",
-        "filetype-doc",
         "file-earmark-richtext",
         "clipboard-check",
         "easel",
@@ -402,11 +394,6 @@ elif settings_page == "Company Management":
 elif page_to_display == "Home":
     st.session_state['settings_page'] = None
     display_homepage()
-
-elif page_to_display == "Generate CP":
-    st.session_state['settings_page'] = None
-    course_proposal_app = lazy_import_course_proposal()
-    course_proposal_app.app()
 
 elif page_to_display == "Generate AP/FG/LG/LP":
     st.session_state['settings_page'] = None

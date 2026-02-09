@@ -279,11 +279,6 @@ def edit_company_form(organizations: List[Dict], company_idx: int):
 
         col1, col2 = st.columns(2)
         with col1:
-            st.write("**Course Proposal Template**")
-            if templates.get("course_proposal"):
-                st.success(f"✅ Current: {templates.get('course_proposal').split('/')[-1]}")
-            cp_template_file = st.file_uploader("Upload Course Proposal Template", type=['docx', 'doc'], key=f"cp_template_{company_idx}")
-
             st.write("**Assessment Template**")
             if templates.get("assessment"):
                 st.success(f"✅ Current: {templates.get('assessment').split('/')[-1]}")
@@ -321,7 +316,6 @@ def edit_company_form(organizations: List[Dict], company_idx: int):
 
             # Handle template uploads
             template_files = {
-                "course_proposal": cp_template_file,
                 "courseware": courseware_template_file,
                 "assessment": assessment_template_file,
                 "brochure": brochure_template_file
@@ -424,7 +418,6 @@ def add_company_form(organizations: List[Dict]):
         st.write("Templates (Optional)")
         col1, col2 = st.columns(2)
         with col1:
-            cp_template_file = st.file_uploader("Course Proposal Template", type=['docx', 'doc'], key="new_cp_template")
             assessment_template_file = st.file_uploader("Assessment Template", type=['docx', 'doc'], key="new_assessment_template")
         with col2:
             courseware_template_file = st.file_uploader("Courseware Template", type=['docx', 'doc'], key="new_courseware_template")
@@ -442,7 +435,6 @@ def add_company_form(organizations: List[Dict]):
                     "address": company_address,
                     "logo": "",
                     "templates": {
-                        "course_proposal": "",
                         "courseware": "",
                         "assessment": "",
                         "brochure": ""
@@ -457,7 +449,6 @@ def add_company_form(organizations: List[Dict]):
 
                 # Handle template uploads
                 template_files = {
-                    "course_proposal": cp_template_file,
                     "courseware": courseware_template_file,
                     "assessment": assessment_template_file,
                     "brochure": brochure_template_file

@@ -2,7 +2,7 @@
 MCP Tools Server
 
 This MCP server exposes all courseware tools to the Claude Agent SDK.
-It wraps the 26 custom tools and makes them accessible via the
+It wraps the custom tools and makes them accessible via the
 Model Context Protocol.
 
 Author: Courseware Generator Team
@@ -19,16 +19,6 @@ from mcp.types import Tool, TextContent
 app = Server("courseware-tools")
 
 # Import all tool implementations
-from courseware_agents.tools.cp_tools import (
-    parse_tsc_document,
-    run_tsc_parsing_agent,
-    run_extraction_pipeline,
-    run_research_pipeline,
-    run_justification_pipeline,
-    generate_cp_document,
-    save_json_output,
-)
-
 from courseware_agents.tools.courseware_tools import (
     generate_assessment_plan,
     generate_facilitator_guide,
@@ -63,93 +53,6 @@ from courseware_agents.tools.document_tools import (
 
 # Tool definitions with JSON schemas
 TOOL_DEFINITIONS = [
-    # CP Agent Tools
-    Tool(
-        name="parse_tsc_document",
-        description="Parse a TSC document (DOCX) and extract structured data",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "file_path": {"type": "string", "description": "Path to the TSC document file"},
-                "output_path": {"type": "string", "description": "Path to save the parsed JSON output", "default": "generate_cp/json_output/output_TSC.json"}
-            },
-            "required": ["file_path"]
-        }
-    ),
-    Tool(
-        name="run_tsc_parsing_agent",
-        description="Run the TSC parsing agent to clean and structure TSC data",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "tsc_data_json": {"type": "string", "description": "Raw parsed TSC data as JSON string"},
-                "model_choice": {"type": "string", "description": "Model to use for parsing", "default": "claude-sonnet-4"}
-            },
-            "required": ["tsc_data_json"]
-        }
-    ),
-    Tool(
-        name="run_extraction_pipeline",
-        description="Extract course information, learning outcomes, topics, and assessment methods from TSC data",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "tsc_data_json": {"type": "string", "description": "Structured TSC data as JSON string"},
-                "model_choice": {"type": "string", "description": "Model to use for extraction", "default": "claude-sonnet-4"}
-            },
-            "required": ["tsc_data_json"]
-        }
-    ),
-    Tool(
-        name="run_research_pipeline",
-        description="Run job role analysis and course enhancement research",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "ensemble_output_json": {"type": "string", "description": "Extracted course data as JSON string"},
-                "model_choice": {"type": "string", "description": "Model to use for research", "default": "claude-sonnet-4"}
-            },
-            "required": ["ensemble_output_json"]
-        }
-    ),
-    Tool(
-        name="run_justification_pipeline",
-        description="Generate assessment justifications for Old CP format",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "ensemble_output_json": {"type": "string", "description": "Extracted course data as JSON string"},
-                "model_choice": {"type": "string", "description": "Model to use", "default": "claude-sonnet-4"}
-            },
-            "required": ["ensemble_output_json"]
-        }
-    ),
-    Tool(
-        name="generate_cp_document",
-        description="Generate the final CP Word document from mapped data",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "mapping_data_json": {"type": "string", "description": "Mapped data for document placeholders as JSON string"},
-                "template_path": {"type": "string", "description": "Path to the CP template document"},
-                "output_path": {"type": "string", "description": "Path to save the generated document"}
-            },
-            "required": ["mapping_data_json", "template_path", "output_path"]
-        }
-    ),
-    Tool(
-        name="save_json_output",
-        description="Save data to a JSON file",
-        inputSchema={
-            "type": "object",
-            "properties": {
-                "data_json": {"type": "string", "description": "Data to save as JSON string"},
-                "output_path": {"type": "string", "description": "Path to save the JSON file"}
-            },
-            "required": ["data_json", "output_path"]
-        }
-    ),
-    
     # Courseware Agent Tools
     Tool(
         name="generate_assessment_plan",
@@ -216,7 +119,7 @@ TOOL_DEFINITIONS = [
             "required": ["course_data_json", "start_date", "organization_json"]
         }
     ),
-    
+
     # Assessment Agent Tools
     Tool(
         name="generate_saq_questions",
@@ -280,7 +183,7 @@ TOOL_DEFINITIONS = [
             "required": ["raw_data_json"]
         }
     ),
-    
+
     # Brochure Agent Tools
     Tool(
         name="scrape_course_info",
@@ -339,7 +242,7 @@ TOOL_DEFINITIONS = [
             "required": ["course_data_json"]
         }
     ),
-    
+
     # Document Agent Tools
     Tool(
         name="extract_document_entities",
@@ -391,14 +294,6 @@ TOOL_DEFINITIONS = [
 
 # Tool function mapping
 TOOL_FUNCTIONS = {
-    # CP Tools
-    "parse_tsc_document": parse_tsc_document,
-    "run_tsc_parsing_agent": run_tsc_parsing_agent,
-    "run_extraction_pipeline": run_extraction_pipeline,
-    "run_research_pipeline": run_research_pipeline,
-    "run_justification_pipeline": run_justification_pipeline,
-    "generate_cp_document": generate_cp_document,
-    "save_json_output": save_json_output,
     # Courseware Tools
     "generate_assessment_plan": generate_assessment_plan,
     "generate_facilitator_guide": generate_facilitator_guide,
@@ -426,10 +321,6 @@ TOOL_FUNCTIONS = {
 
 # Async tools that need special handling
 ASYNC_TOOLS = {
-    "run_tsc_parsing_agent",
-    "run_extraction_pipeline",
-    "run_research_pipeline",
-    "run_justification_pipeline",
     "generate_assessment_plan",
     "generate_facilitator_guide",
     "generate_learner_guide",
@@ -453,16 +344,16 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
     """Execute a tool and return the result."""
     if name not in TOOL_FUNCTIONS:
         return [TextContent(type="text", text=json.dumps({"error": f"Unknown tool: {name}"}))]
-    
+
     try:
         func = TOOL_FUNCTIONS[name]
-        
+
         # Handle async vs sync functions
         if name in ASYNC_TOOLS:
             result = await func(**arguments)
         else:
             result = func(**arguments)
-        
+
         return [TextContent(type="text", text=result if isinstance(result, str) else json.dumps(result))]
     except Exception as e:
         return [TextContent(type="text", text=json.dumps({"error": str(e)}))]
@@ -471,7 +362,7 @@ async def call_tool(name: str, arguments: dict) -> list[TextContent]:
 async def main():
     """Run the MCP server."""
     from mcp.server.stdio import stdio_server
-    
+
     async with stdio_server() as (read_stream, write_stream):
         await app.run(
             read_stream,

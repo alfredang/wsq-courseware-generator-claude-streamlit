@@ -4,4 +4,4 @@ port = 7860
 address = "0.0.0.0"
 
 [theme]
-primaryColor = "#D97706"
+base = "dark"

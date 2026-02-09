@@ -20,23 +20,9 @@ try:
 except ImportError:
     pass
 
-# Try to import Streamlit secrets (optional)
-_st_secrets = None
-try:
-    import streamlit as st
-    _st_secrets = st.secrets
-except (ImportError, Exception):
-    pass
-
-
 def get_secret(key: str, default: str = "") -> str:
     """
-    Get a secret value from environment variables or Streamlit secrets.
-
-    Priority:
-    1. Environment variables
-    2. Streamlit secrets (if available)
-    3. Default value
+    Get a secret value from environment variables.
 
     Args:
         key: The secret key name
@@ -45,19 +31,7 @@ def get_secret(key: str, default: str = "") -> str:
     Returns:
         The secret value
     """
-    # First try environment variables
-    env_value = os.environ.get(key, "")
-    if env_value:
-        return env_value
-
-    # Then try Streamlit secrets
-    if _st_secrets is not None:
-        try:
-            return _st_secrets.get(key, default)
-        except Exception:
-            pass
-
-    return default
+    return os.environ.get(key, default)
 
 
 def get_secret_section(section: str) -> Optional[Dict[str, Any]]:
@@ -70,12 +44,6 @@ def get_secret_section(section: str) -> Optional[Dict[str, Any]]:
     Returns:
         Dictionary of section values or None
     """
-    if _st_secrets is not None:
-        try:
-            return dict(_st_secrets[section])
-        except (KeyError, Exception):
-            pass
-
     # Try to load from environment variable as JSON
     import json
     env_value = os.environ.get(f"{section}_JSON", "")

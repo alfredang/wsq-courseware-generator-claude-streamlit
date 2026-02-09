@@ -140,12 +140,6 @@ Do you have a Facilitator Guide I can use as source material? And which assessme
 
 
 # Import agent instructions from individual agent files
-def _get_cp_agent_instructions() -> str:
-    """Get CP Agent instructions."""
-    from courseware_agents.cp_agent import CP_AGENT_INSTRUCTIONS
-    return CP_AGENT_INSTRUCTIONS
-
-
 def _get_courseware_agent_instructions() -> str:
     """Get Courseware Agent instructions."""
     from courseware_agents.courseware_agent import COURSEWARE_AGENT_INSTRUCTIONS
@@ -171,12 +165,6 @@ def _get_document_agent_instructions() -> str:
 
 
 # Define subagents
-CP_AGENT = AgentDefinition(
-    name="cp_agent",
-    description="Course Proposal generation from TSC documents. Use for parsing TSC files and generating CP data.",
-    prompt=_get_cp_agent_instructions() if 'courseware_agents.cp_agent' in __builtins__ else "CP Agent for Course Proposal generation.",
-)
-
 COURSEWARE_AGENT = AgentDefinition(
     name="courseware_agent",
     description="AP/FG/LG/LP document generation. Use for generating Assessment Plans, Facilitator Guides, Learner Guides, and Lesson Plans.",
@@ -222,7 +210,6 @@ def get_orchestrator_options(
     return ClaudeAgentOptions(
         allowed_tools=["Read", "Write", "Edit", "Bash", "Glob", "Grep", "Task", "WebFetch"],
         agents={
-            "cp_agent": CP_AGENT,
             "courseware_agent": COURSEWARE_AGENT,
             "assessment_agent": ASSESSMENT_AGENT,
             "brochure_agent": BROCHURE_AGENT,
@@ -285,11 +272,6 @@ async def run_orchestrator_simple(
 
 
 # Convenience functions to get individual agent definitions
-def get_cp_agent() -> AgentDefinition:
-    """Get the CP Agent definition."""
-    return CP_AGENT
-
-
 def get_courseware_agent() -> AgentDefinition:
     """Get the Courseware Agent definition."""
     return COURSEWARE_AGENT

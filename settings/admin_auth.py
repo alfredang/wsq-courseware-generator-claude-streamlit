@@ -38,9 +38,9 @@ def logout():
 
 
 def _get_initial_credentials():
-    """Get initial credentials from environment variables or Streamlit secrets."""
-    username = os.environ.get("ADMIN_USERNAME") or st.secrets.get("ADMIN_USERNAME", "admin")
-    password = os.environ.get("ADMIN_PASSWORD") or st.secrets.get("ADMIN_PASSWORD", "")
+    """Get initial credentials from environment variables."""
+    username = os.environ.get("ADMIN_USERNAME", "admin")
+    password = os.environ.get("ADMIN_PASSWORD", "")
     return username, password
 
 
