@@ -11,6 +11,8 @@
 
 Built with **Claude Agent SDK** — all AI processing runs through Claude Code subscription.
 
+![WSQ Courseware Generator](screenshot.png)
+
 </div>
 
 ---
@@ -24,7 +26,7 @@ The **WSQ Courseware Generator** is an AI platform that automates the creation o
 | Feature | Description |
 |---------|-------------|
 | **Courseware Creation** | Auto-generate Assessment Plans, Facilitator Guides, and Learner Guides |
-| **Lesson Plan Generation** | Generate Lesson Plans with barrier algorithm scheduling |
+| **Lesson Plan Generation** | Generate Lesson Plans with pure Python barrier algorithm scheduling |
 | **Assessment Generation** | Create 9 assessment types (SAQ, PP, CS, PRJ, ASGN, OI, DEM, RP, OQ) |
 | **Slides Generation** | AI-enhanced slides with NotebookLM integration |
 | **Brochure Creation** | Design marketing brochures via web scraping |
@@ -66,13 +68,9 @@ The **WSQ Courseware Generator** is an AI platform that automates the creation o
 │                  CLAUDE AGENT SDK (courseware_agents/)           │
 │                                                                 │
 │  ┌────────────────┐ ┌────────────────┐ ┌────────────────┐      │
-│  │ CP Interpreter │ │   Assessment   │ │   Timetable    │      │
-│  │  (cp → JSON)   │ │   Generator    │ │   Generator    │      │
+│  │ CP Interpreter │ │   Assessment   │ │    Slides      │      │
+│  │  (cp → JSON)   │ │   Generator    │ │    Agent       │      │
 │  └────────────────┘ └────────────────┘ └────────────────┘      │
-│  ┌────────────────┐ ┌────────────────┐                         │
-│  │    Entity      │ │    Slides      │                         │
-│  │   Extractor    │ │    Agent       │                         │
-│  └────────────────┘ └────────────────┘                         │
 └────────────────────────────┬───────────────────────────────────┘
                              │
 ┌────────────────────────────▼───────────────────────────────────┐
@@ -88,6 +86,7 @@ The **WSQ Courseware Generator** is an AI platform that automates the creation o
 ```
 courseware_claude_streamlit/
 ├── app.py                          # Main Streamlit application
+├── pyproject.toml                  # Python project metadata
 ├── requirements.txt                # Python dependencies
 ├── .streamlit/config.toml          # Streamlit configuration
 │
@@ -95,21 +94,18 @@ courseware_claude_streamlit/
 │   ├── base.py                     # Core run_agent() wrapper
 │   ├── cp_interpreter.py           # Course Proposal → JSON
 │   ├── assessment_generator.py     # FG → assessment questions
-│   ├── timetable_agent.py          # Context → lesson plan timetable
-│   ├── entity_extractor.py         # Document → named entities
 │   └── slides_agent.py             # Document → slide instructions
 │
 ├── generate_ap_fg_lg_lp/           # Courseware generation
 │   ├── courseware_generation.py     # AP/FG/LG Streamlit page
 │   ├── lesson_plan_generation.py   # Lesson Plan page
-│   └── utils/                      # Template filling modules
+│   └── utils/                      # Template filling & timetable
 │
 ├── generate_assessment/            # Assessment generation
-│   ├── assessment_generation.py    # Assessment Streamlit page
-│   └── utils/                      # Template filling modules
+│   └── assessment_generation.py    # Assessment Streamlit page
 │
 ├── generate_slides/                # Slides generation
-│   └── slides_generation.py        # NotebookLM + Agent SDK
+│   └── slides_generation.py        # NotebookLM integration
 │
 ├── generate_brochure/              # Brochure generation
 │   └── brochure_generation.py      # Web scraping + template
@@ -118,16 +114,14 @@ courseware_claude_streamlit/
 │   └── annex_assessment_v2.py
 │
 ├── courseware_audit/                # Courseware audit
-│   └── sup_doc.py                  # Entity extraction page
+│   ├── sup_doc.py                  # Entity extraction page
+│   └── audit_agent.py              # Audit field extraction agent
 │
 ├── extract_course_info/            # CP parsing (pure Python)
 │   └── extract_course_info.py
 │
-├── settings/                       # Settings & authentication
-│   ├── settings.py                 # Prompt Templates UI
-│   ├── admin_auth.py               # Admin authentication
-│   ├── api_database.py             # SQLite database
-│   └── model_configs.py            # Claude model definitions
+├── settings/                       # Settings
+│   └── api_database.py             # SQLite (prompt templates)
 │
 ├── company/                        # Company management (PostgreSQL)
 │   ├── company_settings.py
@@ -135,10 +129,10 @@ courseware_claude_streamlit/
 │   └── database.py
 │
 ├── utils/                          # Shared utilities
-│   ├── claude_model_client.py      # Model ID mapping
-│   └── prompt_loader.py            # Prompt template loader
-│
-├── prompt_templates/               # Prompt template markdown files
+│   ├── agent_runner.py             # Background agent job manager
+│   ├── agent_status.py             # Agent status UI components
+│   ├── helpers.py                  # File & JSON utilities
+│   └── prompt_template_editor.py   # Prompt template editing UI
 │
 └── .claude/                        # Claude Code configuration
     ├── settings.local.json         # MCP server config (NotebookLM)
@@ -195,20 +189,15 @@ All AI processing uses the **Claude Agent SDK** via the `courseware_agents/` mod
 | Agent | Input | Output |
 |-------|-------|--------|
 | `cp_interpreter` | Parsed Course Proposal | Structured JSON context |
-| `assessment_generator` | FG data + K/A statements | Assessment questions (9 types) |
-| `timetable_agent` | Course context JSON | Lesson plan timetable |
-| `entity_extractor` | Document text | Named entities (PERSON, UEN, etc.) |
+| `assessment_generator` | Course context + K/A statements | Assessment questions (9 types) |
 | `slides_agent` | Document text | Enhanced slide instructions |
 
 ```python
 import asyncio
-from courseware_agents import interpret_cp, generate_timetable
+from courseware_agents import interpret_cp, generate_assessments
 
 # Interpret a Course Proposal
 context = asyncio.run(interpret_cp("output/parsed_cp.md"))
-
-# Generate timetable from context
-timetable = asyncio.run(generate_timetable("output/context.json"))
 ```
 
 ---
