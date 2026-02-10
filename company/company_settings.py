@@ -15,7 +15,8 @@ from datetime import datetime
 from typing import Dict, List, Any
 from PIL import Image
 
-from generate_ap_fg_lg.utils.organizations import get_organizations, save_organizations
+from generate_ap_fg_lg.utils.organizations import get_organizations
+from company.database import add_organization, update_organization_by_name
 
 
 def company_management_app():
@@ -134,7 +135,7 @@ def display_company_list(organizations: List[Dict]):
 
     # Display as compact table/list
     # Header row
-    hcol1, hcol2, hcol3, hcol4 = st.columns([3, 1.5, 3, 0.5])
+    hcol1, hcol2, hcol3, hcol4, hcol5 = st.columns([3, 1.5, 2.5, 0.5, 0.5])
     with hcol1:
         st.markdown("**Company Name**")
     with hcol2:
@@ -142,11 +143,13 @@ def display_company_list(organizations: List[Dict]):
     with hcol3:
         st.markdown("**Address**")
     with hcol4:
+        st.markdown("**Logo**")
+    with hcol5:
         st.markdown("")  # Empty header for edit button
 
     # Company rows
     for idx, company in enumerate(filtered_orgs):
-        col1, col2, col3, col4 = st.columns([3, 1.5, 3, 0.5])
+        col1, col2, col3, col4, col5 = st.columns([3, 1.5, 2.5, 0.5, 0.5])
 
         with col1:
             st.markdown(f"**{company['name']}**", unsafe_allow_html=True)
@@ -162,6 +165,11 @@ def display_company_list(organizations: List[Dict]):
                 st.markdown("<span style='color:#666'>-</span>", unsafe_allow_html=True)
 
         with col4:
+            logo_path = company.get('logo', '')
+            has_logo = bool(logo_path and os.path.exists(logo_path))
+            st.checkbox("Logo", value=has_logo, disabled=True, key=f"logo_check_{idx}", label_visibility="collapsed")
+
+        with col5:
             original_idx = organizations.index(company)
             if st.button("✏️", key=f"edit_btn_{idx}", help="Edit company"):
                 st.session_state['edit_company_idx'] = original_idx
@@ -318,12 +326,10 @@ def edit_company_form(organizations: List[Dict], company_idx: int):
                     if template_path:
                         updated_company["templates"][template_type] = template_path
 
-            # Update the organization in the list
-            organizations[company_idx] = updated_company
-
-            # Save to file
-            if save_organizations(organizations):
-                st.success(f"✅ Company '{new_name}' updated successfully!")
+            # Save single company to database
+            old_name = company["name"]
+            if update_organization_by_name(old_name, updated_company):
+                st.toast(f"Company '{new_name}' updated successfully!", icon="✅")
                 # Clear cache to refresh sidebar company list
                 st.cache_data.clear()
                 st.rerun()
@@ -342,16 +348,15 @@ def edit_company_form(organizations: List[Dict], company_idx: int):
             backup_success = backup_company_files(company)
 
             if backup_success:
-                # Remove from organizations list
-                organizations.pop(company_idx)
-
                 # Clear any session state that might reference old indices
                 keys_to_remove = [key for key in st.session_state.keys() if key.startswith('confirm_delete_')]
                 for key in keys_to_remove:
                     del st.session_state[key]
 
-                if save_organizations(organizations):
-                    st.session_state[f'delete_success_{company_idx}'] = f"✅ Company '{company_name}' deleted successfully! Files backed up to company/deleted_companies/"
+                # Delete single company from database
+                from company.database import delete_organization_by_name
+                if delete_organization_by_name(company_name):
+                    st.toast(f"Company '{company_name}' deleted! Files backed up.", icon="✅")
                     # Clear cache to refresh sidebar company list
                     st.cache_data.clear()
                     st.rerun()
@@ -414,12 +419,16 @@ def add_company_form(organizations: List[Dict]):
             courseware_template_file = st.file_uploader("Courseware Template", type=['docx', 'doc'], key="new_courseware_template")
             brochure_template_file = st.file_uploader("Brochure Template", type=['docx', 'doc'], key="new_brochure_template")
 
-        # Submit button
-        submitted = st.form_submit_button("➕ Add Company", type="primary")
+        # Two buttons: Add (new) and Update (existing)
+        btn_col1, btn_col2 = st.columns(2)
+        with btn_col1:
+            add_submitted = st.form_submit_button("➕ Add Company", type="primary")
+        with btn_col2:
+            update_submitted = st.form_submit_button("🔄 Update Company")
 
-        if submitted:
+        if add_submitted or update_submitted:
             if company_name and company_uen:
-                # Create new company
+                # Build company data
                 new_company = {
                     "name": company_name,
                     "uen": company_uen,
@@ -451,24 +460,48 @@ def add_company_form(organizations: List[Dict]):
                         if template_path:
                             new_company["templates"][template_type] = template_path
 
-                # Add to organizations
-                organizations.append(new_company)
+                # Check if company already exists
+                from company.database import get_organization_by_name
+                existing = get_organization_by_name(company_name)
 
-                # Save to file
-                if save_organizations(organizations):
-                    # Store success message to show after rerun
-                    st.session_state['add_company_success'] = f"✅ Company '{company_name}' added successfully!"
-                    # Clear form fields by setting flag
-                    st.session_state.clear_form = True
-                    # Clear any temporary values
-                    for key in ['temp_company_name', 'temp_company_uen', 'temp_company_address']:
-                        if key in st.session_state:
-                            del st.session_state[key]
-                    # Clear cache to refresh sidebar company list
-                    st.cache_data.clear()
-                    st.rerun()
-                else:
-                    st.error("❌ Error adding company. Please try again.")
+                if add_submitted:
+                    if existing:
+                        st.error(f"❌ Company '{company_name}' already exists. Use 'Update Company' instead.")
+                    elif add_organization(new_company):
+                        st.toast(f"Company '{company_name}' added successfully!", icon="✅")
+                        st.session_state['add_company_success'] = f"✅ Company '{company_name}' added successfully!"
+                        st.session_state.clear_form = True
+                        for key in ['temp_company_name', 'temp_company_uen', 'temp_company_address']:
+                            if key in st.session_state:
+                                del st.session_state[key]
+                        st.cache_data.clear()
+                        st.rerun()
+                    else:
+                        st.error("❌ Error adding company. Please try again.")
+
+                elif update_submitted:
+                    if not existing:
+                        st.error(f"❌ Company '{company_name}' not found. Use 'Add Company' instead.")
+                    else:
+                        # Preserve existing logo/templates if not uploading new ones
+                        if not uploaded_logo and existing.get("logo"):
+                            new_company["logo"] = existing["logo"]
+                        existing_templates = existing.get("templates", {})
+                        for t_type in ["courseware", "assessment", "brochure"]:
+                            if not new_company["templates"].get(t_type) and existing_templates.get(t_type):
+                                new_company["templates"][t_type] = existing_templates[t_type]
+
+                        if update_organization_by_name(company_name, new_company):
+                            st.toast(f"Company '{company_name}' updated successfully!", icon="✅")
+                            st.session_state['add_company_success'] = f"✅ Company '{company_name}' updated successfully!"
+                            st.session_state.clear_form = True
+                            for key in ['temp_company_name', 'temp_company_uen', 'temp_company_address']:
+                                if key in st.session_state:
+                                    del st.session_state[key]
+                            st.cache_data.clear()
+                            st.rerun()
+                        else:
+                            st.error("❌ Error updating company. Please try again.")
             else:
                 st.error("❌ Please fill in required fields: Company Name and UEN")
 
