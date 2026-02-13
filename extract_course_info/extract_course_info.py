@@ -139,18 +139,18 @@ def app():
         key="extract_cp_upload"
     )
 
-    # --- Optional fields ---
-    st.markdown("**Optional: Supplement missing info from external sources**")
+    # --- Required & Optional fields ---
     col1, col2 = st.columns(2)
     with col1:
         course_ref_code = st.text_input(
-            "Course Ref Code (TGS)",
+            "Course Ref Code (TGS) *",
             placeholder="e.g. TGS-2024001234",
-            key="extract_course_ref_code"
+            key="extract_course_ref_code",
+            help="Required. This TGS code will appear in all generated courseware documents (AP, FG, LG, Lesson Plan, etc.)."
         )
     with col2:
         course_url = st.text_input(
-            "Course URL",
+            "Course URL (Optional)",
             placeholder="e.g. https://www.myskillsfuture.gov.sg/...",
             key="extract_course_url"
         )
@@ -162,6 +162,8 @@ def app():
     if st.button("Extract Course Info", type="primary"):
         if cp_file is None:
             st.error("Please upload a Course Proposal document.")
+        elif not course_ref_code.strip():
+            st.error("Please enter the Course Ref Code (TGS). This is required for all generated documents.")
         else:
             # Parse CP (fast, synchronous)
             try:
@@ -177,6 +179,10 @@ def app():
                     tmp.write(raw_data)
                     parsed_cp_path = tmp.name
                 st.session_state['_extract_cp_temp_path'] = parsed_cp_path
+
+                # Save user-entered TGS ref code for merging after extraction
+                if course_ref_code:
+                    st.session_state['_user_tgs_ref_no'] = course_ref_code
 
                 # Submit background agent job
                 job = submit_agent_job(
@@ -199,7 +205,14 @@ def app():
     def _on_extract_complete(job):
         result = job["result"]
         if result:
+            # Merge user-entered TGS ref code if agent didn't return one
+            user_tgs = st.session_state.get('_user_tgs_ref_no', '')
+            if user_tgs and not result.get('TGS_Ref_No'):
+                result['TGS_Ref_No'] = user_tgs
             st.session_state['extracted_course_info'] = result
+            # Clear downstream contexts so they pick up the new data
+            st.session_state.pop('context', None)
+            st.session_state.pop('lp_context', None)
         # Clean up temp file
         temp_path = st.session_state.pop('_extract_cp_temp_path', None)
         if temp_path and os.path.exists(temp_path):

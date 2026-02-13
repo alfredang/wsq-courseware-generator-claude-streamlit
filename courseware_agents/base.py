@@ -18,6 +18,7 @@ async def run_agent(
     tools: Optional[list] = None,
     working_dir: Optional[str] = None,
     max_turns: int = 30,
+    model: Optional[str] = None,
 ) -> str:
     """
     Run a Claude agent with the given prompt and return the result text.
@@ -28,6 +29,7 @@ async def run_agent(
         tools: List of tools the agent can use. Defaults to read-only tools.
         working_dir: Working directory for the agent. Defaults to project root.
         max_turns: Maximum number of agent turns.
+        model: Optional model ID (e.g. 'claude-sonnet-4-20250514').
 
     Returns:
         The agent's final text output.
@@ -43,6 +45,9 @@ async def run_agent(
         permission_mode="bypassPermissions",
         max_turns=max_turns,
     )
+
+    if model:
+        options.model = model
 
     if system_prompt:
         options.system_prompt = system_prompt
@@ -70,6 +75,7 @@ async def run_agent_json(
     tools: Optional[list] = None,
     working_dir: Optional[str] = None,
     max_turns: int = 30,
+    model: Optional[str] = None,
 ) -> dict:
     """
     Run a Claude agent and parse the result as JSON.
@@ -80,6 +86,7 @@ async def run_agent_json(
         tools: List of tools the agent can use.
         working_dir: Working directory for the agent.
         max_turns: Maximum number of agent turns.
+        model: Optional model ID (e.g. 'claude-sonnet-4-20250514').
 
     Returns:
         Parsed JSON dict from the agent's output.
@@ -93,6 +100,7 @@ async def run_agent_json(
         tools=tools,
         working_dir=working_dir,
         max_turns=max_turns,
+        model=model,
     )
 
     # Try to extract JSON from the result

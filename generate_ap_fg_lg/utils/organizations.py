@@ -57,6 +57,9 @@ def get_default_organization() -> Dict[str, Any]:
         "uen": "201200696W",
         "logo": "common/logo/tertiary_infotech_pte_ltd.jpg",
         "address": "",
+        "company_url": "",
+        "ssg_url": "",
+        "email": "",
         "templates": {
             "courseware": "",
             "assessment": "",
@@ -72,6 +75,9 @@ def replace_company_branding(content: str, company: Dict[str, Any]) -> str:
         "{{COMPANY_UEN}}": company.get("uen", ""),
         "{{COMPANY_ADDRESS}}": company.get("address", ""),
         "{{COMPANY_LOGO}}": company.get("logo", ""),
+        "{{COMPANY_URL}}": company.get("company_url", ""),
+        "{{SSG_URL}}": company.get("ssg_url", ""),
+        "{{COMPANY_EMAIL}}": company.get("email", ""),
         # Legacy support
         "Tertiary Infotech Pte Ltd": company.get("name", "Tertiary Infotech Academy Pte Ltd"),
         "201200696W": company.get("uen", "201200696W")

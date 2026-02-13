@@ -255,6 +255,28 @@ def edit_company_form(organizations: List[Dict], company_idx: int):
         new_uen = st.text_input("UEN", value=company["uen"])
         new_address = st.text_area("Address", value=company.get("address", ""))
 
+        # URLs
+        new_company_url = st.text_input(
+            "Company URL",
+            value=company.get("company_url", ""),
+            placeholder="e.g. https://www.yourcompany.com"
+        )
+        # Auto-generate SSG URL from UEN if not already set
+        current_ssg = company.get("ssg_url", "")
+        if not current_ssg and company.get("uen"):
+            current_ssg = f"https://www.myskillsfuture.gov.sg/content/portal/en/public/training-provider.html?UEN={company['uen']}"
+        new_ssg_url = st.text_input(
+            "SSG URL",
+            value=current_ssg,
+            placeholder="e.g. https://www.myskillsfuture.gov.sg/content/portal/en/public/training-provider.html?UEN=...",
+            help="SkillsFuture Singapore training provider URL. Auto-generated from UEN if left empty."
+        )
+        new_email = st.text_input(
+            "Email",
+            value=company.get("email", ""),
+            placeholder="e.g. info@yourcompany.com"
+        )
+
         # Logo upload
         st.write("Company Logo")
         current_logo_path = company.get("logo", "")
@@ -299,12 +321,20 @@ def edit_company_form(organizations: List[Dict], company_idx: int):
 
         if submitted:
             # Update company data
+            # Auto-generate SSG URL from UEN if user left it empty
+            ssg_url_value = new_ssg_url.strip()
+            if not ssg_url_value and new_uen.strip():
+                ssg_url_value = f"https://www.myskillsfuture.gov.sg/content/portal/en/public/training-provider.html?UEN={new_uen.strip()}"
+
             updated_company = {
                 "name": new_name,
                 "uen": new_uen,
                 "address": new_address,
                 "logo": company["logo"],  # Keep existing logo path initially
-                "templates": company.get("templates", {})  # Keep existing templates initially
+                "templates": company.get("templates", {}),  # Keep existing templates initially
+                "company_url": new_company_url.strip(),
+                "ssg_url": ssg_url_value,
+                "email": new_email.strip(),
             }
 
             # Handle logo upload
@@ -402,6 +432,24 @@ def add_company_form(organizations: List[Dict]):
             placeholder="Enter company address (optional)"
         )
 
+        # URLs
+        company_url = st.text_input(
+            "Company URL",
+            value="" if st.session_state.clear_form else st.session_state.get('temp_company_url', ''),
+            placeholder="e.g. https://www.yourcompany.com"
+        )
+        ssg_url = st.text_input(
+            "SSG URL",
+            value="" if st.session_state.clear_form else st.session_state.get('temp_ssg_url', ''),
+            placeholder="e.g. https://www.myskillsfuture.gov.sg/content/portal/en/public/training-provider.html?UEN=...",
+            help="SkillsFuture Singapore training provider URL. Auto-generated from UEN if left empty."
+        )
+        company_email = st.text_input(
+            "Email",
+            value="" if st.session_state.clear_form else st.session_state.get('temp_company_email', ''),
+            placeholder="e.g. info@yourcompany.com"
+        )
+
         # Logo upload
         uploaded_logo = st.file_uploader(
             "Upload company logo",
@@ -429,10 +477,18 @@ def add_company_form(organizations: List[Dict]):
         if add_submitted or update_submitted:
             if company_name and company_uen:
                 # Build company data
+                # Auto-generate SSG URL from UEN if user left it empty
+                ssg_url_value = ssg_url.strip()
+                if not ssg_url_value and company_uen.strip():
+                    ssg_url_value = f"https://www.myskillsfuture.gov.sg/content/portal/en/public/training-provider.html?UEN={company_uen.strip()}"
+
                 new_company = {
                     "name": company_name,
                     "uen": company_uen,
                     "address": company_address,
+                    "company_url": company_url.strip(),
+                    "ssg_url": ssg_url_value,
+                    "email": company_email.strip(),
                     "logo": "",
                     "templates": {
                         "courseware": "",
@@ -471,7 +527,7 @@ def add_company_form(organizations: List[Dict]):
                         st.toast(f"Company '{company_name}' added successfully!", icon="✅")
                         st.session_state['add_company_success'] = f"✅ Company '{company_name}' added successfully!"
                         st.session_state.clear_form = True
-                        for key in ['temp_company_name', 'temp_company_uen', 'temp_company_address']:
+                        for key in ['temp_company_name', 'temp_company_uen', 'temp_company_address', 'temp_company_url', 'temp_ssg_url', 'temp_company_email']:
                             if key in st.session_state:
                                 del st.session_state[key]
                         st.cache_data.clear()

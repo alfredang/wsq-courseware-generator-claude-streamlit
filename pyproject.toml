@@ -9,12 +9,10 @@ dependencies = [
     "streamlit>=1.30.0",
     "streamlit-option-menu",
     "streamlit-modal",
-
     # Data Processing
     "pydantic>=2.0.0",
     "pandas",
     "openpyxl",
-
     # Document Generation & Processing
     "python-docx",
     "docxtpl",
@@ -23,21 +21,17 @@ dependencies = [
     "pymupdf",
     "pillow",
     "jinja2",
-
     # Web & Network
     "requests",
     "beautifulsoup4",
-
     # Browser Automation (brochure)
     "playwright",
-
     # Database
     "psycopg2-binary",
     "python-dotenv",
-
     # AI Processing
     "claude-agent-sdk",
-
     # NotebookLM (slide generation)
     "notebooklm-py[browser]",
+    "setuptools<71",
 ]

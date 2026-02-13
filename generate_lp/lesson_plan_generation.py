@@ -112,15 +112,25 @@ def app():
         if os.path.exists(docx_path):
             ctx = st.session_state.get('lp_context', {})
             course_title = ctx.get('Course_Title', 'Course')
+            tgs_ref = ctx.get('TGS_Ref_No', '')
             safe_title = ''.join(
                 c if c.isalnum() or c in (' ', '_', '-') else '_'
                 for c in str(course_title)
             )[:50].strip('_')
+            safe_tgs = ''.join(
+                c if c.isalnum() or c in ('-', '_') else '_'
+                for c in str(tgs_ref)
+            ).strip('_')
+
+            if safe_tgs:
+                lp_filename = f"LP_{safe_tgs}_{safe_title}_v1.docx"
+            else:
+                lp_filename = f"LP_{safe_title}_v1.docx"
 
             with open(docx_path, "rb") as f:
                 st.download_button(
                     label="Download Lesson Plan (.docx)",
                     data=f.read(),
-                    file_name=f"LP_{safe_title}_v1.docx",
+                    file_name=lp_filename,
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                 )

@@ -157,7 +157,11 @@ with st.sidebar:
     st.markdown("<div style='font-size: 0.85rem; font-weight: 600; margin-bottom: 0.3rem;'>Settings</div>", unsafe_allow_html=True)
 
     if st.button("Companies", use_container_width=True):
-        st.session_state['settings_page'] = "Company Management"
+        if st.session_state.get('settings_page') == "Company Management":
+            # Toggle: clicking again exits Company Management
+            st.session_state['settings_page'] = None
+        else:
+            st.session_state['settings_page'] = "Company Management"
         st.rerun()
 
     # Running agents status
@@ -192,6 +196,9 @@ settings_page = st.session_state.get('settings_page', None)
 page_to_display = st.session_state.get('current_page', 'Extract Course Info')
 
 if settings_page == "Company Management":
+    if st.button("← Back to " + page_to_display):
+        st.session_state['settings_page'] = None
+        st.rerun()
     company_settings = lazy_import_company_settings()
     company_settings.company_management_app()
 

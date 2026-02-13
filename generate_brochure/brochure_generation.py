@@ -609,24 +609,44 @@ def extract_entry_requirements(soup) -> EntryRequirements:
 
 def extract_certificate_info(soup, tsc_code: str, tsc_title: str, tsc_framework: str) -> CertificateInfo:
     """Extract certificate information from the webpage"""
-    text = soup.get_text()
     cert_info = CertificateInfo()
 
-    # Look for Certificate section content
-    cert_patterns = [
-        r'Certificate\s*[:\n]+(.*?)(?=Minimum Entry|Entry Requirement|Knowledge and Skills|WSQ Funding|\$|Course Schedule)',
-        r'Course Certificate\s*[:\n]+(.*?)(?=Minimum Entry|Entry Requirement|Knowledge and Skills|WSQ Funding|\$)',
-        r'Certification\s*[:\n]+(.*?)(?=Minimum Entry|Entry Requirement|Knowledge and Skills|WSQ Funding|\$)',
-    ]
-
+    # Try to find certificate section by looking at specific content elements
+    # (avoid soup.get_text() which includes nav menus)
     cert_text = ""
-    for pattern in cert_patterns:
-        match = re.search(pattern, text, re.IGNORECASE | re.DOTALL)
-        if match:
-            cert_text = match.group(1).strip()
-            # Clean up the text
-            cert_text = re.sub(r'\s+', ' ', cert_text)
-            break
+
+    # Look for heading elements containing "Certif" and get their sibling content
+    for heading in soup.find_all(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'strong', 'b']):
+        heading_text = heading.get_text(strip=True)
+        if re.search(r'^(Course\s+)?Certific', heading_text, re.IGNORECASE):
+            # Get text from sibling elements until next heading/section
+            parts = []
+            for sibling in heading.find_next_siblings():
+                if sibling.name in ('h1', 'h2', 'h3', 'h4', 'h5', 'h6'):
+                    break
+                sib_text = sibling.get_text(strip=True)
+                if sib_text and len(sib_text) < 500:  # Skip nav menu dumps
+                    parts.append(sib_text)
+            if parts:
+                cert_text = ' '.join(parts)
+                break
+
+    # Also try parent container approach
+    if not cert_text:
+        for el in soup.find_all(string=re.compile(r'Certific(?:ate|ation)', re.IGNORECASE)):
+            parent = el.find_parent(['div', 'section'])
+            if parent:
+                parent_text = parent.get_text(separator=' ', strip=True)
+                # Validate it's actual certificate content (not nav menu)
+                if len(parent_text) < 1000 and 'Shopping Cart' not in parent_text:
+                    cert_text = parent_text
+                    # Remove the heading itself
+                    cert_text = re.sub(r'^.*?Certific(?:ate|ation)\s*', '', cert_text, flags=re.IGNORECASE)
+                    break
+
+    # Clean up
+    if cert_text:
+        cert_text = re.sub(r'\s{2,}', ' ', cert_text).strip()
 
     cert_info.certificate_text = cert_text
 
@@ -1764,13 +1784,12 @@ def populate_brochure_template(course_data: CourseData) -> str:
         template_content = template_content.replace('$442.50', wsq_funding.get('Baseline', '$531.00'))
         template_content = template_content.replace('$292.50', wsq_funding.get('MCES / SME', '$351.00'))
         
-        # Replace certificate information based on extracted certificate_info
+        # Replace certificate section with scraped content
         cert_info = data_dict.get('certificate_info', {})
         tsc_title = data_dict.get('tsc_title', 'Skills Development')
         tsc_code = data_dict.get('tsc_code', '')
         tsc_framework = data_dict.get('tsc_framework', 'ICT')
 
-        # Clean up values
         if tsc_title == "Not Applicable":
             tsc_title = "Skills Development"
         if tsc_code == "Not Applicable":
@@ -1778,27 +1797,48 @@ def populate_brochure_template(course_data: CourseData) -> str:
         if tsc_framework == "Not Applicable":
             tsc_framework = "ICT"
 
-        # Build the certificate detail text for WSQ courses
-        if tsc_code:
-            tsc_info = f"{tsc_title} {tsc_code} TSC".strip()
-        else:
-            tsc_info = f"{tsc_title} TSC".strip()
-
-        # Ensure proper TSC suffix
-        if not tsc_info.endswith("TSC"):
-            tsc_info = f"{tsc_info} TSC"
-
-        # Check if this is a WSQ course (has valid TSC code)
+        # Build dynamic certificate section HTML from scraped data
+        cert_text = cert_info.get('certificate_text', '') if cert_info else ''
         has_wsq_cert = cert_info.get('has_wsq_cert', False) if cert_info else False
         if not has_wsq_cert and tsc_code and len(tsc_code) > 5:
-            has_wsq_cert = True  # Fallback check based on TSC code
+            has_wsq_cert = True
 
-        # The skills framework replacement (above) already updates the TSC info in both
-        # the course info section AND the certificate section. We just need to verify
-        # the certificate section is present.
+        # Build certificate items HTML
+        cert_items_html = ""
+        if has_wsq_cert:
+            # WSQ courses always use the standard format (reliable, no scraping issues)
+            tsc_info = f"{tsc_title} {tsc_code} TSC".strip() if tsc_code else f"{tsc_title} TSC".strip()
+            cert_items_html = f'            <p class="cert-subheader">1. Statement of Achievement</p>\n'
+            cert_items_html += f'            <p class="cert-detail"><strong>{tsc_info}</strong> under {tsc_framework} Skills Framework issued by WSG/SSG.</p>\n'
+            cert_items_html += f'            <p class="cert-subheader">2. Certification of Achievement <span class="cert-normal">issued by Tertiary Infotech Academy Pte Ltd.</span></p>\n'
+        elif cert_text and len(cert_text) < 500:
+            # Non-WSQ: use scraped text only if it's clean (not nav menu garbage)
+            parts = re.split(r'(?=Certificate of Completion|OpenCert|Statement of Achievement|Certification of Achievement)', cert_text, flags=re.IGNORECASE)
+            parts = [p.strip() for p in parts if p.strip()]
+            if parts:
+                for i, part in enumerate(parts, 1):
+                    title_match = re.match(r'^(.+?)\s*[-–:]\s*(.+)$', part, re.DOTALL)
+                    if title_match:
+                        title = title_match.group(1).strip()
+                        desc = title_match.group(2).strip()
+                        cert_items_html += f'            <p class="cert-subheader">{i}. {title}</p>\n'
+                        cert_items_html += f'            <p class="cert-detail">{desc}</p>\n'
+                    else:
+                        cert_items_html += f'            <p class="cert-subheader">{i}. {part}</p>\n'
+        if not cert_items_html:
+            cert_items_html = '            <p class="cert-detail">Certificate of Completion will be awarded upon successful completion of the course.</p>\n'
 
-        # Verify certificate section exists - if not, there's a template issue
-        if 'class="certificate-section"' not in template_content:
+        intro_text = "Two e-certificates will be awarded to trainees who have passed the assessment."
+        new_cert_section = f'''<div class="certificate-section">
+            <h3>Course Certificate</h3>
+            <p>{intro_text}</p>
+{cert_items_html}        </div>'''
+
+        # Replace the entire certificate section block
+        cert_section_pattern = r'<div class="certificate-section">.*?</div>'
+        if re.search(cert_section_pattern, template_content, re.DOTALL):
+            template_content = re.sub(cert_section_pattern, new_cert_section, template_content, flags=re.DOTALL)
+        else:
             st.warning("Certificate section not found in template - check brochure.html")
 
         # Debug: Save a copy of the generated HTML for inspection

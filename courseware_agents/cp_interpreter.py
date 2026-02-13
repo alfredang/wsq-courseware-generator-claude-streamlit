@@ -19,6 +19,7 @@ CRITICAL: Return ONLY a valid JSON object with no additional text or explanation
 The JSON must follow this exact schema:
 {
     "Course_Title": "string",
+    "TGS_Ref_No": "string (TGS course reference code, e.g., TGS-2024001234)",
     "TSC_Title": "string (Technical Skills & Competency title)",
     "TSC_Code": "string (e.g., ICT-XXX-3.1)",
     "TSC_Category": "string",

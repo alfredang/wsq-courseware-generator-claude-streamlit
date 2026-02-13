@@ -24,8 +24,10 @@ import hashlib
 
 from copy import deepcopy
 from docx import Document
-from docx.shared import Pt, Inches, RGBColor
+from docx.shared import Pt, Inches, RGBColor, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.oxml.ns import qn, nsdecls
+from docx.oxml import parse_xml
 from company.company_manager import get_selected_company, get_company_template
 
 # Try to import pymupdf, fallback to pypdf2
@@ -331,12 +333,25 @@ def _build_assessment_doc(context: dict, assessment_type: str, questions: list, 
                     for r in bp.runs:
                         r.font.size = Pt(11)
         else:
-            # Blank answer space
-            doc.add_paragraph()
+            # Answer box — single-cell table with border
             p = doc.add_paragraph()
-            run = p.add_run("Answer: " + "_" * 60)
+            run = p.add_run("Answer:")
+            run.bold = True
             run.font.size = Pt(11)
-            run.font.color.rgb = RGBColor(0x99, 0x99, 0x99)
+
+            box_table = doc.add_table(rows=1, cols=1)
+            box_table.style = 'Table Grid'
+            cell = box_table.cell(0, 0)
+            # Add empty lines inside the box for writing space
+            cell.text = ""
+            for _ in range(5):
+                cell.add_paragraph("")
+            # Style the cell paragraphs
+            for cp in cell.paragraphs:
+                cp.paragraph_format.space_before = Pt(2)
+                cp.paragraph_format.space_after = Pt(2)
+                for r in cp.runs:
+                    r.font.size = Pt(11)
 
         doc.add_paragraph()  # spacing
 
@@ -523,7 +538,22 @@ def app():
         help="Upload the main Assessment Plan document"
     )
 
-    assessment_types = ["WA (SAQ)", "PP", "CS", "Oral Questioning"]
+    # Build assessment types dynamically from extracted course info
+    assessment_types = []
+    if extracted_info:
+        methods = extracted_info.get('Assessment_Methods_Details', [])
+        for m in methods:
+            abbr = m.get('Method_Abbreviation', '')
+            name = m.get('Assessment_Method', '')
+            if abbr == 'WA-SAQ':
+                assessment_types.append("WA (SAQ)")
+            elif abbr:
+                assessment_types.append(abbr)
+            elif name:
+                assessment_types.append(name)
+    # Fallback if no course info
+    if not assessment_types:
+        assessment_types = ["WA (SAQ)", "PP", "CS", "Oral Questioning"]
     assessment_files = {}
 
     for a_type in assessment_types:

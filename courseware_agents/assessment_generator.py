@@ -11,11 +11,15 @@ from courseware_agents.base import run_agent_json
 
 SYSTEM_PROMPT = """You are an expert WSQ assessment content generator.
 
-Your task is to read Facilitator Guide (FG) data and generate assessment questions and answers
+Your task is to read course data and generate assessment questions and answers
 for various assessment types. Be thorough, accurate, and create questions that properly test
 the Knowledge (K) and Ability (A) statements.
 
-CRITICAL: Return ONLY a valid JSON object with no additional text.
+CRITICAL RULES:
+- You MUST respond with ONLY a valid JSON object.
+- Do NOT output any preamble, commentary, or explanation before or after the JSON.
+- Do NOT use tools — all data you need is provided in the prompt.
+- Start your response with { and end with }.
 
 The JSON must follow this schema:
 {
@@ -152,8 +156,8 @@ Return ONLY the JSON object."""
     result = await run_agent_json(
         prompt=prompt,
         system_prompt=SYSTEM_PROMPT,
-        tools=["Read", "Glob", "Grep"],
-        max_turns=15,
+        tools=[],
+        max_turns=5,
     )
 
     # Save to output file

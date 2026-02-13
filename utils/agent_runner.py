@@ -11,11 +11,17 @@ The background thread writes to the job dict, the main thread reads on rerun.
 
 import threading
 import asyncio
+import sys
 import traceback
 from datetime import datetime
 from typing import Callable, Any, Optional
 
 import streamlit as st
+
+# Fix for Windows: Streamlit/tornado switches to SelectorEventLoop which
+# doesn't support subprocess creation. Force ProactorEventLoop policy.
+if sys.platform == "win32":
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
 
 
 def _run_in_thread(job: dict, async_fn: Callable, args: tuple, kwargs: dict,
