@@ -720,3 +720,330 @@ def app():
                 )
             except Exception as e:
                 st.error(f"Error merging documents: {e}")
+
+
+################################################################################
+# Convert Existing Assessments to Standard Format
+################################################################################
+
+_Q_PATTERN = re.compile(
+    r'^(?:'
+    r'Q\s*(\d+)\s*[\.:\)]\s*'   # Q1. / Q1: / Q1)
+    r'|Question\s+(\d+)\s*[\.:\)]?\s*'  # Question 1 / Question 1.
+    r')',
+    re.IGNORECASE,
+)
+
+_COMPETENCY_TAG_PATTERN = re.compile(
+    r'\(\s*([KA]\d+(?:\s*,\s*[KA]\d+)*)\s*\)\s*$'
+)
+
+# Reverse mapping: display name → short code
+_DISPLAY_TO_CODE = {v: k for k, v in _TYPE_DISPLAY_MAP.items()}
+_DISPLAY_TO_CODE["Written Assessment (SAQ)"] = "WA (SAQ)"
+
+
+def parse_uploaded_assessment(file_bytes) -> dict:
+    """Parse an uploaded assessment DOCX and extract questions + answers.
+
+    Walks the document body elements in order (paragraphs interleaved with
+    tables). Questions are identified by Q-number patterns; the table
+    immediately following a question is its answer box.
+
+    Returns dict with keys: title, questions, has_answers, detected_type,
+    detected_duration, scenario.
+    """
+    doc = Document(io.BytesIO(file_bytes))
+
+    body_elements = []
+    for elem in doc.element.body:
+        tag = elem.tag.split('}')[-1]
+        if tag == 'p':
+            # Collect all run text for the paragraph
+            text_parts = []
+            for r in elem.findall('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}r'):
+                for t in r.findall('{http://schemas.openxmlformats.org/wordprocessingml/2006/main}t'):
+                    text_parts.append(t.text or '')
+            text = ''.join(text_parts).strip()
+            body_elements.append(('para', text))
+        elif tag == 'tbl':
+            # Extract all cell text from a 1x1 table
+            ns = '{http://schemas.openxmlformats.org/wordprocessingml/2006/main}'
+            cells = elem.findall(f'.//{ns}tc')
+            lines = []
+            if cells:
+                for p in cells[0].findall(f'{ns}p'):
+                    ptext = []
+                    for r in p.findall(f'{ns}r'):
+                        for t in r.findall(f'{ns}t'):
+                            ptext.append(t.text or '')
+                    line = ''.join(ptext).strip()
+                    lines.append(line)
+            body_elements.append(('table', lines))
+
+    # --- Extract metadata from title paragraphs ---
+    title_lines = []
+    detected_type = ""
+    detected_duration = ""
+    is_answer_doc = False
+    scenario = ""
+
+    for tag, content in body_elements[:25]:
+        if tag != 'para' or not content:
+            continue
+        low = content.lower()
+        if low.startswith("answer"):
+            is_answer_doc = True
+        if "duration:" in low:
+            detected_duration = content.split(":", 1)[1].strip()
+        # Check for assessment type keywords in title
+        if not detected_type:
+            for display_name in _TYPE_DISPLAY_MAP.values():
+                if display_name.lower() in low:
+                    detected_type = _DISPLAY_TO_CODE.get(display_name, "")
+                    break
+        # Collect title lines (non-section-header, non-empty, before questions)
+        if not content.startswith(("A:", "B:", "C:", "C.", "Q", "1.", "2.", "3.", "Duration", "This is")):
+            if not _Q_PATTERN.match(content):
+                title_lines.append(content)
+
+    # Build course title from first title line (strip "Answers to" prefix)
+    course_title = ""
+    for line in title_lines:
+        cleaned = re.sub(r'^Answers?\s+to\s+', '', line, flags=re.IGNORECASE).strip()
+        # Skip lines that are just the assessment type name
+        if cleaned.lower() not in [v.lower() for v in _TYPE_DISPLAY_MAP.values()]:
+            course_title = cleaned
+            break
+
+    # --- Walk elements to extract questions and answers ---
+    questions = []
+    has_answers = is_answer_doc
+    current_q_text = ""
+    pending_scenario = ""
+
+    i = 0
+    while i < len(body_elements):
+        tag, content = body_elements[i]
+
+        if tag == 'para':
+            # Check for case study
+            if content.lower().startswith("case study"):
+                # Next non-empty paragraph is the scenario text
+                for j in range(i + 1, min(i + 5, len(body_elements))):
+                    if body_elements[j][0] == 'para' and body_elements[j][1]:
+                        if not _Q_PATTERN.match(body_elements[j][1]):
+                            pending_scenario = body_elements[j][1]
+                            break
+                i += 1
+                continue
+
+            # Check for question pattern
+            m = _Q_PATTERN.match(content)
+            if m:
+                current_q_text = _Q_PATTERN.sub('', content).strip()
+                # Look ahead for table (answer box)
+                answer_lines = []
+                for j in range(i + 1, min(i + 4, len(body_elements))):
+                    if body_elements[j][0] == 'table':
+                        cell_lines = body_elements[j][1]
+                        # Filter out empty lines and "Suggestive answers" prefix
+                        for line in cell_lines:
+                            stripped = line.strip()
+                            if stripped and not stripped.lower().startswith("suggestive answer"):
+                                answer_lines.append(stripped)
+                        if answer_lines:
+                            has_answers = True
+                        break
+
+                # Extract competency tag from question text
+                knowledge_id = ""
+                ability_ids = []
+                tag_match = _COMPETENCY_TAG_PATTERN.search(current_q_text)
+                if tag_match:
+                    tags_str = tag_match.group(1)
+                    current_q_text = current_q_text[:tag_match.start()].strip()
+                    for t in re.split(r'\s*,\s*', tags_str):
+                        t = t.strip()
+                        if t.startswith('K'):
+                            knowledge_id = t
+                        elif t.startswith('A'):
+                            ability_ids.append(t)
+
+                q_dict = {
+                    "question_statement": current_q_text,
+                    "answer": answer_lines,
+                }
+                if knowledge_id:
+                    q_dict["knowledge_id"] = knowledge_id
+                if ability_ids:
+                    q_dict["ability_id"] = ability_ids
+                if pending_scenario:
+                    q_dict["scenario"] = pending_scenario
+
+                questions.append(q_dict)
+
+        i += 1
+
+    # Auto-detect type from competency tags if not found in title
+    if not detected_type and questions:
+        has_k = any(q.get('knowledge_id') for q in questions)
+        has_a = any(q.get('ability_id') for q in questions)
+        if has_k and not has_a:
+            detected_type = "WA (SAQ)"
+        elif has_a and not has_k:
+            detected_type = "PP"
+
+    return {
+        "course_title": course_title,
+        "questions": questions,
+        "has_answers": has_answers,
+        "detected_type": detected_type,
+        "detected_duration": detected_duration,
+        "scenario": pending_scenario,
+    }
+
+
+def convert_assessment_app():
+    """Streamlit page for converting existing assessments to standard format."""
+    st.title("Convert Assessment")
+    st.markdown("Upload existing assessment documents to convert them to the WSQ standard format.")
+
+    uploaded_files = st.file_uploader(
+        "Upload Assessment Documents",
+        type=["docx"],
+        accept_multiple_files=True,
+        key="convert_assessment_upload",
+        help="Upload question papers and/or answer keys (.docx)"
+    )
+
+    if not uploaded_files:
+        st.info("Upload one or more assessment DOCX files to get started.")
+        return
+
+    # Parse each uploaded file
+    parsed_docs = []
+    for f in uploaded_files:
+        try:
+            result = parse_uploaded_assessment(f.read())
+            result["filename"] = f.name
+            parsed_docs.append(result)
+            f.seek(0)
+        except Exception as e:
+            st.error(f"Error parsing {f.name}: {e}")
+
+    if not parsed_docs:
+        return
+
+    # Auto-detect values from first document
+    first = parsed_docs[0]
+    default_title = first.get("course_title", "")
+    default_type = first.get("detected_type", "WA (SAQ)")
+    default_duration = first.get("detected_duration", "60 mins")
+
+    # Config section
+    st.subheader("Settings")
+    col1, col2, col3 = st.columns(3)
+
+    type_options = list(_TYPE_DISPLAY_MAP.keys())
+    default_type_idx = type_options.index(default_type) if default_type in type_options else 0
+
+    with col1:
+        course_title = st.text_input("Course Title", value=default_title, key="convert_course_title")
+    with col2:
+        assessment_type = st.selectbox(
+            "Assessment Type",
+            type_options,
+            index=default_type_idx,
+            format_func=_get_assessment_type_display,
+            key="convert_assessment_type",
+        )
+    with col3:
+        duration = st.text_input("Duration", value=default_duration, key="convert_duration")
+
+    # Preview extracted questions
+    st.subheader("Extracted Questions")
+    for doc_info in parsed_docs:
+        doc_label = doc_info["filename"]
+        doc_type = "Answer Key" if doc_info["has_answers"] else "Question Paper"
+        questions = doc_info.get("questions", [])
+
+        with st.expander(f"{doc_label} ({doc_type} — {len(questions)} questions)", expanded=True):
+            if not questions:
+                st.warning("No questions detected in this document.")
+                continue
+            for idx, q in enumerate(questions, 1):
+                q_text = q.get("question_statement", "")
+                tag = ""
+                if q.get("knowledge_id"):
+                    tag = f" ({q['knowledge_id']})"
+                elif q.get("ability_id"):
+                    tag = f" ({', '.join(q['ability_id'])})"
+                st.markdown(f"**Q{idx}.** {q_text}{tag}")
+                if q.get("answer"):
+                    with st.container():
+                        for ans in q["answer"]:
+                            st.markdown(f"- {ans}")
+
+    # Convert button
+    if st.button("Convert to Standard Format", type="primary", key="convert_btn"):
+        if not course_title:
+            st.error("Please enter a course title.")
+            return
+
+        converted_files = []
+        for doc_info in parsed_docs:
+            questions = doc_info.get("questions", [])
+            if not questions:
+                continue
+
+            doc_context = {
+                "course_title": course_title,
+                "duration": duration,
+                "questions": questions,
+            }
+
+            display_type = _get_assessment_type_display(assessment_type)
+
+            if doc_info["has_answers"]:
+                # Generate answer key
+                out_doc = _build_assessment_doc(doc_context, assessment_type, questions, include_answers=True)
+                out_name = f"Answers to {display_type} - {course_title}.docx"
+            else:
+                # Generate question paper
+                out_doc = _build_assessment_doc(doc_context, assessment_type, questions, include_answers=False)
+                out_name = f"{display_type} - {course_title}.docx"
+
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".docx")
+            tmp.close()
+            out_doc.save(tmp.name)
+            converted_files.append({"path": tmp.name, "name": out_name})
+
+        if not converted_files:
+            st.error("No questions found to convert.")
+            return
+
+        st.success(f"Converted {len(converted_files)} document(s) to standard format.")
+
+        if len(converted_files) == 1:
+            with open(converted_files[0]["path"], "rb") as f:
+                st.download_button(
+                    label=f"Download {converted_files[0]['name']}",
+                    data=f.read(),
+                    file_name=converted_files[0]["name"],
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key="download_converted_single",
+                )
+        else:
+            zip_buffer = io.BytesIO()
+            with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zipf:
+                for cf in converted_files:
+                    zipf.write(cf["path"], arcname=cf["name"])
+            zip_buffer.seek(0)
+            st.download_button(
+                label="Download All Converted (ZIP)",
+                data=zip_buffer.getvalue(),
+                file_name=f"Converted Assessments - {course_title}.zip",
+                mime="application/zip",
+                key="download_converted_zip",
+            )
