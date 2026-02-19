@@ -26,8 +26,8 @@ The **WSQ Courseware Generator** is an AI platform that automates the creation o
 | Feature | Description |
 |---------|-------------|
 | **Courseware Creation** | Auto-generate Assessment Plans, Facilitator Guides, and Learner Guides |
-| **Lesson Plan Generation** | Generate Lesson Plans with pure Python barrier algorithm scheduling |
-| **Assessment Generation** | Create 9 assessment types (SAQ, PP, CS, PRJ, ASGN, OI, DEM, RP, OQ) |
+| **Lesson Plan Generation** | Generate Lesson Plans with LU-level barrier algorithm scheduling, cover page, and version control |
+| **Assessment Generation** | Create 9 assessment types (SAQ, PP, CS, PRJ, ASGN, OI, DEM, RP, OQ) with WSQ standard format — trainee info header, instructions, and assessor sign-off |
 | **Slides Generation** | AI-enhanced slides with NotebookLM integration |
 | **Brochure Creation** | Design marketing brochures via web scraping |
 | **Courseware Audit** | Validate supporting documents with entity extraction |

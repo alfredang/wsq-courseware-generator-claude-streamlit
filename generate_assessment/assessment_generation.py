@@ -238,122 +238,248 @@ def _ensure_list(answer):
 
 
 ################################################################################
-# Generate documents (Question and Answer papers) - Template filling only
+# Assessment document formatting helpers (Standard WSQ Format)
+################################################################################
+
+# Assessment type code → full display name mapping
+_TYPE_DISPLAY_MAP = {
+    "WA (SAQ)": "Written Assessment (SAQ)",
+    "WA-SAQ": "Written Assessment (SAQ)",
+    "PP": "Practical Performance Assessment",
+    "CS": "Case Study Assessment",
+    "PRJ": "Project Assessment",
+    "ASGN": "Assignment Assessment",
+    "OI": "Oral Interview Assessment",
+    "DEM": "Demonstration Assessment",
+    "RP": "Role Play Assessment",
+    "OQ": "Oral Questioning Assessment",
+}
+
+
+def _get_assessment_type_display(assessment_type: str) -> str:
+    """Map assessment type codes to full display names for document titles."""
+    return _TYPE_DISPLAY_MAP.get(assessment_type, f"{assessment_type} Assessment")
+
+
+def _is_saq_type(assessment_type: str) -> bool:
+    """Check if assessment type is SAQ (written short-answer questions)."""
+    return assessment_type in ("WA (SAQ)", "WA-SAQ")
+
+
+def _setup_page(doc):
+    """Configure A4 page with standard assessment margins."""
+    section = doc.sections[0]
+    section.top_margin = Inches(0.30)
+    section.bottom_margin = Inches(0.30)
+    section.left_margin = Inches(0.50)
+    section.right_margin = Inches(0.50)
+
+
+def _add_para(doc, text, size=11, bold=False, alignment=None):
+    """Add a paragraph with Arial font styling."""
+    p = doc.add_paragraph()
+    if alignment is not None:
+        p.alignment = alignment
+    run = p.add_run(text)
+    run.font.name = 'Arial'
+    run.font.size = Pt(size)
+    run.bold = bold
+    return p
+
+
+def _add_bordered_table(doc, cell_paragraphs=None):
+    """Add a 1x1 table with black borders matching the standard format.
+
+    Args:
+        doc: Document instance.
+        cell_paragraphs: List of strings for cell content.
+            If None, adds empty lines for a write-in answer box.
+    """
+    table = doc.add_table(rows=1, cols=1)
+
+    # Set explicit black borders via XML (matching reference docs)
+    tbl = table._tbl
+    tblPr = tbl.tblPr
+    if tblPr is None:
+        tblPr = parse_xml(f'<w:tblPr {nsdecls("w")}/>')
+        tbl.insert(0, tblPr)
+    borders = parse_xml(
+        f'<w:tblBorders {nsdecls("w")}>'
+        '  <w:top w:val="single" w:sz="8" w:space="0" w:color="000000"/>'
+        '  <w:left w:val="single" w:sz="8" w:space="0" w:color="000000"/>'
+        '  <w:bottom w:val="single" w:sz="8" w:space="0" w:color="000000"/>'
+        '  <w:right w:val="single" w:sz="8" w:space="0" w:color="000000"/>'
+        '  <w:insideH w:val="single" w:sz="8" w:space="0" w:color="000000"/>'
+        '  <w:insideV w:val="single" w:sz="8" w:space="0" w:color="000000"/>'
+        '</w:tblBorders>'
+    )
+    tblPr.append(borders)
+
+    cell = table.cell(0, 0)
+
+    if cell_paragraphs is None:
+        # Empty answer box for question papers
+        cell.text = ""
+        for _ in range(6):
+            cell.add_paragraph("")
+    else:
+        # Filled answer box for answer keys
+        cell.text = ""
+        for i, text in enumerate(cell_paragraphs):
+            if i == 0:
+                p = cell.paragraphs[0]
+                run = p.add_run(text)
+            else:
+                p = cell.add_paragraph()
+                run = p.add_run(text)
+            run.font.name = 'Arial'
+            run.font.size = Pt(11)
+
+    return table
+
+
+def _get_competency_tag(question: dict, assessment_type: str) -> str:
+    """Build competency tag like (K1) or (A1) for the question text."""
+    if _is_saq_type(assessment_type):
+        kid = question.get('knowledge_id', '')
+        if kid:
+            return f" ({kid})"
+    else:
+        aids = question.get('ability_id', [])
+        if isinstance(aids, str):
+            aids = [aids]
+        if aids:
+            return f" ({', '.join(aids)})"
+    return ""
+
+
+################################################################################
+# Generate documents (Question and Answer papers) - Standard WSQ Format
 ################################################################################
 def _build_assessment_doc(context: dict, assessment_type: str, questions: list, include_answers: bool) -> Document:
-    """Build an assessment Word document programmatically."""
+    """Build an assessment Word document following the WSQ standard format.
+
+    Question papers include: Title, Section A (Trainee Info), Section B
+    (Instructions), Section C (Questions with empty answer boxes), and
+    Assessor Sign-off.
+
+    Answer keys include: Title and Questions with filled answer tables.
+    """
     doc = Document()
 
-    # Set default font
+    # Set default font to Arial 11pt
     style = doc.styles['Normal']
-    font = style.font
-    font.name = 'Calibri'
-    font.size = Pt(11)
+    style.font.name = 'Arial'
+    style.font.size = Pt(11)
 
-    # Title
-    title = doc.add_heading(level=1)
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = title.add_run(f"{'Answer Key' if include_answers else 'Question Paper'} - {assessment_type}")
-    run.font.color.rgb = RGBColor(0x44, 0x72, 0xC4)
+    _setup_page(doc)
 
-    # Course info
     course_title = context.get('course_title', '')
-    company_name = context.get('company_name', '')
     duration = context.get('duration', '')
+    display_type = _get_assessment_type_display(assessment_type)
+    is_saq = _is_saq_type(assessment_type)
 
-    info_table = doc.add_table(rows=3, cols=2)
-    info_table.style = 'Light Grid Accent 1'
-    info_cells = [
-        ("Course Title", course_title),
-        ("Company", company_name),
-        ("Duration", duration),
-    ]
-    for i, (label, value) in enumerate(info_cells):
-        info_table.cell(i, 0).text = label
-        info_table.cell(i, 1).text = str(value)
-        for cell in [info_table.cell(i, 0), info_table.cell(i, 1)]:
-            for p in cell.paragraphs:
-                for r in p.runs:
-                    r.font.size = Pt(10)
+    # ── Title ──
+    if include_answers:
+        _add_para(doc, f"Answers to {course_title}", size=18, bold=True,
+                  alignment=WD_ALIGN_PARAGRAPH.CENTER)
+    else:
+        _add_para(doc, course_title, size=18, bold=True,
+                  alignment=WD_ALIGN_PARAGRAPH.CENTER)
 
-    doc.add_paragraph()
+    _add_para(doc, display_type, size=18, bold=True,
+              alignment=WD_ALIGN_PARAGRAPH.CENTER)
 
-    # Questions
-    for idx, q in enumerate(questions, 1):
-        # Question number heading
-        q_heading = doc.add_heading(level=2)
-        q_heading.add_run(f"Question {idx}")
+    if not include_answers:
+        # ── Section A: Trainee Information ──
+        doc.add_paragraph()
+        _add_para(doc, "A: Trainee Information:", bold=True)
+        doc.add_paragraph()
+        _add_para(doc, "Trainee Name (as Per NRIC): _______________________________")
+        doc.add_paragraph()
+        _add_para(doc, "Last three digits and alphabet of NRIC/FIN: _________________")
+        doc.add_paragraph()
+        _add_para(doc, "Date: __________________")
+        doc.add_paragraph()
 
-        # Scenario
-        scenario = q.get('scenario', '')
-        if scenario:
-            p = doc.add_paragraph()
-            run = p.add_run("Scenario: ")
-            run.bold = True
-            run.font.size = Pt(11)
-            run = p.add_run(scenario)
-            run.font.size = Pt(11)
+        # ── Section B: Assessment Instruction ──
+        _add_para(doc, "B: Assessment Instruction", bold=True)
+        doc.add_paragraph()
 
-        # Question statement
-        question_text = q.get('question_statement', q.get('question', ''))
-        if question_text:
-            p = doc.add_paragraph()
-            run = p.add_run(question_text)
-            run.font.size = Pt(11)
-
-        # Reference IDs
-        refs = []
-        if q.get('knowledge_id'):
-            refs.append(f"K: {q['knowledge_id']}")
-        if q.get('ability_id'):
-            aids = q['ability_id'] if isinstance(q['ability_id'], list) else [q['ability_id']]
-            refs.append(f"A: {', '.join(aids)}")
-        if q.get('learning_outcome_id'):
-            lo = q['learning_outcome_id']
-            if isinstance(lo, list):
-                lo = ', '.join(lo)
-            refs.append(f"LO: {lo}")
-        if refs:
-            p = doc.add_paragraph()
-            run = p.add_run(f"[{' | '.join(refs)}]")
-            run.font.size = Pt(9)
-            run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
-
-        # Answer (only if include_answers)
-        if include_answers:
-            answers = _ensure_list(q.get('answer', []))
-            if answers:
-                p = doc.add_paragraph()
-                run = p.add_run("Answer:")
-                run.bold = True
-                run.font.size = Pt(11)
-                run.font.color.rgb = RGBColor(0x00, 0x70, 0x30)
-                for ans in answers:
-                    bp = doc.add_paragraph(str(ans), style='List Bullet')
-                    for r in bp.runs:
-                        r.font.size = Pt(11)
+        if is_saq:
+            _add_para(doc, "This is the Written Assessment (Q&A)")
         else:
-            # Answer box — single-cell table with border
-            p = doc.add_paragraph()
-            run = p.add_run("Answer:")
-            run.bold = True
-            run.font.size = Pt(11)
+            _add_para(doc, f"This is a {display_type}")
 
-            box_table = doc.add_table(rows=1, cols=1)
-            box_table.style = 'Table Grid'
-            cell = box_table.cell(0, 0)
-            # Add empty lines inside the box for writing space
-            cell.text = ""
-            for _ in range(5):
-                cell.add_paragraph("")
-            # Style the cell paragraphs
-            for cp in cell.paragraphs:
-                cp.paragraph_format.space_before = Pt(2)
-                cp.paragraph_format.space_after = Pt(2)
-                for r in cp.runs:
-                    r.font.size = Pt(11)
+        _add_para(doc, f"Duration: {duration}")
+        doc.add_paragraph()
 
-        doc.add_paragraph()  # spacing
+        num_questions = len(questions)
+        if is_saq:
+            _add_para(doc, f"1. The assessor will pass the questions in hard copy to you. "
+                      f"There are {num_questions} questions. You need to answer all the questions.")
+            _add_para(doc, "2. This is an open-book exam that must be completed individually.")
+            _add_para(doc, "3. You need to get all answers correct to be competent.")
+        else:
+            _add_para(doc, "1. The assessor will pass the case study in hard copy to you.")
+            _add_para(doc, "2. This is an open-book exam that must be completed individually.")
+
+        doc.add_paragraph()
+        _add_para(doc, "Submission Procedure:")
+        _add_para(doc, "1. Please pass the hard copy to the assessor after completion.")
+        doc.add_paragraph()
+
+        # ── Section C: Questions ──
+        if is_saq:
+            _add_para(doc, "C: Questions and Answers", bold=True)
+        else:
+            _add_para(doc, "C. Practical Performance", bold=True)
+        doc.add_paragraph()
+
+        # PP/CS: case study scenario before questions
+        if not is_saq and questions:
+            scenario = questions[0].get('scenario', '')
+            if scenario:
+                _add_para(doc, "Case Study 1:", bold=True)
+                _add_para(doc, scenario)
+                doc.add_paragraph()
+
+        # Questions with empty answer boxes
+        for idx, q in enumerate(questions, 1):
+            question_text = q.get('question_statement', q.get('question', ''))
+            tag = _get_competency_tag(q, assessment_type)
+            _add_para(doc, f"Q{idx}. {question_text}{tag}")
+            _add_bordered_table(doc)
+            doc.add_paragraph()
+
+        # ── Assessor Sign-off ──
+        doc.add_paragraph()
+        _add_para(doc, "_" * 74, bold=True)
+        _add_para(doc, "For Official Use Only", bold=True)
+        doc.add_paragraph()
+        _add_para(doc, "Grade: __________ (C / NYC)")
+        doc.add_paragraph()
+        doc.add_paragraph()
+        _add_para(doc, "Assessor Name: _______________\t\tAssessor NRIC: _____________")
+        doc.add_paragraph()
+        doc.add_paragraph()
+        _add_para(doc, "Date: ________________________\t\tSignature:  _________________")
+
+    else:
+        # ── Answer Key: questions with filled answer tables ──
+        doc.add_paragraph()
+        for idx, q in enumerate(questions, 1):
+            question_text = q.get('question_statement', q.get('question', ''))
+            tag = _get_competency_tag(q, assessment_type)
+            _add_para(doc, f"Q{idx}. {question_text}{tag}")
+
+            answers = _ensure_list(q.get('answer', []))
+            cell_lines = ["Suggestive answers (not exhaustive):", ""]
+            for ans in answers:
+                cell_lines.append(str(ans))
+
+            _add_bordered_table(doc, cell_paragraphs=cell_lines)
+            doc.add_paragraph()
 
     return doc
 
@@ -507,11 +633,13 @@ def app():
                 a_path = file_paths.get('ANSWER')
 
                 if q_path and os.path.exists(q_path):
-                    q_file_name = f"{assessment_type} - {course_title}.docx"
+                    display_type = _get_assessment_type_display(assessment_type)
+                    q_file_name = f"{display_type} - {course_title}.docx"
                     zipf.write(q_path, arcname=q_file_name)
 
                 if a_path and os.path.exists(a_path):
-                    a_file_name = f"Answer to {assessment_type} - {course_title}.docx"
+                    display_type = _get_assessment_type_display(assessment_type)
+                    a_file_name = f"Answers to {display_type} - {course_title}.docx"
                     zipf.write(a_path, arcname=a_file_name)
 
         zip_buffer.seek(0)
