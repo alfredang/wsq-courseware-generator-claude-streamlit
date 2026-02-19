@@ -59,6 +59,7 @@ courseware_claude_streamlit/
 │   ├── agent_status.py          # Agent status UI components
 │   ├── helpers.py               # File & JSON utilities
 │   └── prompt_template_editor.py # Prompt template editing UI
+├── Courseware/                   # Generated courseware output (gitignored)
 ├── .claude/skills/              # Claude Code skill definitions
 └── prompt_templates/            # Prompt template markdown files
 ```

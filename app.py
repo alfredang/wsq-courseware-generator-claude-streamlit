@@ -90,11 +90,19 @@ with st.sidebar:
         if st.session_state['selected_company_idx'] >= len(organizations):
             st.session_state['selected_company_idx'] = default_company_idx
 
+        # Sync widget key with session state for programmatic updates
+        if 'company_selector' not in st.session_state:
+            st.session_state['company_selector'] = st.session_state['selected_company_idx']
+        elif st.session_state.get('_company_auto_selected'):
+            # Auto-select triggered by CP extraction - update widget
+            st.session_state['company_selector'] = st.session_state['selected_company_idx']
+            st.session_state.pop('_company_auto_selected', None)
+
         selected_company_idx = st.selectbox(
             "Select Company:",
             range(len(company_names)),
             format_func=lambda x: company_names[x],
-            index=st.session_state['selected_company_idx']
+            key="company_selector",
         )
 
         st.session_state['selected_company_idx'] = selected_company_idx

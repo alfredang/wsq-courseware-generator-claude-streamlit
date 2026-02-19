@@ -18,6 +18,7 @@ CRITICAL: Return ONLY a valid JSON object with no additional text or explanation
 
 The JSON must follow this exact schema:
 {
+    "Name_of_Organisation": "string (Name of Registered Training Provider, e.g., SOPHIA IGNITE LEARNING ACADEMY PTE. LTD.)",
     "Course_Title": "string",
     "TGS_Ref_No": "string (TGS course reference code, e.g., TGS-2024001234)",
     "TSC_Title": "string (Technical Skills & Competency title)",

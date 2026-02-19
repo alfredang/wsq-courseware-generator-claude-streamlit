@@ -40,6 +40,9 @@ data/
 output/
 .output/
 
+# Generated courseware output (runtime-generated, not part of codebase)
+Courseware/
+
 # Generated outputs (created at runtime)
 generate_assessment/output/*
 common/generated_brochures/*.html

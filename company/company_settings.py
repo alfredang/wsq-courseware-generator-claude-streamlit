@@ -589,7 +589,8 @@ def save_company_logo(uploaded_file, company_name: str) -> str:
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
-        return file_path
+        # Use forward slashes for cross-platform DB storage
+        return file_path.replace("\\", "/")
     except Exception as e:
         st.error(f"Error saving logo: {e}")
         return ""
@@ -611,7 +612,8 @@ def save_company_template(uploaded_file, company_name: str, template_type: str) 
         with open(file_path, "wb") as f:
             f.write(uploaded_file.getbuffer())
 
-        return file_path
+        # Use forward slashes for cross-platform DB storage
+        return file_path.replace("\\", "/")
     except Exception as e:
         st.error(f"Error saving {template_type} template: {e}")
         return ""

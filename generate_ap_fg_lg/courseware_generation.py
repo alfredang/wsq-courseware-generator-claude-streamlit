@@ -15,7 +15,7 @@ from docx import Document as DocxDocument
 import openpyxl
 from pydantic import BaseModel
 from typing import List, Optional
-from utils.helpers import save_uploaded_file, parse_json_content
+from utils.helpers import save_uploaded_file, parse_json_content, copy_to_courseware
 import asyncio
 from generate_ap_fg_lg.utils.organization_utils import (
     load_organizations,
@@ -441,6 +441,22 @@ def app():
         ctx = st.session_state.get('context', {}) or {}
         course_title = sanitize_filename(ctx.get('Course_Title', 'Course'))
         tgs_ref_no = sanitize_filename(ctx.get('TGS_Ref_No', ''))
+
+        # Copy generated files to Courseware subfolders
+        _file_map = {
+            "lg_output": ("LG", "Learner Guide"),
+            "ap_output": ("Assessment_Plan", "Assessment Plan"),
+            "asr_output": ("Assessment_Summary_Record", "Assessment Plan"),
+            "fg_output": ("FG", "Facilitator Guide"),
+        }
+        for key, (prefix, subfolder) in _file_map.items():
+            fpath = st.session_state.get(key)
+            if fpath and os.path.exists(fpath):
+                if tgs_ref_no:
+                    fname = f"{prefix}_{tgs_ref_no}_{course_title}_v1.docx"
+                else:
+                    fname = f"{prefix}_{course_title}_v1.docx"
+                copy_to_courseware(fpath, subfolder, fname, ctx)
 
         zip_buffer = io.BytesIO()
         try:

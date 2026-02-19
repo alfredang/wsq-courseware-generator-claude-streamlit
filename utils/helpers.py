@@ -157,6 +157,48 @@ def load_json_file(file_path: str) -> Optional[Dict[str, Any]]:
         return None
 
 
+COURSEWARE_DIR = "Courseware"
+COURSEWARE_SUBFOLDERS = [
+    "Assessment Plan",
+    "Assessment Questions and Answers",
+    "Course Proposal",
+    "Facilitator Guide",
+    "Learner Guide",
+    "Lesson Plan",
+    "Trainer Slides",
+]
+
+
+def get_courseware_folder(context: dict) -> Optional[str]:
+    """Return the per-course Courseware folder path if TGS ref is available.
+    Creates subfolders if they don't exist. Returns None if no TGS ref."""
+    tgs_ref = (context.get("TGS_Ref_No") or "").strip()
+    if not tgs_ref:
+        return None
+    course_title = (context.get("Course_Title") or "").strip()
+    folder_name = tgs_ref
+    if course_title:
+        folder_name = f"{folder_name} - {course_title}"
+    course_dir = os.path.join(COURSEWARE_DIR, folder_name)
+    for subfolder in COURSEWARE_SUBFOLDERS:
+        os.makedirs(os.path.join(course_dir, subfolder), exist_ok=True)
+    return course_dir
+
+
+def copy_to_courseware(source_path: str, subfolder: str, filename: str, context: dict) -> Optional[str]:
+    """Copy a generated file to the appropriate Courseware subfolder.
+    Returns the destination path, or None if copy failed."""
+    import shutil
+    course_dir = get_courseware_folder(context)
+    if not course_dir or not source_path or not os.path.exists(source_path):
+        return None
+    dest_dir = os.path.join(course_dir, subfolder)
+    os.makedirs(dest_dir, exist_ok=True)
+    dest_path = os.path.join(dest_dir, filename)
+    shutil.copy2(source_path, dest_path)
+    return dest_path
+
+
 def save_json_file(data: Dict[str, Any], file_path: str) -> bool:
     """
     Save data to JSON file with error handling.

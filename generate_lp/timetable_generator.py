@@ -16,12 +16,16 @@ Algorithm rules (from SKILL.md):
 - Fill remaining gaps with Breaks to fit exactly 9AM-6PM
 """
 
+import os
 import re
 import tempfile
+from datetime import datetime
 from docx import Document
 from docx.shared import Pt, RGBColor, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
+from docxtpl import DocxTemplate
+from PIL import Image
 
 
 # =============================================================================
@@ -54,6 +58,11 @@ def _parse_hours(value) -> float:
     return float(match.group(1)) if match else 0.0
 
 
+def _round5(minutes: int) -> int:
+    """Round minutes to the nearest 5-minute step."""
+    return 5 * round(minutes / 5)
+
+
 def _fmt_time(minutes_from_midnight: int) -> str:
     """Format minutes from midnight as 'H:MM AM/PM'."""
     h = minutes_from_midnight // 60
@@ -63,24 +72,32 @@ def _fmt_time(minutes_from_midnight: int) -> str:
     return f"{display_h}:{m:02d} {period}"
 
 
-def _make_slot(start: int, end: int, description: str, methods: str) -> dict:
-    """Create a schedule slot dictionary."""
+def _make_slot(start: int, end: int, description: str, methods: str, **extra) -> dict:
+    """Create a schedule slot dictionary with optional extra fields (lu_num, lu_title)."""
     duration = end - start
-    return {
+    slot = {
         "timing": f"{_fmt_time(start)} - {_fmt_time(end)}",
         "duration": f"{duration} mins",
         "description": description,
         "methods": methods,
     }
+    slot.update(extra)
+    return slot
 
 
-def _collect_topics(context: dict) -> list:
-    """Collect all topics across Learning Units with numbering and methods."""
-    topics = []
-    num = 1
-    for lu in context.get("Learning_Units", []):
+def _collect_lu_blocks(context: dict) -> list:
+    """Collect Learning Unit blocks with aggregated topics for LU-level scheduling.
+
+    Each LU becomes one schedulable block. Topic numbering matches the CP:
+    each LU restarts at T1. Returns list of LU block dicts.
+    """
+    lu_blocks = []
+    for lu_idx, lu in enumerate(context.get("Learning_Units", []), start=1):
+        lu_title = lu.get("LU_Title", f"Learning Unit {lu_idx}")
+        # Strip existing "LU1:" or "LU 1:" prefix to avoid "LU1: LU1: ..."
+        lu_title = re.sub(r'^LU\s*\d+\s*[:.\-]\s*', '', lu_title).strip() or lu_title
+
         methods = lu.get("Instructional_Methods", [])
-        # Normalize method names
         normalized = []
         for m in methods:
             if m == "Classroom":
@@ -92,15 +109,22 @@ def _collect_topics(context: dict) -> list:
             else:
                 normalized.append(m)
 
-        for topic in lu.get("Topics", []):
-            topics.append({
-                "num": num,
-                "title": topic.get("Topic_Title", f"Topic {num}"),
-                "bullet_points": topic.get("Bullet_Points", []),
-                "methods": normalized or ["Lecture"],
-            })
-            num += 1
-    return topics
+        topic_labels = []
+        for t_idx, topic in enumerate(lu.get("Topics", []), start=1):
+            title = topic.get("Topic_Title", f"Topic {t_idx}")
+            if re.match(r'^T\d+[\s:.]', title):
+                topic_labels.append(title)
+            else:
+                topic_labels.append(f"T{t_idx}: {title}")
+
+        lu_blocks.append({
+            "lu_num": lu_idx,
+            "lu_title": lu_title,
+            "topic_labels": topic_labels,
+            "methods": normalized or ["Lecture"],
+            "num_topics": len(topic_labels),
+        })
+    return lu_blocks
 
 
 def extract_unique_instructional_methods(course_context):
@@ -164,16 +188,15 @@ def extract_unique_instructional_methods(course_context):
 # =============================================================================
 
 def build_lesson_plan_schedule(context: dict) -> dict:
-    """Build a lesson plan schedule using the barrier algorithm.
+    """Build a lesson plan schedule using the barrier algorithm at the LU level.
 
-    Barriers: Lunch (12:30-1:15), Assessment (4:00-6:00 last day), Day End (6:00).
-    Topics are packed sequentially and split at barriers.
+    Each Learning Unit is scheduled as a single block. If an LU spans a barrier
+    (lunch, day-end), it splits into multiple slots marked with is_contd.
 
     Returns:
         Dict with keys: num_days, instructional_hours, assessment_hours,
         per_topic_mins, days (dict of day_num -> list of slot dicts).
     """
-    # Parse course parameters
     total_hours = _parse_hours(context.get("Total_Course_Duration_Hours", "16"))
     instr_hours = _parse_hours(context.get("Total_Training_Hours", ""))
     if not instr_hours:
@@ -182,10 +205,9 @@ def build_lesson_plan_schedule(context: dict) -> dict:
 
     num_days = max(1, round(total_hours / 8)) if total_hours >= 8 else 1
 
-    # Collect all topics
-    topics = _collect_topics(context)
-    num_topics = len(topics)
-    if num_topics == 0:
+    lu_blocks = _collect_lu_blocks(context)
+    total_topics = sum(b["num_topics"] for b in lu_blocks)
+    if total_topics == 0:
         return {
             "num_days": num_days,
             "instructional_hours": instr_hours,
@@ -194,12 +216,16 @@ def build_lesson_plan_schedule(context: dict) -> dict:
             "days": {},
         }
 
-    per_topic = (instr_hours * 60) / num_topics
+    per_topic = (instr_hours * 60) / total_topics
     assess_mins = int(assess_hours * 60)
 
+    # Calculate duration for each LU block
+    for block in lu_blocks:
+        block["duration_mins"] = block["num_topics"] * per_topic
+
     days = {}
-    topic_idx = 0
-    topic_remaining = per_topic
+    lu_idx = 0
+    lu_remaining = lu_blocks[0]["duration_mins"]
     is_contd = False
 
     for day in range(1, num_days + 1):
@@ -207,12 +233,9 @@ def build_lesson_plan_schedule(context: dict) -> dict:
         current = DAY_START
         is_last_day = (day == num_days)
         lunch_done = False
-
-        # Effective end of instruction time
         instr_end = ASSESS_START if (is_last_day and assess_mins > 0) else DAY_END
 
-        while topic_idx < num_topics and current < instr_end:
-            # Insert lunch if we've reached or passed 12:30
+        while lu_idx < len(lu_blocks) and current < instr_end:
             if not lunch_done and current >= LUNCH_START:
                 lunch_end = current + LUNCH_DURATION
                 slots.append(_make_slot(current, lunch_end, "Lunch Break", "-"))
@@ -220,50 +243,47 @@ def build_lesson_plan_schedule(context: dict) -> dict:
                 lunch_done = True
                 continue
 
-            # Next barrier
             next_barrier = LUNCH_START if (not lunch_done) else instr_end
             available = next_barrier - current
 
             if available <= 0:
                 break
 
-            topic = topics[topic_idx]
-            t_label = f"T{topic['num']}: {topic['title']}"
-            if is_contd:
-                t_label += " (Cont'd)"
-            t_methods = ", ".join(topic["methods"])
+            block = lu_blocks[lu_idx]
+            topics_text = "\n".join(block["topic_labels"])
+            t_methods = ", ".join(block["methods"])
+            lu_extra = {
+                "lu_num": block["lu_num"],
+                "lu_title": block["lu_title"],
+                "is_contd": is_contd,
+            }
 
-            if topic_remaining <= available:
-                # Topic fits completely before barrier
-                end = current + int(round(topic_remaining))
-                slots.append(_make_slot(current, end, t_label, t_methods))
+            if lu_remaining <= available:
+                end = _round5(current + int(round(lu_remaining)))
+                slots.append(_make_slot(current, end, topics_text, t_methods, **lu_extra))
                 current = end
-                topic_idx += 1
-                if topic_idx < num_topics:
-                    topic_remaining = per_topic
+                lu_idx += 1
+                if lu_idx < len(lu_blocks):
+                    lu_remaining = lu_blocks[lu_idx]["duration_mins"]
                     is_contd = False
 
             elif available >= MIN_SESSION:
-                # Split topic at barrier
-                slots.append(_make_slot(current, next_barrier, t_label, t_methods))
-                topic_remaining -= available
+                slots.append(_make_slot(current, next_barrier, topics_text, t_methods, **lu_extra))
+                lu_remaining -= available
                 is_contd = True
                 current = next_barrier
 
             else:
-                # Too short for a topic session
                 if not lunch_done:
-                    # Start lunch early (absorb the tiny gap)
                     lunch_end = current + LUNCH_DURATION
                     slots.append(_make_slot(current, lunch_end, "Lunch Break", "-"))
                     current = lunch_end
                     lunch_done = True
                 else:
-                    # Insert break before next barrier
                     slots.append(_make_slot(current, next_barrier, "Break", "-"))
                     current = next_barrier
 
-        # Ensure lunch is placed even if topics ended early
+        # Ensure lunch is placed even if LUs ended early
         if not lunch_done:
             if current < LUNCH_START:
                 slots.append(_make_slot(current, LUNCH_START, "Break", "-"))
@@ -279,16 +299,25 @@ def build_lesson_plan_schedule(context: dict) -> dict:
                 current = ASSESS_START
 
             am_details = context.get("Assessment_Methods_Details", [])
-            if am_details:
+            # Assessment always fills from ASSESS_START to DAY_END (4-6 PM)
+            am_end = DAY_END
+            total_am_mins = am_end - current
+            if am_details and len(am_details) > 1:
+                # Group all assessments into one row, split time equally
+                per_am = total_am_mins // len(am_details)
+                lines = []
                 for am in am_details:
-                    am_dur = max(int(_parse_hours(am.get("Total_Delivery_Hours", "1")) * 60), 15)
-                    am_end = min(current + am_dur, DAY_END)
-                    label = f"Assessment: {am.get('Assessment_Method', 'Assessment')}"
-                    slots.append(_make_slot(current, am_end, label, "Assessment"))
-                    current = am_end
+                    name = am.get("Assessment_Method", "Assessment")
+                    lines.append(f"Assessment: {name} ({per_am} mins)")
+                label = "\n".join(lines)
+                slots.append(_make_slot(current, am_end, label, "Assessment"))
+                current = am_end
+            elif am_details:
+                name = am_details[0].get("Assessment_Method", "Assessment")
+                label = f"Assessment: {name} ({total_am_mins} mins)"
+                slots.append(_make_slot(current, am_end, label, "Assessment"))
+                current = am_end
             else:
-                # Generic assessment block
-                am_end = min(current + assess_mins, DAY_END)
                 slots.append(_make_slot(current, am_end, "Assessment", "Assessment"))
                 current = am_end
 
@@ -305,6 +334,52 @@ def build_lesson_plan_schedule(context: dict) -> dict:
         "per_topic_mins": round(per_topic, 1),
         "days": days,
     }
+
+
+# =============================================================================
+# Template-based Cover Page & Version Control
+# =============================================================================
+
+LP_TEMPLATE_PATH = ".claude/skills/generate_lesson_plan/templates/LP_template_v2.docx"
+
+
+def _render_lp_template(context: dict, company: dict) -> Document:
+    """Render the LP docxtpl template with cover page and version control.
+
+    Returns a python-docx Document ready for appending schedule tables.
+    """
+    from generate_ap_fg_lg.utils.helper import process_logo_image
+
+    tpl = DocxTemplate(LP_TEMPLATE_PATH)
+
+    org_name = company.get("name", "") if company else ""
+
+    # Build template context (matches AP/FG/LG variable names)
+    current_date = datetime.now()
+    tpl_ctx = {
+        "Course_Title": context.get("Course_Title", "Course"),
+        "TGS_Ref_No": context.get("TGS_Ref_No", ""),
+        "Name_of_Organisation": org_name,
+        "UEN": company.get("uen", "") if company else "",
+        "Date": current_date.strftime("%d %b %Y"),
+        "Year": str(current_date.year),
+    }
+
+    # Process logo via shared helper (same as AP/FG/LG)
+    try:
+        if org_name:
+            tpl_ctx["company_logo"] = process_logo_image(tpl, org_name)
+        else:
+            tpl_ctx["company_logo"] = ""
+    except (FileNotFoundError, Exception):
+        tpl_ctx["company_logo"] = ""
+
+    tpl.render(tpl_ctx, autoescape=True)
+
+    # Save rendered template to temp, then reload as python-docx Document
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
+        tpl.save(tmp.name)
+        return Document(tmp.name)
 
 
 # =============================================================================
@@ -335,24 +410,70 @@ def _add_colored_heading(doc, text: str, level: int = 2):
         run.font.color.rgb = HEADING_COLOR
 
 
-def generate_lesson_plan_docx(context: dict, schedule_data: dict, org_name: str = "") -> str:
-    """Generate a Lesson Plan DOCX with 4-column tables.
+def _add_lu_header_row(table, text: str):
+    """Add a Learning Unit header row that spans all columns with light blue background."""
+    row = table.add_row()
+    merged = row.cells[0].merge(row.cells[-1])
+    merged.text = ""
+    p = merged.paragraphs[0]
+    run = p.add_run(text)
+    run.bold = True
+    run.font.size = Pt(10)
+    run.font.name = "Calibri"
+    run.font.color.rgb = RGBColor(0x1F, 0x38, 0x64)  # Dark blue text
+    tc_pr = merged._element.get_or_add_tcPr()
+    shading = tc_pr.makeelement(
+        qn("w:shd"), {qn("w:fill"): "D6E4F0", qn("w:val"): "clear"},
+    )
+    tc_pr.append(shading)
+
+
+def _set_fixed_table_layout(table, col_widths):
+    """Force a table to use fixed column layout at the XML level.
+
+    This prevents Word from auto-resizing columns and ensures the table
+    stays within page margins.
+    """
+    tbl = table._element
+    tblPr = tbl.tblPr
+    if tblPr is None:
+        tblPr = tbl._new_tblPr()
+        tbl.insert(0, tblPr)
+    # Set layout to fixed
+    tblLayout = tblPr.makeelement(qn("w:tblLayout"), {qn("w:type"): "fixed"})
+    tblPr.append(tblLayout)
+    # Set explicit total width in twips (dxa: 1 inch = 1440 twips)
+    # Inches() returns EMU; 1 twip = 635 EMU
+    total_twips = sum(int(w) // 635 for w in col_widths)
+    # Remove existing tblW if any
+    for existing in tblPr.findall(qn("w:tblW")):
+        tblPr.remove(existing)
+    tblW = tblPr.makeelement(
+        qn("w:tblW"),
+        {qn("w:w"): str(total_twips), qn("w:type"): "dxa"},
+    )
+    tblPr.append(tblW)
+
+
+def generate_lesson_plan_docx(context: dict, schedule_data: dict, company: dict = None) -> str:
+    """Generate a Lesson Plan DOCX with cover page, version control, and 4-column tables.
+
+    Uses docxtpl template for cover page & version control (matching AP/FG/LG),
+    then appends schedule tables programmatically.
 
     Args:
         context: Course context dict with Course_Title, etc.
         schedule_data: Output from build_lesson_plan_schedule().
-        org_name: Organization name (for metadata).
+        company: Company dict with name, uen, logo keys.
 
     Returns:
         Path to the generated DOCX file.
     """
-    doc = Document()
+    if company is None:
+        company = {}
 
-    # Default style
-    style = doc.styles["Normal"]
-    style.font.name = "Calibri"
-    style.font.size = Pt(11)
-    style.paragraph_format.space_after = Pt(6)
+    # Render cover page & version control from template
+    doc = _render_lp_template(context, company)
 
     # Title
     title_para = doc.add_paragraph()
@@ -369,6 +490,7 @@ def generate_lesson_plan_docx(context: dict, schedule_data: dict, org_name: str 
     methods = extract_unique_instructional_methods(context)
     methods_text = ", ".join(sorted(methods)) if methods else "N/A"
 
+    org_name = company.get("name", "")
     metadata_lines = [
         f"Course Duration: {num_days} Day(s) (9:00 AM - 6:00 PM daily)",
         f"Total Training Hours: {instr_hrs} hrs",
@@ -387,7 +509,8 @@ def generate_lesson_plan_docx(context: dict, schedule_data: dict, org_name: str 
 
     # Day-by-day 4-column tables
     days = schedule_data.get("days", {})
-    col_widths = [Inches(1.5), Inches(0.8), Inches(2.5), Inches(1.7)]
+    # Columns sized to fit within 7.0" table budget
+    col_widths = [Inches(1.3), Inches(0.7), Inches(3.0), Inches(2.0)]
 
     for day_num in sorted(days.keys()):
         _add_colored_heading(doc, f"Day {day_num}")
@@ -396,26 +519,36 @@ def generate_lesson_plan_docx(context: dict, schedule_data: dict, org_name: str 
         table = doc.add_table(rows=1, cols=4)
         table.style = "Table Grid"
         table.autofit = False
+        _set_fixed_table_layout(table, col_widths)
 
         for i, width in enumerate(col_widths):
             table.columns[i].width = width
 
         # Header row
+        for i, width in enumerate(col_widths):
+            table.rows[0].cells[i].width = width
         _set_header_cell(table.rows[0].cells[0], "Timing")
         _set_header_cell(table.rows[0].cells[1], "Duration")
         _set_header_cell(table.rows[0].cells[2], "Description")
         _set_header_cell(table.rows[0].cells[3], "Instructional Methods")
 
-        # Data rows
+        # Data rows (with LU header rows)
         for slot in slots:
+            slot_lu = slot.get("lu_num")
+            if slot_lu:
+                # Add LU header row
+                is_contd = slot.get("is_contd", False)
+                header = f"LU{slot_lu}: {slot.get('lu_title', '')}"
+                if is_contd:
+                    header += " (Cont'd)"
+                _add_lu_header_row(table, header)
+
             row = table.add_row()
-            values = [
+            # Timing, Duration, Methods - single-line cells
+            for j, val in enumerate([
                 slot.get("timing", ""),
                 slot.get("duration", ""),
-                slot.get("description", ""),
-                slot.get("methods", ""),
-            ]
-            for j, val in enumerate(values):
+            ]):
                 cell = row.cells[j]
                 cell.width = col_widths[j]
                 cell.text = ""
@@ -424,7 +557,34 @@ def generate_lesson_plan_docx(context: dict, schedule_data: dict, org_name: str 
                 run.font.name = "Calibri"
                 run.font.size = Pt(10)
 
+            # Description cell - multi-line topics (one per line)
+            desc_cell = row.cells[2]
+            desc_cell.width = col_widths[2]
+            desc_cell.text = ""
+            desc_text = slot.get("description", "")
+            lines = desc_text.split("\n") if "\n" in desc_text else [desc_text]
+            for line_idx, line in enumerate(lines):
+                if line_idx == 0:
+                    p = desc_cell.paragraphs[0]
+                else:
+                    p = desc_cell.add_paragraph()
+                p.paragraph_format.space_after = Pt(1)
+                run = p.add_run(line)
+                run.font.name = "Calibri"
+                run.font.size = Pt(10)
+
+            # Methods cell
+            methods_cell = row.cells[3]
+            methods_cell.width = col_widths[3]
+            methods_cell.text = ""
+            p = methods_cell.paragraphs[0]
+            run = p.add_run(slot.get("methods", ""))
+            run.font.name = "Calibri"
+            run.font.size = Pt(10)
+
         doc.add_paragraph()  # Spacing between days
+
+    # Margins are controlled by the template - no override needed
 
     # Save to temp file
     with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:

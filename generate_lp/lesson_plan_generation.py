@@ -14,6 +14,7 @@ from generate_lp.timetable_generator import (
     build_lesson_plan_schedule,
     generate_lesson_plan_docx,
 )
+from utils.helpers import copy_to_courseware
 
 
 # =============================================================================
@@ -25,13 +26,27 @@ def display_timetable_preview(schedule_data: dict):
     days = schedule_data.get("days", {})
     for day_num in sorted(days.keys()):
         slots = days[day_num]
-        with st.expander(f"Day {day_num} ({len(slots)} sessions)", expanded=False):
+        with st.expander(f"Day {day_num}", expanded=False):
             rows = []
             for s in slots:
+                slot_lu = s.get("lu_num")
+                if slot_lu:
+                    is_contd = s.get("is_contd", False)
+                    header = f"LU{slot_lu}: {s.get('lu_title', '')}"
+                    if is_contd:
+                        header += " (Cont'd)"
+                    rows.append({
+                        "Timing": "",
+                        "Duration": "",
+                        "Description": f"**{header}**",
+                        "Methods": "",
+                    })
+                # Replace newlines with " | " for flat table display
+                desc = s.get("description", "").replace("\n", " | ")
                 rows.append({
                     "Timing": s.get("timing", ""),
                     "Duration": s.get("duration", ""),
-                    "Description": s.get("description", ""),
+                    "Description": desc,
                     "Methods": s.get("methods", ""),
                 })
             if rows:
@@ -48,7 +63,6 @@ def app():
 
     # Get organization from sidebar
     selected_company = st.session_state.get('selected_company', {})
-    selected_org = selected_company.get('name', '')
 
     # Auto-load from Extract Course Info session state
     extracted_info = st.session_state.get('extracted_course_info')
@@ -85,7 +99,7 @@ def app():
 
                 # Generate DOCX
                 try:
-                    docx_path = generate_lesson_plan_docx(context, schedule_data, selected_org)
+                    docx_path = generate_lesson_plan_docx(context, schedule_data, selected_company)
                     st.session_state['lp_docx_path'] = docx_path
                 except Exception as e:
                     st.error(f"Error generating DOCX: {e}")
@@ -126,6 +140,9 @@ def app():
                 lp_filename = f"LP_{safe_tgs}_{safe_title}_v1.docx"
             else:
                 lp_filename = f"LP_{safe_title}_v1.docx"
+
+            # Copy to Courseware/Lesson Plan folder
+            copy_to_courseware(docx_path, "Lesson Plan", lp_filename, ctx)
 
             with open(docx_path, "rb") as f:
                 st.download_button(

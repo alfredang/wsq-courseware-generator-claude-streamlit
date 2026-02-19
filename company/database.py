@@ -71,19 +71,30 @@ def _get_conn():
             pass
 
 
+def _normalize_path(path: str) -> str:
+    """Normalize file path separators for cross-platform compatibility.
+    Always uses forward slashes which work on both Windows and macOS/Linux."""
+    return path.replace("\\", "/") if path else ""
+
+
 def _row_to_org(row: dict) -> dict:
     """Convert a database row to an organization dict."""
+    templates = row["templates"] if row["templates"] else {
+        "courseware": "",
+        "assessment": "",
+        "brochure": ""
+    }
+    # Normalize template paths
+    if isinstance(templates, dict):
+        templates = {k: _normalize_path(v) if isinstance(v, str) else v for k, v in templates.items()}
+
     return {
         "id": row["id"],
         "name": row["name"],
         "uen": row["uen"] or "",
         "address": row["address"] or "",
-        "logo": row["logo"] or "",
-        "templates": row["templates"] if row["templates"] else {
-            "courseware": "",
-            "assessment": "",
-            "brochure": ""
-        },
+        "logo": _normalize_path(row["logo"] or ""),
+        "templates": templates,
         "company_url": row.get("company_url") or "",
         "ssg_url": row.get("ssg_url") or "",
         "email": row.get("email") or "",
@@ -196,11 +207,14 @@ def get_organization_by_name(name: str) -> Optional[Dict[str, Any]]:
 def _org_params(org: dict) -> tuple:
     """Extract common INSERT/UPDATE parameters from an org dict."""
     templates = org.get("templates", {"courseware": "", "assessment": "", "brochure": ""})
+    # Normalize template paths before storing
+    if isinstance(templates, dict):
+        templates = {k: _normalize_path(v) if isinstance(v, str) else v for k, v in templates.items()}
     return (
         org.get("name", ""),
         org.get("uen", ""),
         org.get("address", ""),
-        org.get("logo", ""),
+        _normalize_path(org.get("logo", "")),
         json.dumps(templates),
         org.get("company_url", ""),
         org.get("ssg_url", ""),

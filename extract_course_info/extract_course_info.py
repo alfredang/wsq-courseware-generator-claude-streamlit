@@ -13,6 +13,7 @@ import pandas as pd
 
 from generate_ap_fg_lg.courseware_generation import parse_cp_document
 from courseware_agents.cp_interpreter import interpret_cp
+from utils.helpers import get_courseware_folder, copy_to_courseware
 
 
 def display_course_info(context):
@@ -21,6 +22,7 @@ def display_course_info(context):
     # --- Course Overview ---
     st.subheader("Course Overview")
     overview_data = [
+        {"Field": "Registered Training Provider", "Value": context.get('Name_of_Organisation', 'N/A')},
         {"Field": "Course Title", "Value": context.get('Course_Title', 'N/A')},
         {"Field": "Course Ref Code (TGS)", "Value": context.get('TGS_Ref_No', 'N/A')},
         {"Field": "TSC Code", "Value": context.get('TSC_Code', 'N/A')},
@@ -180,6 +182,14 @@ def app():
                     parsed_cp_path = tmp.name
                 st.session_state['_extract_cp_temp_path'] = parsed_cp_path
 
+                # Save uploaded CP file to temp for later copy to Course Proposal folder
+                cp_ext = os.path.splitext(cp_file.name)[1]
+                with tempfile.NamedTemporaryFile(delete=False, suffix=cp_ext) as cp_tmp:
+                    cp_file.seek(0)
+                    cp_tmp.write(cp_file.read())
+                    st.session_state['_extract_cp_file_path'] = cp_tmp.name
+                    st.session_state['_extract_cp_file_name'] = cp_file.name
+
                 # Save user-entered TGS ref code for merging after extraction
                 if course_ref_code:
                     st.session_state['_user_tgs_ref_no'] = course_ref_code
@@ -202,6 +212,37 @@ def app():
                     st.rerun()
 
     # --- Agent Status ---
+    def _auto_select_company(org_name: str):
+        """Match extracted organisation name against the company list and auto-select."""
+        if not org_name:
+            return
+        from generate_ap_fg_lg.utils.organizations import get_organizations
+        organizations = get_organizations()
+        if not organizations:
+            return
+
+        # Normalize for comparison: lowercase, strip whitespace & punctuation
+        def _norm(s: str) -> str:
+            return s.lower().strip().replace(".", "").replace(",", "")
+
+        def _select(idx, org):
+            st.session_state['selected_company_idx'] = idx
+            st.session_state['selected_company'] = org
+            st.session_state['_company_auto_selected'] = True
+
+        target = _norm(org_name)
+        for idx, org in enumerate(organizations):
+            if _norm(org.get("name", "")) == target:
+                _select(idx, org)
+                return
+
+        # Fallback: substring match (e.g. "SOPHIA IGNITE" matches "Sophia Ignite Learning Academy Pte Ltd")
+        for idx, org in enumerate(organizations):
+            org_norm = _norm(org.get("name", ""))
+            if target in org_norm or org_norm in target:
+                _select(idx, org)
+                return
+
     def _on_extract_complete(job):
         result = job["result"]
         if result:
@@ -213,10 +254,21 @@ def app():
             # Clear downstream contexts so they pick up the new data
             st.session_state.pop('context', None)
             st.session_state.pop('lp_context', None)
-        # Clean up temp file
-        temp_path = st.session_state.pop('_extract_cp_temp_path', None)
-        if temp_path and os.path.exists(temp_path):
-            os.unlink(temp_path)
+            # Auto-select company from extracted organisation name
+            _auto_select_company(result.get('Name_of_Organisation', ''))
+            # Silently create per-course courseware folders
+            get_courseware_folder(result)
+            # Copy uploaded CP to Course Proposal folder
+            cp_temp = st.session_state.get('_extract_cp_file_path')
+            cp_name = st.session_state.get('_extract_cp_file_name')
+            if cp_temp and cp_name:
+                copy_to_courseware(cp_temp, "Course Proposal", cp_name, result)
+        # Clean up temp files
+        for key in ('_extract_cp_temp_path', '_extract_cp_file_path'):
+            temp_path = st.session_state.pop(key, None)
+            if temp_path and os.path.exists(temp_path):
+                os.unlink(temp_path)
+        st.session_state.pop('_extract_cp_file_name', None)
 
     job_status = render_page_job_status(
         "extract_course_info",
