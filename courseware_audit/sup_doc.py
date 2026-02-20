@@ -190,6 +190,10 @@ def app():
     if "audit_results" not in st.session_state:
         st.session_state.audit_results = {}
 
+    # Prompt templates (editable, collapsed)
+    from utils.prompt_template_editor import render_prompt_templates
+    render_prompt_templates("courseware_audit", "Prompt Templates (Courseware Audit)")
+
     # Upload section
     st.subheader("Upload Documents")
     st.write("Upload your courseware documents and assign each a document type for cross-checking.")
