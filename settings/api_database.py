@@ -186,6 +186,14 @@ BUILTIN_PROMPT_TEMPLATES = [
         "description": "Generate marketing-quality content for WSQ course brochures",
         "variables": "course_title, course_topics, entry_requirements, certification_info"
     },
+    # --- Courseware Audit ---
+    {
+        "category": "courseware_audit",
+        "name": "audit_extraction",
+        "display_name": "Audit Field Extraction",
+        "description": "Extract key fields (TGS code, course title, LOs, durations, topics, assessment/instructional methods) from courseware documents for cross-checking",
+        "variables": "document_text, document_type"
+    },
 ]
 
 
