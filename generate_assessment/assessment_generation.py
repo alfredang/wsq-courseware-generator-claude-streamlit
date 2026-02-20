@@ -238,122 +238,462 @@ def _ensure_list(answer):
 
 
 ################################################################################
+# Assessment type name mapping
+################################################################################
+def _get_assessment_full_name(assessment_type: str) -> str:
+    """Map assessment type code to full display name for document titles."""
+    mapping = {
+        "WA (SAQ)": "Written Assessment (SAQ)",
+        "WA-SAQ": "Written Assessment (SAQ)",
+        "PP": "Practical Performance (PP)",
+        "CS": "Case Study (CS)",
+        "OQ": "Oral Questioning (OQ)",
+        "OI": "Oral Interview (OI)",
+        "DEM": "Demonstration (DEM)",
+        "RP": "Role Play (RP)",
+        "PRJ": "Project (PRJ)",
+        "ASGN": "Assignment (ASGN)",
+    }
+    return mapping.get(assessment_type, assessment_type)
+
+
+def _get_assessment_long_name(assessment_type: str) -> str:
+    """Map assessment type code to long descriptive name for Section B."""
+    mapping = {
+        "WA (SAQ)": "Written Assessment \u2013 Short Answer Questions (SAQ)",
+        "WA-SAQ": "Written Assessment \u2013 Short Answer Questions (SAQ)",
+        "PP": "Practical Performance (PP)",
+        "CS": "Case Study (CS)",
+        "OQ": "Oral Questioning (OQ)",
+        "OI": "Oral Interview (OI)",
+        "DEM": "Demonstration (DEM)",
+        "RP": "Role Play (RP)",
+        "PRJ": "Project (PRJ)",
+        "ASGN": "Assignment (ASGN)",
+    }
+    return mapping.get(assessment_type, assessment_type)
+
+
+def _format_duration_mins(duration: str) -> str:
+    """Convert duration string to minutes format (e.g. '1 hr' -> '60 mins')."""
+    if not duration:
+        return "60 mins"
+    d = duration.strip().lower()
+    # Already in mins format
+    if 'min' in d and 'hr' not in d and 'hour' not in d:
+        m = re.match(r'(\d+)', d)
+        return f"{m.group(1)} mins" if m else duration
+    # Extract hours
+    m = re.match(r'(\d+(?:\.\d+)?)\s*(?:hr|hour)', d)
+    if m:
+        hours = float(m.group(1))
+        return f"{int(hours * 60)} mins"
+    return duration
+
+
+def _set_cell_font(cell, size=11, bold=False, font_name='Calibri'):
+    """Set font properties for all paragraphs in a table cell."""
+    for p in cell.paragraphs:
+        for r in p.runs:
+            r.font.size = Pt(size)
+            r.font.name = font_name
+            r.bold = bold
+
+
+def _build_ref_string(q: dict) -> str:
+    """Build inline reference string like (K3) or (A1, A2) from question data."""
+    refs = []
+    if q.get('knowledge_id'):
+        refs.append(q['knowledge_id'])
+    if q.get('ability_id'):
+        aids = q['ability_id'] if isinstance(q['ability_id'], list) else [q['ability_id']]
+        refs.extend(aids)
+    if refs:
+        return f"({', '.join(refs)})"
+    return ""
+
+
+################################################################################
 # Generate documents (Question and Answer papers) - Template filling only
 ################################################################################
-def _build_assessment_doc(context: dict, assessment_type: str, questions: list, include_answers: bool) -> Document:
-    """Build an assessment Word document programmatically."""
+def _build_answer_doc(context: dict, assessment_type: str, questions: list) -> Document:
+    """Build an assessment ANSWER document in WSQ client-ready format.
+
+    Matches reference format: Title ('Answers to ...') + horizontal line +
+    questions with suggestive answers inside bordered boxes.
+    No Section A/B/C, no trainee info, no instructions, no footer.
+    """
     doc = Document()
 
-    # Set default font
+    # -- Set default font --
     style = doc.styles['Normal']
     font = style.font
-    font.name = 'Calibri'
-    font.size = Pt(11)
+    font.name = 'Arial'
+    font.size = Pt(12)
 
-    # Title
-    title = doc.add_heading(level=1)
-    title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = title.add_run(f"{'Answer Key' if include_answers else 'Question Paper'} - {assessment_type}")
-    run.font.color.rgb = RGBColor(0x44, 0x72, 0xC4)
+    # -- Set margins (1 inch) --
+    for section in doc.sections:
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1)
+        section.right_margin = Inches(1)
 
-    # Course info
     course_title = context.get('course_title', '')
-    company_name = context.get('company_name', '')
-    duration = context.get('duration', '')
+    assessment_code = context.get('assessment_code', assessment_type)
 
-    info_table = doc.add_table(rows=3, cols=2)
-    info_table.style = 'Light Grid Accent 1'
-    info_cells = [
-        ("Course Title", course_title),
-        ("Company", company_name),
-        ("Duration", duration),
-    ]
-    for i, (label, value) in enumerate(info_cells):
-        info_table.cell(i, 0).text = label
-        info_table.cell(i, 1).text = str(value)
-        for cell in [info_table.cell(i, 0), info_table.cell(i, 1)]:
-            for p in cell.paragraphs:
-                for r in p.runs:
-                    r.font.size = Pt(10)
+    # =========================================================================
+    # Title Block (centered, bold)
+    # =========================================================================
+    # "Answers to [Course Title]"
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.space_after = Pt(2)
+    run = p_title.add_run(f"Answers to {course_title}")
+    run.bold = True
+    run.font.size = Pt(18)
+    run.font.name = 'Arial'
 
-    doc.add_paragraph()
+    # Assessment type subtitle
+    subtitle_text = _get_assessment_full_name(assessment_code)
+    p_sub = doc.add_paragraph()
+    p_sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_sub.paragraph_format.space_after = Pt(6)
+    run = p_sub.add_run(subtitle_text)
+    run.bold = True
+    run.font.size = Pt(18)
+    run.font.name = 'Arial'
 
-    # Questions
+    # Horizontal line separator after title
+    p_line = doc.add_paragraph()
+    p_line.paragraph_format.space_before = Pt(0)
+    p_line.paragraph_format.space_after = Pt(6)
+    pPr = p_line._p.get_or_add_pPr()
+    pBdr = parse_xml(f'<w:pBdr {nsdecls("w")}><w:bottom w:val="single" w:sz="6" w:space="1" w:color="000000"/></w:pBdr>')
+    pPr.append(pBdr)
+
+    # =========================================================================
+    # Questions with Suggestive Answers in bordered boxes
+    # =========================================================================
     for idx, q in enumerate(questions, 1):
-        # Question number heading
-        q_heading = doc.add_heading(level=2)
-        q_heading.add_run(f"Question {idx}")
-
-        # Scenario
+        # Scenario (italics) — outside the box
         scenario = q.get('scenario', '')
         if scenario:
-            p = doc.add_paragraph()
-            run = p.add_run("Scenario: ")
-            run.bold = True
-            run.font.size = Pt(11)
-            run = p.add_run(scenario)
-            run.font.size = Pt(11)
+            p_scen = doc.add_paragraph()
+            p_scen.paragraph_format.space_before = Pt(12)
+            p_scen.paragraph_format.space_after = Pt(6)
+            run = p_scen.add_run(scenario)
+            run.italic = True
+            run.font.size = Pt(12)
+            run.font.name = 'Arial'
 
-        # Question statement
+        # Question: "Q1. [text] (K3)" — outside the box, regular weight
         question_text = q.get('question_statement', q.get('question', ''))
-        if question_text:
-            p = doc.add_paragraph()
-            run = p.add_run(question_text)
-            run.font.size = Pt(11)
+        ref_str = _build_ref_string(q)
 
-        # Reference IDs
-        refs = []
-        if q.get('knowledge_id'):
-            refs.append(f"K: {q['knowledge_id']}")
-        if q.get('ability_id'):
-            aids = q['ability_id'] if isinstance(q['ability_id'], list) else [q['ability_id']]
-            refs.append(f"A: {', '.join(aids)}")
-        if q.get('learning_outcome_id'):
-            lo = q['learning_outcome_id']
-            if isinstance(lo, list):
-                lo = ', '.join(lo)
-            refs.append(f"LO: {lo}")
-        if refs:
-            p = doc.add_paragraph()
-            run = p.add_run(f"[{' | '.join(refs)}]")
-            run.font.size = Pt(9)
-            run.font.color.rgb = RGBColor(0x66, 0x66, 0x66)
+        p_q = doc.add_paragraph()
+        p_q.paragraph_format.space_before = Pt(12) if not scenario else Pt(6)
+        p_q.paragraph_format.space_after = Pt(6)
 
-        # Answer (only if include_answers)
-        if include_answers:
-            answers = _ensure_list(q.get('answer', []))
-            if answers:
-                p = doc.add_paragraph()
-                run = p.add_run("Answer:")
-                run.bold = True
-                run.font.size = Pt(11)
-                run.font.color.rgb = RGBColor(0x00, 0x70, 0x30)
+        # "Q1." prefix — regular weight (not bold) to match reference
+        run_q = p_q.add_run(f"Q{idx}. {question_text}")
+        run_q.font.size = Pt(12)
+        run_q.font.name = 'Arial'
+
+        # Inline reference (K#) or (A#)
+        if ref_str:
+            run_ref = p_q.add_run(f" {ref_str}")
+            run_ref.font.size = Pt(12)
+            run_ref.font.name = 'Arial'
+
+        # Bordered box containing "Suggestive answers" label + answer text
+        answers = _ensure_list(q.get('answer', []))
+        ans_table = doc.add_table(rows=1, cols=1)
+        ans_table.style = 'Table Grid'
+        cell = ans_table.cell(0, 0)
+        cell.paragraphs[0].clear()
+
+        # "Suggestive answers (not exhaustive):" — first line inside box
+        p_label = cell.paragraphs[0]
+        p_label.paragraph_format.space_before = Pt(6)
+        p_label.paragraph_format.space_after = Pt(6)
+        run = p_label.add_run("Suggestive answers (not exhaustive):")
+        run.font.size = Pt(12)
+        run.font.name = 'Arial'
+
+        # Answer text inside the same box
+        if answers:
+            # Check if answers look like bullet items (short items)
+            # Use bullets if there are 3+ short items (like the reference K9 example)
+            use_bullets = len(answers) >= 3 and all(len(a) < 80 for a in answers)
+
+            if use_bullets:
                 for ans in answers:
-                    bp = doc.add_paragraph(str(ans), style='List Bullet')
-                    for r in bp.runs:
-                        r.font.size = Pt(11)
-        else:
-            # Answer box — single-cell table with border
-            p = doc.add_paragraph()
-            run = p.add_run("Answer:")
-            run.bold = True
-            run.font.size = Pt(11)
+                    p_ans = cell.add_paragraph()
+                    p_ans.paragraph_format.space_before = Pt(2)
+                    p_ans.paragraph_format.space_after = Pt(2)
+                    # Use list style indent with bullet
+                    p_ans.paragraph_format.left_indent = Inches(0.5)
+                    run = p_ans.add_run(f"\u25cf {ans}")
+                    run.font.size = Pt(12)
+                    run.font.name = 'Arial'
+            else:
+                # Join all answer items into a single paragraph (like reference format)
+                combined_answer = " ".join(answers)
+                p_ans = cell.add_paragraph()
+                p_ans.paragraph_format.space_before = Pt(6)
+                p_ans.paragraph_format.space_after = Pt(6)
+                run = p_ans.add_run(combined_answer)
+                run.font.size = Pt(12)
+                run.font.name = 'Arial'
 
-            box_table = doc.add_table(rows=1, cols=1)
-            box_table.style = 'Table Grid'
-            cell = box_table.cell(0, 0)
-            # Add empty lines inside the box for writing space
-            cell.text = ""
-            for _ in range(5):
-                cell.add_paragraph("")
-            # Style the cell paragraphs
-            for cp in cell.paragraphs:
-                cp.paragraph_format.space_before = Pt(2)
-                cp.paragraph_format.space_after = Pt(2)
-                for r in cp.runs:
-                    r.font.size = Pt(11)
+    return doc
 
-        doc.add_paragraph()  # spacing
+
+def _build_assessment_doc(context: dict, assessment_type: str, questions: list, include_answers: bool) -> Document:
+    """Build an assessment Word document in WSQ client-ready format."""
+
+    # Answer documents use a completely different simpler format
+    if include_answers:
+        return _build_answer_doc(context, assessment_type, questions)
+
+    doc = Document()
+
+    # -- Set default font --
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Arial'
+    font.size = Pt(12)
+
+    # -- Set margins (1 inch = 914400 EMU) --
+    for section in doc.sections:
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1)
+        section.right_margin = Inches(1)
+
+    course_title = context.get('course_title', '')
+    duration = context.get('duration', '')
+    assessment_code = context.get('assessment_code', assessment_type)
+
+    # =========================================================================
+    # Title Block (centered)
+    # =========================================================================
+    # Course title
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_title.paragraph_format.space_after = Pt(2)
+    run = p_title.add_run(course_title)
+    run.bold = True
+    run.font.size = Pt(18)
+    run.font.name = 'Arial'
+
+    # Assessment type subtitle
+    subtitle_text = _get_assessment_full_name(assessment_code)
+    p_sub = doc.add_paragraph()
+    p_sub.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_sub.paragraph_format.space_after = Pt(12)
+    run = p_sub.add_run(subtitle_text)
+    run.bold = True
+    run.font.size = Pt(18)
+    run.font.name = 'Arial'
+
+    # =========================================================================
+    # A: Trainee Information
+    # =========================================================================
+    p_a = doc.add_paragraph()
+    p_a.paragraph_format.space_before = Pt(6)
+    p_a.paragraph_format.space_after = Pt(6)
+    run = p_a.add_run("A: Trainee Information:")
+    run.bold = True
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
+
+    blank_line = "_" * 30
+    short_blank = "_" * 15
+
+    p = doc.add_paragraph()
+    run = p.add_run(f"Trainee Name (as Per NRIC): {blank_line}")
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
+
+    p = doc.add_paragraph()
+    run = p.add_run(f"Last three digits and alphabet of NRIC/FIN: {short_blank}")
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
+
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(12)
+    run = p.add_run(f"Date: {short_blank}")
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
+
+    # =========================================================================
+    # B: Assessment Instruction
+    # =========================================================================
+    p_b = doc.add_paragraph()
+    p_b.paragraph_format.space_before = Pt(6)
+    p_b.paragraph_format.space_after = Pt(6)
+    run = p_b.add_run("B: Assessment Instruction")
+    run.bold = True
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
+
+    assessment_long = _get_assessment_long_name(assessment_code)
+    num_questions = len(questions)
+
+    p = doc.add_paragraph()
+    run = p.add_run(f"This is the {assessment_long}")
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
+
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(6)
+    run = p.add_run(f"Duration: {_format_duration_mins(duration)}")
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
+
+    instructions = [
+        f"1. The assessor will pass the questions in hard copy to you. There are {num_questions} questions. You need to answer all the questions.",
+        "2. This is an open-book exam that must be completed individually.",
+        "3. You need to get all answers correct to be competent.",
+    ]
+    for instr in instructions:
+        p = doc.add_paragraph()
+        run = p.add_run(instr)
+        run.font.size = Pt(12)
+        run.font.name = 'Arial'
+
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(6)
+    run = p.add_run("Submission Procedure:")
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
+
+    p = doc.add_paragraph()
+    p.paragraph_format.space_after = Pt(12)
+    run = p.add_run("1. Please pass the hard copy to the assessor after completion.")
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
+
+    # =========================================================================
+    # C: Questions and Answers
+    # =========================================================================
+    p_c = doc.add_paragraph()
+    p_c.paragraph_format.space_before = Pt(6)
+    p_c.paragraph_format.space_after = Pt(6)
+    run = p_c.add_run("C: Questions and Answers")
+    run.bold = True
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
+
+    for idx, q in enumerate(questions, 1):
+        # Scenario (italics)
+        scenario = q.get('scenario', '')
+        if scenario:
+            p_scen = doc.add_paragraph()
+            p_scen.paragraph_format.space_before = Pt(12)
+            p_scen.paragraph_format.space_after = Pt(6)
+            run = p_scen.add_run(scenario)
+            run.italic = True
+            run.font.size = Pt(12)
+            run.font.name = 'Arial'
+
+        # Question: "Q1. [text] (K3)"
+        question_text = q.get('question_statement', q.get('question', ''))
+        ref_str = _build_ref_string(q)
+
+        p_q = doc.add_paragraph()
+        p_q.paragraph_format.space_before = Pt(12) if not scenario else Pt(6)
+        p_q.paragraph_format.space_after = Pt(6)
+
+        # Bold "Q1." prefix
+        run_num = p_q.add_run(f"Q{idx}. ")
+        run_num.bold = True
+        run_num.font.size = Pt(12)
+        run_num.font.name = 'Arial'
+
+        # Question text
+        run_text = p_q.add_run(question_text)
+        run_text.font.size = Pt(12)
+        run_text.font.name = 'Arial'
+
+        # Inline reference (K#) or (A#)
+        if ref_str:
+            run_ref = p_q.add_run(f" {ref_str}")
+            run_ref.font.size = Pt(12)
+            run_ref.font.name = 'Arial'
+
+        # Answer label
+        p_ans_label = doc.add_paragraph()
+        p_ans_label.paragraph_format.space_before = Pt(6)
+        p_ans_label.paragraph_format.space_after = Pt(4)
+        run = p_ans_label.add_run("Answer:")
+        run.bold = True
+        run.font.size = Pt(12)
+        run.font.name = 'Arial'
+
+        # Empty bordered answer box for writing
+        box_table = doc.add_table(rows=1, cols=1)
+        box_table.style = 'Table Grid'
+        cell = box_table.cell(0, 0)
+        cell.text = ""
+        for _ in range(6):
+            cell.add_paragraph("")
+        for cp in cell.paragraphs:
+            cp.paragraph_format.space_before = Pt(2)
+            cp.paragraph_format.space_after = Pt(2)
+            for r in cp.runs:
+                r.font.size = Pt(12)
+                r.font.name = 'Arial'
+
+    # =========================================================================
+    # Footer: For Official Use Only
+    # =========================================================================
+    doc.add_paragraph()  # spacing
+
+    # Horizontal line
+    p_line = doc.add_paragraph()
+    p_line.paragraph_format.space_before = Pt(12)
+    p_line.paragraph_format.space_after = Pt(6)
+    pPr = p_line._p.get_or_add_pPr()
+    pBdr = parse_xml(f'<w:pBdr {nsdecls("w")}><w:bottom w:val="single" w:sz="6" w:space="1" w:color="000000"/></w:pBdr>')
+    pPr.append(pBdr)
+
+    # "For Official Use Only" heading
+    p_official = doc.add_paragraph()
+    p_official.paragraph_format.space_before = Pt(6)
+    p_official.paragraph_format.space_after = Pt(6)
+    run = p_official.add_run("For Official Use Only")
+    run.bold = True
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
+
+    blank = "_" * 10
+    long_blank = "_" * 15
+
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(6)
+    run = p.add_run(f"Grade: {blank}(C / NYC)")
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
+
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(6)
+    run = p.add_run(f"Assessor Name: {long_blank}")
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
+    run = p.add_run(f"    Assessor NRIC: {long_blank}")
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
+
+    p = doc.add_paragraph()
+    p.paragraph_format.space_before = Pt(6)
+    run = p.add_run(f"Date: {long_blank}")
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
+    run = p.add_run(f"    Signature: {long_blank}")
+    run.font.size = Pt(12)
+    run.font.name = 'Arial'
 
     return doc
 
@@ -453,6 +793,7 @@ def app():
                         doc_context = {
                             "course_title": result.get('course_title', ''),
                             "duration": assessment.get('duration', ''),
+                            "assessment_code": assessment.get('code', a_type),
                             "questions": questions,
                         }
                         files = generate_documents(doc_context, a_type, ".output", company=_company)

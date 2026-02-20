@@ -17,6 +17,10 @@ def lazy_import_brochure():
     import generate_brochure.brochure_generation as brochure_generation
     return brochure_generation
 
+def lazy_import_convert_assessment():
+    import convert_assessment.convert_assessment as convert_assessment
+    return convert_assessment
+
 def lazy_import_docs():
     import courseware_audit.sup_doc as sup_doc
     return sup_doc
@@ -121,6 +125,7 @@ with st.sidebar:
         "Generate Assessment",
         "Generate Slides",
         "Generate Brochure",
+        "Convert Assessment",
         "Courseware Audit",
     ]
 
@@ -131,6 +136,7 @@ with st.sidebar:
         "clipboard-check",
         "easel",
         "file-earmark-pdf",
+        "arrow-repeat",
         "search",
     ]
 
@@ -239,6 +245,11 @@ elif page_to_display == "Generate Brochure":
     st.session_state['settings_page'] = None
     brochure_generation = lazy_import_brochure()
     brochure_generation.app()
+
+elif page_to_display == "Convert Assessment":
+    st.session_state['settings_page'] = None
+    convert_assessment = lazy_import_convert_assessment()
+    convert_assessment.app()
 
 elif page_to_display == "Courseware Audit":
     st.session_state['settings_page'] = None

@@ -844,7 +844,7 @@ async def _do_internet_research(client, notebook_id: str, queries: List[str],
                 continue
 
             found_sources = research_result.get("sources", [])
-            sources_to_import = [s for s in found_sources if s.get("url")][:3]
+            sources_to_import = [s for s in found_sources if s.get("url")][:5]
 
             if progress_callback:
                 progress_callback(
