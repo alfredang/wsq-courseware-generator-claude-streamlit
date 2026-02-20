@@ -40,7 +40,7 @@ LUNCH_END = LUNCH_START + LUNCH_DURATION  # 1:15 PM
 ASSESS_START = 16 * 60         # 4:00 PM (last day only)
 MIN_SESSION = 15               # Minimum session length in minutes
 
-HEADING_COLOR = RGBColor(0x44, 0x72, 0xC4)  # Steel blue
+HEADING_COLOR = RGBColor(0x00, 0x00, 0x00)  # Black
 
 
 # =============================================================================
@@ -233,7 +233,7 @@ def build_lesson_plan_schedule(context: dict) -> dict:
         current = DAY_START
         is_last_day = (day == num_days)
         lunch_done = False
-        instr_end = ASSESS_START if (is_last_day and assess_mins > 0) else DAY_END
+        instr_end = (DAY_END - assess_mins) if (is_last_day and assess_mins > 0) else DAY_END
 
         while lu_idx < len(lu_blocks) and current < instr_end:
             if not lunch_done and current >= LUNCH_START:
@@ -292,33 +292,30 @@ def build_lesson_plan_schedule(context: dict) -> dict:
             slots.append(_make_slot(current, lunch_end, "Lunch Break", "-"))
             current = lunch_end
 
-        # Assessment on last day
+        # Assessment on last day — strictly follow CP assessment hours
         if is_last_day and assess_mins > 0:
-            if current < ASSESS_START:
-                slots.append(_make_slot(current, ASSESS_START, "Break", "-"))
-                current = ASSESS_START
+            # Assessment starts at end of instruction, not fixed 4:00 PM
+            am_start = max(current, DAY_END - assess_mins)
+            if current < am_start:
+                slots.append(_make_slot(current, am_start, "Break", "-"))
+                current = am_start
 
             am_details = context.get("Assessment_Methods_Details", [])
-            # Assessment always fills from ASSESS_START to DAY_END (4-6 PM)
-            am_end = DAY_END
-            total_am_mins = am_end - current
-            if am_details and len(am_details) > 1:
-                # Group all assessments into one row, split time equally
-                per_am = total_am_mins // len(am_details)
+            am_end = current + assess_mins
+            if am_end > DAY_END:
+                am_end = DAY_END
+            # List all assessment methods, show total CP duration only
+            if am_details:
                 lines = []
                 for am in am_details:
                     name = am.get("Assessment_Method", "Assessment")
-                    lines.append(f"Assessment: {name} ({per_am} mins)")
+                    lines.append(f"Assessment: {name}")
+                lines.append(f"({assess_mins} mins)")
                 label = "\n".join(lines)
                 slots.append(_make_slot(current, am_end, label, "Assessment"))
                 current = am_end
-            elif am_details:
-                name = am_details[0].get("Assessment_Method", "Assessment")
-                label = f"Assessment: {name} ({total_am_mins} mins)"
-                slots.append(_make_slot(current, am_end, label, "Assessment"))
-                current = am_end
             else:
-                slots.append(_make_slot(current, am_end, "Assessment", "Assessment"))
+                slots.append(_make_slot(current, am_end, f"Assessment ({assess_mins} mins)", "Assessment"))
                 current = am_end
 
         # Fill remaining time to end of day
@@ -387,31 +384,26 @@ def _render_lp_template(context: dict, company: dict) -> Document:
 # =============================================================================
 
 def _set_header_cell(cell, text: str):
-    """Style a table header cell with steel blue background and white text."""
+    """Style a table header cell with black and white formatting."""
     cell.text = ""
     p = cell.paragraphs[0]
     run = p.add_run(text)
     run.bold = True
     run.font.size = Pt(10)
     run.font.name = "Calibri"
-    run.font.color.rgb = RGBColor(255, 255, 255)
+    run.font.color.rgb = RGBColor(0, 0, 0)
     p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    tc_pr = cell._element.get_or_add_tcPr()
-    shading = tc_pr.makeelement(
-        qn("w:shd"), {qn("w:fill"): "4472C4", qn("w:val"): "clear"},
-    )
-    tc_pr.append(shading)
 
 
 def _add_colored_heading(doc, text: str, level: int = 2):
-    """Add a heading with steel blue color."""
+    """Add a heading with black color."""
     heading = doc.add_heading(text, level=level)
     for run in heading.runs:
-        run.font.color.rgb = HEADING_COLOR
+        run.font.color.rgb = RGBColor(0, 0, 0)
 
 
 def _add_lu_header_row(table, text: str):
-    """Add a Learning Unit header row that spans all columns with light blue background."""
+    """Add a Learning Unit header row that spans all columns with bold black text."""
     row = table.add_row()
     merged = row.cells[0].merge(row.cells[-1])
     merged.text = ""
@@ -420,12 +412,7 @@ def _add_lu_header_row(table, text: str):
     run.bold = True
     run.font.size = Pt(10)
     run.font.name = "Calibri"
-    run.font.color.rgb = RGBColor(0x1F, 0x38, 0x64)  # Dark blue text
-    tc_pr = merged._element.get_or_add_tcPr()
-    shading = tc_pr.makeelement(
-        qn("w:shd"), {qn("w:fill"): "D6E4F0", qn("w:val"): "clear"},
-    )
-    tc_pr.append(shading)
+    run.font.color.rgb = RGBColor(0, 0, 0)
 
 
 def _set_fixed_table_layout(table, col_widths):
