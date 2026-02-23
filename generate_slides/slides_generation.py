@@ -31,6 +31,117 @@ logger = logging.getLogger(__name__)
 
 
 # =============================================================================
+# Helpers for building lesson plan and activity source text
+# =============================================================================
+
+def _build_lesson_plan_text(context: dict) -> list:
+    """Build Lesson Plan slide content from course context.
+
+    Creates a day-by-day schedule matching supervisor's reference PPTX:
+    - Digital Attendance (AM) in each day
+    - Topics distributed across days
+    - Lunch Break
+    - Digital Attendance (PM)
+    - Assessment on last day
+    """
+    lines = []
+    lus = context.get('Learning_Units', [])
+    total_hours = context.get('Total_Course_Duration_Hours', '')
+    try:
+        hours = float(str(total_hours).replace('hours', '').replace('hrs', '').replace('h', '').strip() or '0')
+    except (ValueError, TypeError):
+        hours = 8
+    days = max(1, round(hours / 8))
+
+    # Gather all topics in order
+    all_topics = []
+    for lu_idx, lu in enumerate(lus):
+        for t_idx, topic in enumerate(lu.get('Topics', [])):
+            topic_title = topic.get('Topic_Title', f'Topic {t_idx + 1}')
+            all_topics.append(topic_title)
+
+    # Distribute topics across days (excluding assessment time on last day)
+    topics_per_day = max(1, len(all_topics) // days)
+    topic_idx = 0
+
+    for day in range(1, days + 1):
+        lines.append(f"### Day {day}")
+
+        lines.append("- **Digital Attendance (AM)**")
+        if day == 1:
+            lines.append("- Trainer and Learners Introduction")
+            lines.append("- Learning Outcomes")
+            lines.append("- Course Outline")
+
+        # Assign topics to this day
+        day_topics = []
+        end_idx = min(topic_idx + topics_per_day, len(all_topics))
+        if day == days:
+            end_idx = len(all_topics)
+        for ti in range(topic_idx, end_idx):
+            day_topics.append(all_topics[ti])
+        topic_idx = end_idx
+
+        # First half topics (before lunch)
+        mid = max(1, len(day_topics) // 2)
+        for t in day_topics[:mid]:
+            lines.append(f"- {t}")
+
+        lines.append("- Lunch Break")
+        lines.append("- **Digital Attendance (PM)**")
+
+        # Second half topics (after lunch)
+        for t in day_topics[mid:]:
+            lines.append(f"- {t}")
+
+        if day == days:
+            lines.append("- **Course Feedback and TRAQOM Survey**")
+            lines.append("- **Digital Attendance (Assessment)**")
+            lines.append("- Final Assessment")
+
+        lines.append(f"- End of Day {day}")
+        lines.append("")
+
+    return lines
+
+
+def _build_activity_text(topic_title: str, topic_bullets: list,
+                          assessment_methods: list) -> list:
+    """Build activity/lab slide content for a topic.
+
+    Following the supervisor's reference PPTX pattern:
+    - "Activity: [Topic Title]" or "Lab - [Topic Title]"
+    - Hands-on activity instructions
+    - Link to assessment method from CP
+    """
+    lines = []
+    lines.append(f"### Activity: {topic_title}")
+    lines.append("")
+
+    # Generate activity description based on topic content
+    if topic_bullets:
+        # Use first bullet point concepts for activity focus
+        focus_area = topic_bullets[0] if topic_bullets else topic_title
+        lines.append(f"- Apply the concepts learned about {focus_area}")
+    else:
+        lines.append(f"- Apply the concepts learned in this topic")
+
+    lines.append("- Work individually or in small groups")
+    lines.append("- Discuss findings with the class")
+    lines.append("")
+
+    # Link to assessment methods from CP
+    if assessment_methods:
+        method_names = [am.get('Assessment_Method', '') for am in assessment_methods if am.get('Assessment_Method')]
+        if method_names:
+            lines.append(f"**Assessment Link:** This activity prepares you for the {', '.join(method_names)} assessment.")
+            lines.append("Submit your work as part of the final assessment.")
+            lines.append("")
+
+    return lines
+
+
+# =============================================================================
 # Format course info as text for NotebookLM
 # =============================================================================
 
@@ -160,6 +271,10 @@ def _format_course_info_as_text(context: dict) -> str:
             lines.append(f"- T{t_idx}: {topic_title}")
         lines.append("")
 
+    # ── LESSON PLAN ──
+    lines.append("## Lesson Plan")
+    lines.extend(_build_lesson_plan_text(context))
+
     # ── SECTION 5: ASSESSMENT INFORMATION ──
     assessment_details = context.get('Assessment_Methods_Details', [])
     if assessment_details:
@@ -172,6 +287,7 @@ def _format_course_info_as_text(context: dict) -> str:
             lines.append(f"- {label} - {duration_am}")
         lines.append("- Assessment format: Open Book")
         lines.append("- Open book assessment ONLY includes Slides, Learner Guide or any approved materials.")
+        lines.append("- Appeal process")
         lines.append("")
 
         lines.append("## Briefing for Assessment")
@@ -198,6 +314,7 @@ def _format_course_info_as_text(context: dict) -> str:
 
     # ── SECTION 6: DETAILED TOPIC CONTENT (MAIN BODY) ──
     # Each LU becomes a major section with deep, expanded topic slides
+    assessment_details = context.get('Assessment_Methods_Details', [])
     for lu_idx, lu in enumerate(context.get('Learning_Units', []), 1):
         lu_title = lu.get('LU_Title', 'Learning Unit')
         lu_num = lu.get('LU_Number', f'LU{lu_idx}')
@@ -216,7 +333,8 @@ def _format_course_info_as_text(context: dict) -> str:
             lines.append("")
 
             # Include all bullet points as detailed content
-            for bp in topic.get('Bullet_Points', []):
+            bullet_points = topic.get('Bullet_Points', [])
+            for bp in bullet_points:
                 lines.append(f"- {bp}")
 
             # Add instruction for deep content generation
@@ -226,6 +344,9 @@ def _format_course_info_as_text(context: dict) -> str:
                          f"explanations, examples, diagrams, and practical applications. "
                          f"Include comparison slides, summary slides, and real-world examples.")
             lines.append("")
+
+            # Add Activity/Lab slide after each topic
+            lines.extend(_build_activity_text(topic_title, bullet_points, assessment_details))
 
         # K&A statements for this LU
         k_statements = lu.get('K_numbering_description', [])
@@ -260,6 +381,28 @@ def _format_course_info_as_text(context: dict) -> str:
     lines.append("## Questions & Answers")
     lines.append("- Any questions?")
     lines.append("- Open discussion")
+    lines.append("")
+
+    # ── ADDITIONAL CLOSING SLIDES (matching supervisor reference) ──
+    lines.append("## Certificate Delivery")
+    lines.append("- Please provide the following details to facilitate the issuance of your certificate.")
+    lines.append("- Ensure the accuracy of the information printed on the certificate.")
+    lines.append("")
+
+    lines.append("## Digital Attendance")
+    lines.append("- It is mandatory for you to take both AM, PM and Assessment digital attendance for WSQ funded courses.")
+    lines.append("- The trainer or administrator will show you the digital attendance QR code generated from SSG portal.")
+    lines.append("- Please scan the QR code from your mobile phone camera and submit your attendance.")
+    lines.append("")
+
+    lines.append("## Recommended Courses")
+    lines.append("- Explore other WSQ courses to continue your professional development.")
+    lines.append("")
+
+    lines.append("## Support")
+    lines.append("- If you have any enquiries during and after the class, you can contact us:")
+    lines.append("- Email: enquiry@tertiaryinfotech.com")
+    lines.append("- Tel: 61000613")
     lines.append("")
 
     lines.append("## Thank You")
@@ -384,12 +527,21 @@ def _format_lu_source_text(context: dict, lu_index: int, num_lus: int) -> str:
         for i, u in enumerate(lus, 1):
             un = u.get('LU_Number', f'LU{i}')
             ut = u.get('LU_Title', 'Learning Unit')
-            lines.append(f"### {un}: {ut}")
+            k_nums = [k.get('K_number', '') for k in u.get('K_numbering_description', [])]
+            a_nums = [a.get('A_number', '') for a in u.get('A_numbering_description', [])]
+            ka_refs = ', '.join(k_nums + a_nums)
+            ka_str = f" ({ka_refs})" if ka_refs else ""
+            lines.append(f"### {un}: {ut}{ka_str}")
             for j, t in enumerate(u.get('Topics', []), 1):
                 lines.append(f"- T{j}: {t.get('Topic_Title', 'Topic')}")
             lines.append("")
 
+        # Lesson Plan
+        lines.append("## Lesson Plan")
+        lines.extend(_build_lesson_plan_text(context))
+
     # ── LU CONTENT (always included) ──
+    assessment_details = context.get('Assessment_Methods_Details', [])
     lines.append(f"## {lu_num}: {lu_title}")
     lines.append("")
     if lu.get('LO'):
@@ -400,7 +552,8 @@ def _format_lu_source_text(context: dict, lu_index: int, num_lus: int) -> str:
         topic_title = topic.get('Topic_Title', 'Topic')
         lines.append(f"### T{t_idx}: {topic_title}")
         lines.append("")
-        for bp in topic.get('Bullet_Points', []):
+        bullet_points = topic.get('Bullet_Points', [])
+        for bp in bullet_points:
             lines.append(f"- {bp}")
         lines.append("")
         lines.append(
@@ -409,6 +562,9 @@ def _format_lu_source_text(context: dict, lu_index: int, num_lus: int) -> str:
             f"explanations, examples, diagrams, and practical applications."
         )
         lines.append("")
+
+        # Add Activity/Lab after each topic
+        lines.extend(_build_activity_text(topic_title, bullet_points, assessment_details))
 
     # K&A for this LU
     k_statements = lu.get('K_numbering_description', [])
@@ -443,6 +599,7 @@ def _format_lu_source_text(context: dict, lu_index: int, num_lus: int) -> str:
                 lines.append(f"- {label} - {dur}")
             lines.append("- Assessment format: Open Book")
             lines.append("- Open book assessment ONLY includes Slides, Learner Guide or any approved materials.")
+            lines.append("- Appeal process")
             lines.append("")
 
             lines.append("## Briefing for Assessment")
@@ -476,6 +633,25 @@ def _format_lu_source_text(context: dict, lu_index: int, num_lus: int) -> str:
         lines.append("## Questions & Answers")
         lines.append("- Any questions?")
         lines.append("- Open discussion")
+        lines.append("")
+
+        lines.append("## Certificate Delivery")
+        lines.append("- Please provide the following details to facilitate the issuance of your certificate.")
+        lines.append("- Ensure the accuracy of the information printed on the certificate.")
+        lines.append("")
+
+        lines.append("## Digital Attendance")
+        lines.append("- It is mandatory for you to take both AM, PM and Assessment digital attendance for WSQ funded courses.")
+        lines.append("")
+
+        lines.append("## Recommended Courses")
+        lines.append("- Explore other WSQ courses to continue your professional development.")
+        lines.append("")
+
+        lines.append("## Support")
+        lines.append("- If you have any enquiries during and after the class, you can contact us:")
+        lines.append("- Email: enquiry@tertiaryinfotech.com")
+        lines.append("- Tel: 61000613")
         lines.append("")
 
         lines.append("## Thank You")
@@ -603,12 +779,21 @@ def _format_chunk_source_text(context: dict, lu_index: int, num_lus: int,
         for i, u in enumerate(lus, 1):
             un = u.get('LU_Number', f'LU{i}')
             ut = u.get('LU_Title', 'Learning Unit')
-            lines.append(f"### {un}: {ut}")
+            k_nums = [k.get('K_number', '') for k in u.get('K_numbering_description', [])]
+            a_nums = [a.get('A_number', '') for a in u.get('A_numbering_description', [])]
+            ka_refs = ', '.join(k_nums + a_nums)
+            ka_str = f" ({ka_refs})" if ka_refs else ""
+            lines.append(f"### {un}: {ut}{ka_str}")
             for j, t in enumerate(u.get('Topics', []), 1):
                 lines.append(f"- T{j}: {t.get('Topic_Title', 'Topic')}")
             lines.append("")
 
+        # Lesson Plan
+        lines.append("## Lesson Plan")
+        lines.extend(_build_lesson_plan_text(context))
+
     # ── LU + TOPIC CHUNK CONTENT ──
+    assessment_details = context.get('Assessment_Methods_Details', [])
     lines.append(f"## {lu_num}: {lu_title}")
     lines.append("")
     if lu.get('LO'):
@@ -623,7 +808,8 @@ def _format_chunk_source_text(context: dict, lu_index: int, num_lus: int,
         topic_title = topic.get('Topic_Title', 'Topic')
         lines.append(f"### T{t_idx + 1}: {topic_title}")
         lines.append("")
-        for bp in topic.get('Bullet_Points', []):
+        bullet_points = topic.get('Bullet_Points', [])
+        for bp in bullet_points:
             lines.append(f"- {bp}")
         lines.append("")
         lines.append(
@@ -632,6 +818,9 @@ def _format_chunk_source_text(context: dict, lu_index: int, num_lus: int,
             f"explanations, examples, diagrams, and practical applications."
         )
         lines.append("")
+
+        # Add Activity/Lab after each topic
+        lines.extend(_build_activity_text(topic_title, bullet_points, assessment_details))
 
     # K&A for this LU
     k_statements = lu.get('K_numbering_description', [])
@@ -661,6 +850,7 @@ def _format_chunk_source_text(context: dict, lu_index: int, num_lus: int,
                 lines.append(f"- {label} - {dur}")
             lines.append("- Assessment format: Open Book")
             lines.append("- Open book assessment ONLY includes Slides, Learner Guide or any approved materials.")
+            lines.append("- Appeal process")
             lines.append("")
 
             lines.append("## Briefing for Assessment")
@@ -694,6 +884,25 @@ def _format_chunk_source_text(context: dict, lu_index: int, num_lus: int,
         lines.append("## Questions & Answers")
         lines.append("- Any questions?")
         lines.append("- Open discussion")
+        lines.append("")
+
+        lines.append("## Certificate Delivery")
+        lines.append("- Please provide the following details to facilitate the issuance of your certificate.")
+        lines.append("- Ensure the accuracy of the information printed on the certificate.")
+        lines.append("")
+
+        lines.append("## Digital Attendance")
+        lines.append("- It is mandatory for you to take both AM, PM and Assessment digital attendance for WSQ funded courses.")
+        lines.append("")
+
+        lines.append("## Recommended Courses")
+        lines.append("- Explore other WSQ courses to continue your professional development.")
+        lines.append("")
+
+        lines.append("## Support")
+        lines.append("- If you have any enquiries during and after the class, you can contact us:")
+        lines.append("- Email: enquiry@tertiaryinfotech.com")
+        lines.append("- Tel: 61000613")
         lines.append("")
 
         lines.append("## Thank You")
@@ -992,7 +1201,6 @@ async def _generate_slides_direct(content: str, course_title: str, config: Dict[
             if progress_callback:
                 progress_callback(f"Step {slide_step}/{total_steps}: Generating slide deck...", 65)
 
-            slides_per_topic = config.get('slides_per_topic', 15)
             include_notes = config.get('include_notes', True)
             include_summaries = config.get('include_summaries', True)
             slide_style = config.get('slide_style', 'Professional')
@@ -1006,86 +1214,93 @@ async def _generate_slides_direct(content: str, course_title: str, config: Dict[
             except (ValueError, TypeError):
                 course_hours = 8  # Default to 1-day
 
-            # Slide count targets based on course duration
             num_topics = sum(
                 len(lu.get('Topics', []))
                 for lu in ctx.get('Learning_Units', [])
             ) or 10
 
-            # Target ~5 slides per topic
-            min_slides = max(num_topics * 5, 80)
+            # Target ~12 slides per topic + 15 intro + 10 closing
+            min_slides = max(num_topics * 12 + 25, 100)
             max_slides = min_slides + 40
             course_type = f"{course_hours}-hour"
 
             instructions = (
                 f"Create a comprehensive {slide_style.lower()} slide deck for this WSQ training course. "
-                f"This is for PROFESSIONAL CLIENT DELIVERY — quality and completeness are critical. "
-                f"IMPORTANT: The cover/title slide MUST use exactly this title: \"{course_title}\". "
-                "Do NOT rephrase, shorten, or change the course title in any way. "
-                ""
-                "CONTENT RULES: "
-                "You MUST strictly follow the Course Proposal (CP) source material provided. "
-                "All slide content must come directly from the source. "
-                "Do NOT fabricate or invent information not in the source. "
-                "However, you MUST expand each topic with detailed explanations, examples, "
-                "diagrams, comparisons, and practical applications to create rich, educational content. "
-                ""
+                f"This is for PROFESSIONAL CLIENT DELIVERY at Tertiary Infotech — "
+                f"quality, depth, and completeness are CRITICAL. "
+                f"The client expects slides matching the standard of Dr. Alfred Ang's training materials.\n\n"
+                f"TITLE: Use exactly \"{course_title}\" on the cover slide. "
+                "Do NOT rephrase, shorten, or change the course title.\n\n"
+
+                "CONTENT RULES:\n"
+                "- STRICTLY follow the Course Proposal (CP) source material provided.\n"
+                "- All slide content must come from the source.\n"
+                "- Do NOT fabricate or invent information not in the source.\n"
+                "- EXPAND each topic with detailed explanations, examples, "
+                "diagrams, comparisons, and practical applications.\n\n"
+
                 f"SLIDE COUNT: This is a {course_type} course ({course_hours} hours). "
                 f"Generate between {min_slides} to {max_slides} slides total. "
-                f"There are {num_topics} topics — each topic needs multiple detailed slides. "
-                "15 slides is completely inadequate — generate comprehensive content. "
-                ""
-                "MANDATORY STANDARD PAGES (must appear in this exact order): "
-                "1. COVER SLIDE — Course title, course code "
-                "2. DIGITAL ATTENDANCE — WSQ digital attendance instructions "
-                "3. LET'S KNOW EACH OTHER — Learner introduction slide "
-                "4. ABOUT THE TRAINER — Trainer introduction slide "
-                "5. GROUND RULES — Class rules and expectations "
-                "6. LESSON PLAN — Day-by-day schedule overview "
-                "7. SKILLS FRAMEWORK — TSC title, code, and description "
-                "8. TSC KNOWLEDGE & ABILITY STATEMENTS — All K&A statements "
-                "9. LEARNING OUTCOMES — All LOs listed clearly "
-                "10. COURSE OUTLINE — All topics with K&A references "
-                "11. ASSESSMENT INFO — Methods, format, briefing for assessment "
-                "12. CRITERIA FOR FUNDING — Attendance and competency requirements "
-                "13-onwards. TOPIC CONTENT — Deep, detailed slides for each LU and topic "
-                "THEN: TRAQOM SURVEY — Course feedback instructions "
-                "THEN: SUMMARY & Q&A — Recap all LOs and key takeaways "
-                "FINAL: THANK YOU — Closing slide "
-                ""
-                "TOPIC CONTENT DEPTH: "
-                "Each Learning Unit (LU1, LU2, LU3, etc.) must be a separate major section. "
-                "Each section starts with a SECTION TITLE slide (e.g., 'LU1: Title'). "
-                "Show the Learning Outcome on the section title or next slide. "
-                "Each Topic (T1, T2, T3, etc.) must have MULTIPLE slides: "
-                "- Title/overview slide for the topic "
-                "- Detailed content slides with explanations "
-                "- Comparison or diagram slides where relevant "
-                "- Examples and real-world applications "
-                "- Summary slide for each topic "
-                "Include K&A statement references on relevant slides. "
-                ""
-                "VISUAL STYLE: "
-                "Use a clean, light, modern design with white or light-colored backgrounds. "
-                "Avoid dark themes. Use professional accent colors like blue (#4472C4). "
-                "Use clear, readable fonts with good contrast. "
-                "Include relevant images, diagrams, flowcharts, and icons throughout. "
-                "Every few slides should have a visual element (diagram, chart, icon, image). "
+                f"There are {num_topics} topics — each needs 10-15 detailed slides.\n\n"
+
+                "MANDATORY INTRO PAGES (in this exact order):\n"
+                "1. COVER SLIDE — Course title centered, course code, company info\n"
+                "2. DIGITAL ATTENDANCE — WSQ digital attendance instructions (AM, PM, Assessment)\n"
+                "3. ABOUT THE TRAINER — Title only with creative design elements\n"
+                "4. LET'S KNOW EACH OTHER — Name, role, experience, expectations\n"
+                "5. GROUND RULES — Silent phones, participation, respect, punctuality, 75% attendance\n"
+                "6. LESSON PLAN — Day-by-day schedule with Digital Attendance (AM/PM) in BOLD RED, "
+                "topics distributed per day, Lunch Break, Assessment on last day\n"
+                "7. SKILLS FRAMEWORK — TSC title and code\n"
+                "8. TSC KNOWLEDGE & ABILITY STATEMENTS — All K and A statements\n"
+                "9. LEARNING OUTCOMES — All LOs listed\n"
+                "10. COURSE OUTLINE — Topics with K&A references per topic, sub-topics indented\n"
+                "11. FINAL ASSESSMENT — Methods, open book format, appeal process\n"
+                "12. BRIEFING FOR ASSESSMENT — Rules for conduct\n"
+                "13. CRITERIA FOR FUNDING — 75% attendance, competent assessment\n\n"
+
+                "TOPIC CONTENT STRUCTURE (MANDATORY for each topic):\n"
+                "a) SECTION HEADER SLIDE — 'Topic N' on line 1, topic title on line 2 (centered, large)\n"
+                "b) CONCEPT SLIDES (10-15 per topic) — Each concept gets its own slide:\n"
+                "   - Clear title, detailed explanation, diagrams/tables, examples\n"
+                "   - Progressive disclosure from simple to complex\n"
+                "   - Visual elements on every 2-3 slides\n"
+                "c) ACTIVITY/LAB SLIDE — MANDATORY after each topic. Title: 'Activity: [Topic]'. "
+                "Include hands-on instructions and link to assessment method.\n\n"
+
+                "MANDATORY CLOSING PAGES (at end):\n"
+                "1. SUMMARY & Q&A section header, then recap all LOs\n"
+                "2. TRAQOM SURVEY — Feedback instructions\n"
+                "3. CERTIFICATE DELIVERY — Certificate info\n"
+                "4. DIGITAL ATTENDANCE — Reminder\n"
+                "5. FINAL ASSESSMENT — Section header\n"
+                "6. RECOMMENDED COURSES — Related WSQ courses\n"
+                "7. SUPPORT — Contact info (email, phone)\n"
+                "8. THANK YOU — Closing\n\n"
+
+                "DESIGN THEME — 'WSQ Professional Blue':\n"
+                "- BACKGROUND: White (#FFFFFF) or light grey (#F5F5F5) ONLY. No dark/colored backgrounds.\n"
+                "- HEADINGS: Dark navy blue (#1B3A5C). ACCENTS: Teal (#2AA198).\n"
+                "- BODY TEXT: Dark grey (#333333), clean sans-serif font.\n"
+                "- SECTION HEADERS: Large centered text, clean divider layout.\n"
+                "- Digital Attendance items: BOLD RED (#FF0000) text.\n"
+                "- CONSISTENCY: Same color scheme on every slide.\n"
+                "- CREATIVE: Icons, tables, flowcharts, infographic layouts, side-by-side columns.\n"
             )
             if include_notes:
-                instructions += "Include detailed speaker/facilitator notes for each slide. "
+                instructions += "\nInclude detailed speaker/facilitator notes for every slide."
             if include_summaries:
-                instructions += "Add a summary slide at the end of each LU section. "
+                instructions += "\nAdd a summary slide at the end of each topic section."
             if enable_research and research_sources_count > 0:
                 instructions += (
-                    "Use research sources to supplement and enrich the CP content "
+                    "\nUse research sources to supplement CP content "
                     "with latest industry practices and real-world examples. "
-                    "CP content takes priority — research adds depth. "
+                    "CP content takes priority — research adds depth."
                 )
             instructions += (
-                f"REMEMBER: This is a {course_type} course. "
+                f"\n\nREMEMBER: {course_type} course. "
                 f"Generate {min_slides}-{max_slides} slides. "
-                "Quality AND quantity are both required for professional client delivery."
+                "Quality AND quantity required for professional client delivery."
             )
 
             gen_result = None
@@ -1168,6 +1383,563 @@ async def _generate_slides_direct(content: str, course_title: str, config: Dict[
         }
 
 
+# =============================================================================
+# Module-level chunk deck generator (used by both single & multi-account modes)
+# =============================================================================
+
+async def _generate_chunk_deck_impl(client, cm: dict, notebook_id: str,
+                                     nb_title: str, source_id: str,
+                                     course_title: str, config: dict) -> dict:
+    """Generate slides for a single chunk using the given NotebookLM client.
+
+    Extracted from the nested function in _generate_slides_per_lu so it can
+    be reused by the multi-account orchestrator.
+    """
+    enable_research = config.get('enable_research', True)
+    num_queries = config.get('num_queries', 2)
+    slide_style = config.get('slide_style', 'Professional')
+    include_notes = config.get('include_notes', True)
+
+    all_source_ids = [source_id]
+    research_count = 0
+
+    if enable_research:
+        try:
+            queries = _extract_research_queries(cm['content'], course_title, num_queries)
+            if queries:
+                research_ids = await _do_internet_research(
+                    client, notebook_id, queries
+                )
+                all_source_ids.extend(research_ids)
+                research_count = len(research_ids)
+
+                if research_ids:
+                    await asyncio.sleep(5)
+
+                # Clean up failed/error sources before generating slides
+                try:
+                    sources_list = await client.sources.list(notebook_id)
+                    for src in sources_list:
+                        src_id = getattr(src, 'id', None) or (src.get('id') if isinstance(src, dict) else None)
+                        status = getattr(src, 'status', None) or (src.get('status') if isinstance(src, dict) else None)
+                        status_str = str(status).lower() if status else ''
+                        if status_str in ('error', 'failed', 'invalid', 'unprocessable'):
+                            try:
+                                await client.sources.delete(notebook_id, src_id)
+                                if src_id in all_source_ids:
+                                    all_source_ids.remove(src_id)
+                                logger.info(f"Removed failed source {src_id} (status: {status_str})")
+                            except Exception:
+                                pass
+                except Exception as e:
+                    logger.warning(f"Source cleanup check failed: {e}")
+        except Exception as e:
+            logger.warning(f"{cm['label']} research failed: {e}")
+
+    # Build instructions — matching supervisor's reference PPTX format
+    # Each topic should get 10-15+ slides (not 4-5) for comprehensive coverage
+    num_topics = cm.get('num_topics', len(cm['topic_names']))
+    slides_per_topic = 12
+    slides_target = num_topics * slides_per_topic + (15 if cm['is_first'] else 0) + (10 if cm['is_last'] else 0)
+    topic_list = ", ".join(cm['topic_names'])
+
+    instructions = (
+        f"Create a {slide_style.lower()} presentation for this WSQ training course section. "
+        f"This is for PROFESSIONAL CLIENT DELIVERY at Tertiary Infotech — "
+        f"quality, depth, and completeness are CRITICAL. "
+        f"The client expects slides matching the standard of Dr. Alfred Ang's training materials.\n\n"
+    )
+
+    if cm['is_first']:
+        instructions += (
+            f"TITLE: Use exactly \"{course_title}\" on the cover slide.\n\n"
+            "REQUIRED INTRO PAGES (in this exact order):\n"
+            "1. COVER SLIDE — Course title centered, course code, company info (right-aligned)\n"
+            "2. DIGITAL ATTENDANCE — WSQ digital attendance instructions (AM, PM, Assessment)\n"
+            "3. ABOUT THE TRAINER — Simple slide with title only, creative illustrations/icons. "
+            "Do NOT add photo placeholders, bio fields, or name fields.\n"
+            "4. LET'S KNOW EACH OTHER — Name, current role, experience, expectations\n"
+            "5. GROUND RULES — Silent phones, active participation, mutual respect, punctuality, "
+            "75% attendance requirement\n"
+            "6. LESSON PLAN — Day-by-day schedule showing: Digital Attendance (AM) in bold red, "
+            "topics for each session, Lunch Break, Digital Attendance (PM) in bold red, "
+            "Digital Attendance (Assessment) in bold red on last day, Final Assessment\n"
+            "7. SKILLS FRAMEWORK — TSC title and code\n"
+            "8. TSC KNOWLEDGE & ABILITY STATEMENTS — All K and A statements listed\n"
+            "9. LEARNING OUTCOMES — All LOs listed clearly\n"
+            "10. COURSE OUTLINE — All topics listed with K&A references per topic, sub-topics indented\n"
+            "11. FINAL ASSESSMENT — Assessment methods listed (from source), open book, appeal process\n"
+            "12. BRIEFING FOR ASSESSMENT — Rules for assessment conduct\n"
+            "13. CRITERIA FOR FUNDING — 75% attendance, competent assessment\n\n"
+        )
+
+    if cm['is_last']:
+        instructions += (
+            "REQUIRED CLOSING PAGES (in this exact order at end):\n"
+            "1. SUMMARY & Q&A — Section header slide, then recap of all LOs\n"
+            "2. TRAQOM SURVEY — Course feedback survey instructions\n"
+            "3. CERTIFICATE DELIVERY — Certificate information collection\n"
+            "4. DIGITAL ATTENDANCE — Reminder for attendance scanning\n"
+            "5. FINAL ASSESSMENT — Section header slide for assessment\n"
+            "6. RECOMMENDED COURSES — Related WSQ courses\n"
+            "7. SUPPORT — Contact information (email, phone)\n"
+            "8. THANK YOU — Closing slide\n\n"
+        )
+
+    instructions += (
+        f"SLIDE COUNT: Generate approximately {slides_target} slides. "
+        f"Topics in this deck: {topic_list}\n\n"
+
+        "CRITICAL — TOPIC CONTENT STRUCTURE (follow this EXACTLY for each topic):\n"
+        "Each topic MUST follow this pattern:\n"
+        "a) SECTION HEADER SLIDE — Full-width slide with 'Topic N' on first line "
+        "and topic title on second line (centered, large font). This is a divider slide.\n"
+        "b) CONCEPT SLIDES (8-12 slides per topic) — Each major concept from the source "
+        "gets its own dedicated slide with:\n"
+        "   - Clear title describing the concept\n"
+        "   - Detailed explanation text (not just bullet points)\n"
+        "   - Diagrams, flowcharts, comparison tables, or illustrations where relevant\n"
+        "   - Real-world examples and practical applications\n"
+        "   - Key definitions and terminology\n"
+        "c) ACTIVITY/LAB SLIDE — MANDATORY after each topic's content slides. Title: "
+        "'Activity: [Topic Title]' or 'Lab - [Topic Title]'. Include:\n"
+        "   - Clear hands-on activity instructions\n"
+        "   - What the learner should do/produce\n"
+        "   - Link to assessment: 'Submit your work as part of the [assessment method] assessment'\n"
+        "   - This is NOT optional — every topic must end with an activity slide\n\n"
+
+        "IMPORTANT: Cover ONLY the topics listed above. "
+        "Do NOT repeat content from other decks.\n\n"
+
+        "CONTENT QUALITY RULES:\n"
+        "- STRICTLY follow the Course Proposal (CP) source material provided.\n"
+        "- All content must come from or be supported by the source.\n"
+        "- Do NOT fabricate or invent information not in the source.\n"
+        "- EXPAND each concept with thorough explanations — not just bullet points.\n"
+        "- Include detailed examples, use cases, and practical scenarios.\n"
+        "- Add comparison slides where two or more concepts are related.\n"
+        "- Include K&A statement references on relevant content slides.\n"
+        "- Use PROGRESSIVE DISCLOSURE — build from simple to complex.\n"
+        "- Include visual elements: diagrams, flowcharts, tables, process flows.\n\n"
+
+        "MANDATORY DESIGN THEME — 'WSQ Professional Blue' (ALL slides MUST follow this exactly):\n"
+        "- BACKGROUND: Plain white (#FFFFFF) or very light grey (#F5F5F5) ONLY. "
+        "NO colored backgrounds, NO gradients, NO dark slides.\n"
+        "- PRIMARY COLOR: Dark navy blue (#1B3A5C) for all headings and section titles.\n"
+        "- SECONDARY COLOR: Teal (#2AA198) for accents, icons, and highlights.\n"
+        "- SECTION HEADERS: Use a distinctive layout — large centered text on clean background.\n"
+        "- BODY TEXT: Dark grey (#333333), clean sans-serif font.\n"
+        "- CONSISTENCY: Every slide uses the EXACT same color scheme. "
+        "All sections look like they belong to the SAME presentation.\n"
+        "- CREATIVE ELEMENTS: Icons, illustrations, comparison tables, "
+        "process flowcharts, timeline diagrams, infographic layouts.\n"
+        "- LAYOUT VARIETY: Side-by-side columns, numbered steps, "
+        "highlight boxes for key concepts, quote callouts.\n"
+        "- DIGITAL ATTENDANCE items should appear in BOLD RED (#FF0000) text.\n"
+    )
+
+    if include_notes:
+        instructions += "\nInclude detailed speaker/facilitator notes for every slide."
+
+    gen_result = None
+    for attempt in range(3):
+        try:
+            gen_result = await client.artifacts.generate_slide_deck(
+                notebook_id,
+                source_ids=all_source_ids,
+                instructions=instructions,
+            )
+            break
+        except Exception as e:
+            logger.warning(f"{cm['label']} generation attempt {attempt + 1} failed: {e}")
+            if attempt < 2:
+                await asyncio.sleep(3)
+            else:
+                raise
+
+    task_id = gen_result.task_id if hasattr(gen_result, 'task_id') else str(gen_result)
+
+    generation_status = "triggered"
+    if task_id:
+        try:
+            await client.artifacts.wait_for_completion(
+                notebook_id, task_id, timeout=300.0
+            )
+            generation_status = "completed"
+        except TimeoutError:
+            generation_status = "timeout"
+        except Exception as e:
+            generation_status = f"wait_error: {e}"
+
+    return {
+        "lu_num": cm['label'],
+        "lu_title": f"{cm['lu_title']} ({cm['topic_range']})",
+        "notebook_id": notebook_id,
+        "notebook_title": nb_title,
+        "task_id": task_id,
+        "generation_status": generation_status,
+        "research_sources_count": research_count,
+        "total_sources": len(all_source_ids),
+        "chunk_idx": cm['chunk_idx'],
+    }
+
+
+# =============================================================================
+# Multi-account batch runner
+# =============================================================================
+
+async def _run_account_batch(account, chunk_meta_list: list,
+                              course_title: str, config: dict,
+                              progress_callback=None) -> list:
+    """Run a batch of deck generations on a single NotebookLM account.
+
+    Creates one client per account, generates up to N decks concurrently.
+    Returns list of result dicts.
+    """
+    from notebooklm import NotebookLMClient
+
+    results = []
+    try:
+        client = await NotebookLMClient.from_storage(
+            path=account.storage_state_path
+        )
+        acct_name = account.email.split("@")[0]
+        async with client:
+            # Phase 1: Create notebooks
+            if progress_callback:
+                progress_callback(f"[{acct_name}] Creating {len(chunk_meta_list)} notebooks...", None)
+
+            async def _create_nb(cm):
+                nb_title = f"{course_title} - {cm['label']}: {cm['lu_title']} ({cm['topic_range']})"
+                notebook = await client.notebooks.create(nb_title)
+                return (cm, notebook.id, nb_title)
+
+            nb_tasks = [_create_nb(cm) for cm in chunk_meta_list]
+            nb_results = await asyncio.gather(*nb_tasks, return_exceptions=True)
+
+            active = []
+            for res in nb_results:
+                if isinstance(res, Exception):
+                    logger.warning(f"[{acct_name}] Notebook creation failed: {res}")
+                    account.decks_failed += 1
+                    continue
+                active.append(res)
+
+            if not active:
+                account.error = "Failed to create any notebooks"
+                return results
+
+            # Phase 2: Add sources
+            if progress_callback:
+                progress_callback(f"[{acct_name}] Adding sources to {len(active)} notebooks...", None)
+
+            async def _add_src(cm, nb_id):
+                src_title = f"{course_title} - {cm['label']} (Course Material)"
+                source = await client.sources.add_text(nb_id, src_title, cm['content'][:100000])
+                return source.id
+
+            src_tasks = [_add_src(cm, nb_id) for (cm, nb_id, _) in active]
+            src_results = await asyncio.gather(*src_tasks, return_exceptions=True)
+
+            await asyncio.sleep(3)
+
+            # Phase 3: Generate slide decks
+            if progress_callback:
+                progress_callback(f"[{acct_name}] Generating {len(active)} slide decks...", None)
+
+            gen_tasks = []
+            for i, (cm, nb_id, nb_title) in enumerate(active):
+                src_id = src_results[i] if not isinstance(src_results[i], Exception) else None
+                if src_id is None:
+                    logger.warning(f"[{acct_name}] Skipping {cm['label']} — source add failed")
+                    account.decks_failed += 1
+                    continue
+                gen_tasks.append(
+                    _generate_chunk_deck_impl(client, cm, nb_id, nb_title, src_id,
+                                              course_title, config)
+                )
+
+            gen_results = await asyncio.gather(*gen_tasks, return_exceptions=True)
+
+            for res in gen_results:
+                if isinstance(res, Exception):
+                    logger.warning(f"[{acct_name}] Deck generation failed: {res}")
+                    account.decks_failed += 1
+                else:
+                    results.append(res)
+                    account.decks_completed += 1
+                    if progress_callback:
+                        progress_callback(f"[{acct_name}] {res['lu_num']} slides generated ({res['generation_status']})", None)
+
+            # Phase 4: Download slide decks as PDFs
+            import tempfile
+            for res in results:
+                if res.get("generation_status") != "completed":
+                    continue
+                nb_id = res.get("notebook_id")
+                if not nb_id:
+                    continue
+                try:
+                    if progress_callback:
+                        progress_callback(f"[{acct_name}] Downloading PDF for {res['lu_num']}...", None)
+                    pdf_path = tempfile.mktemp(suffix=f"_{res['lu_num']}.pdf")
+                    await client.artifacts.download_slide_deck(
+                        nb_id, output_path=pdf_path
+                    )
+                    res["pdf_path"] = pdf_path
+                    if progress_callback:
+                        progress_callback(f"[{acct_name}] Downloaded {res['lu_num']} PDF", None)
+                    logger.info(f"[{acct_name}] Downloaded PDF for {res['lu_num']}")
+                except Exception as e:
+                    if progress_callback:
+                        progress_callback(f"[{acct_name}] PDF download failed for {res['lu_num']}", None)
+                    logger.warning(f"[{acct_name}] PDF download failed for {res['lu_num']}: {e}")
+
+    except Exception as e:
+        account.error = str(e)
+        logger.error(f"[{account.email}] Account batch failed: {e}")
+
+    return results
+
+
+# =============================================================================
+# Multi-account orchestrator
+# =============================================================================
+
+async def _generate_slides_multi_account(context: dict, course_title: str,
+                                          config: Dict[str, Any],
+                                          progress_callback=None,
+                                          skip_lu_indices: set = None) -> Dict[str, Any]:
+    """Generate slides across multiple NotebookLM accounts.
+
+    Distributes chunks across accounts (max N per account) and runs
+    all accounts concurrently. Falls back to single-account if no
+    multi-account config is available.
+    """
+    try:
+        from notebooklm import NotebookLMClient
+    except ImportError:
+        return {
+            "success": False,
+            "message": ("**notebooklm-py is not installed.**\n\n"
+                        "Run: `pip install notebooklm-py[browser]`")
+        }
+
+    from generate_slides.account_pool import AccountPool
+
+    lus = context.get('Learning_Units', [])
+    num_lus = len(lus)
+    if num_lus == 0:
+        return {"success": False, "message": "No Learning Units found in course info."}
+
+    # ── Calculate target decks (same logic as _generate_slides_per_lu) ──
+    total_hours = context.get('Total_Course_Duration_Hours', '')
+    try:
+        hours = float(str(total_hours).replace('hrs', '').replace('hr', '').strip())
+    except (ValueError, TypeError):
+        hours = 8
+    days = max(1, round(hours / 8))
+    total_topics = sum(len(lu.get('Topics', [])) for lu in lus)
+    if days >= 3:
+        target_decks = 11
+    elif days >= 2:
+        target_decks = 7
+    else:
+        target_decks = 4
+    target_decks = min(target_decks, total_topics)
+
+    # ── Distribute decks proportionally across LUs ──
+    topic_counts = [len(lu.get('Topics', [])) for lu in lus if len(lu.get('Topics', [])) > 0]
+    lu_indices_with_topics = [i for i in range(num_lus) if len(lus[i].get('Topics', [])) > 0]
+
+    raw_alloc = [(tc / total_topics) * target_decks for tc in topic_counts]
+    chunks_per_lu = [max(1, int(r)) for r in raw_alloc]
+    remaining = target_decks - sum(chunks_per_lu)
+    if remaining > 0:
+        fracs = [(raw_alloc[i] - chunks_per_lu[i], i) for i in range(len(topic_counts))]
+        fracs.sort(reverse=True)
+        for _, idx in fracs[:remaining]:
+            chunks_per_lu[idx] += 1
+    for i, tc in enumerate(topic_counts):
+        chunks_per_lu[i] = min(chunks_per_lu[i], tc)
+
+    all_chunks = []
+    chunk_idx = 0
+    for alloc_idx, lu_idx in enumerate(lu_indices_with_topics):
+        lu = lus[lu_idx]
+        lu_num = lu.get('LU_Number', f'LU{lu_idx + 1}')
+        lu_title = lu.get('LU_Title', 'Learning Unit')
+        topics = lu.get('Topics', [])
+        num_topics_lu = len(topics)
+        num_chunks = chunks_per_lu[alloc_idx]
+
+        base = num_topics_lu // num_chunks
+        extra = num_topics_lu % num_chunks
+        topic_chunks = []
+        start = 0
+        for ci in range(num_chunks):
+            size = base + (1 if ci < extra else 0)
+            topic_chunks.append(list(range(start, start + size)))
+            start += size
+
+        for ci, t_indices in enumerate(topic_chunks):
+            if len(topic_chunks) == 1:
+                label = lu_num
+            else:
+                letter = chr(65 + ci)
+                label = f"{lu_num}-{letter}"
+            all_chunks.append((chunk_idx, lu_idx, lu_num, lu_title, t_indices, label))
+            chunk_idx += 1
+
+    total_chunks = len(all_chunks)
+    if total_chunks == 0:
+        return {"success": False, "message": "No topics found in any Learning Unit."}
+
+    if skip_lu_indices is None:
+        skip_lu_indices = set()
+
+    # ── Build chunk metadata ──
+    active_raw = [c for c in all_chunks if c[0] not in skip_lu_indices]
+    chunk_meta = []
+    for chunk in all_chunks:
+        c_idx, lu_idx, lu_num, lu_title, t_indices, label = chunk
+        if c_idx in skip_lu_indices:
+            continue
+
+        is_first = (active_raw[0][0] == c_idx) if active_raw else False
+        is_last = (active_raw[-1][0] == c_idx) if active_raw else False
+
+        content = _format_chunk_source_text(
+            context, lu_idx, num_lus, t_indices, label,
+            is_first_chunk_of_course=is_first,
+            is_last_chunk_of_course=is_last
+        )
+
+        topics = lus[lu_idx].get('Topics', [])
+        topic_names = [topics[ti].get('Topic_Title', f'T{ti+1}') for ti in t_indices if ti < len(topics)]
+        topic_range = f"T{t_indices[0]+1}-T{t_indices[-1]+1}" if len(t_indices) > 1 else f"T{t_indices[0]+1}"
+
+        chunk_meta.append({
+            'chunk_idx': c_idx,
+            'lu_idx': lu_idx,
+            'lu_num': lu_num,
+            'lu_title': lu_title,
+            'label': label,
+            'topic_indices': t_indices,
+            'topic_range': topic_range,
+            'topic_names': topic_names,
+            'num_topics': len(t_indices),
+            'content': content,
+            'is_first': is_first,
+            'is_last': is_last,
+        })
+
+    if not chunk_meta:
+        return {"success": True, "message": "All decks already completed.", "lu_results": [], "num_lus": num_lus}
+
+    # ── Multi-account distribution ──
+    pool = AccountPool()
+    authenticated = pool.get_authenticated()
+
+    if not authenticated:
+        # Fallback: try single-account (original storage path)
+        logger.info("No multi-account setup found, falling back to single-account mode.")
+        return await _generate_slides_per_lu(context, course_title, config,
+                                              progress_callback, skip_lu_indices)
+
+    try:
+        assignments = pool.distribute_decks(chunk_meta)
+    except ValueError as e:
+        return {"success": False, "message": str(e)}
+
+    num_accounts = len(assignments)
+    if progress_callback:
+        acct_summary = ", ".join(
+            f"{a.email.split('@')[0]}={len(chunks)}" for a, chunks in assignments
+        )
+        progress_callback(
+            f"Distributing {len(chunk_meta)} decks across {num_accounts} accounts: {acct_summary}", 5
+        )
+
+    # ── Run all account batches concurrently ──
+    try:
+        account_tasks = [
+            _run_account_batch(account, chunks, course_title, config, progress_callback)
+            for account, chunks in assignments
+        ]
+
+        all_results = await asyncio.gather(*account_tasks, return_exceptions=True)
+
+        lu_results = []
+        for res in all_results:
+            if isinstance(res, list):
+                lu_results.extend(res)
+            elif isinstance(res, Exception):
+                logger.error(f"Account batch exception: {res}")
+
+        # Sort by chunk_idx to maintain order
+        lu_results.sort(key=lambda r: r.get("chunk_idx", 0))
+
+        if progress_callback:
+            progress_callback("Merging downloaded PDFs...", 95)
+
+        # Auto-merge all downloaded PDFs into one
+        merged_pdf_path = None
+        pdf_paths = [r["pdf_path"] for r in lu_results if r.get("pdf_path")]
+        if pdf_paths:
+            try:
+                from pypdf import PdfReader, PdfWriter
+                import tempfile
+                writer = PdfWriter()
+                for pdf_path in pdf_paths:
+                    reader = PdfReader(pdf_path)
+                    for page in reader.pages:
+                        writer.add_page(page)
+                merged_tmp = tempfile.mktemp(suffix="_merged_slides.pdf")
+                with open(merged_tmp, "wb") as f:
+                    writer.write(f)
+                merged_pdf_path = merged_tmp
+                logger.info(f"Merged {len(pdf_paths)} PDFs into {merged_tmp}")
+            except Exception as e:
+                logger.warning(f"PDF merge failed: {e}")
+
+        account_status = pool.get_status()
+
+        generated_count = len(lu_results)
+        skipped_count = len(skip_lu_indices)
+        msg = f"Generated {generated_count}/{len(chunk_meta)} decks across {num_accounts} accounts."
+        if skipped_count:
+            msg += f" (Skipped {skipped_count} already completed.)"
+
+        return {
+            "success": generated_count > 0,
+            "message": msg,
+            "lu_results": lu_results,
+            "num_lus": num_lus,
+            "total_chunks": total_chunks,
+            "is_resume": bool(skip_lu_indices),
+            "account_status": account_status,
+            "merged_pdf_path": merged_pdf_path,
+        }
+
+    except FileNotFoundError:
+        return {
+            "success": False,
+            "message": ("**NotebookLM authentication not found.**\n\n"
+                        "Run: `python -m generate_slides.authenticate_accounts`")
+        }
+    except Exception as e:
+        error_msg = str(e)
+        return {
+            "success": False,
+            "message": f"**Error generating slides:** {error_msg}",
+        }
+
+
+# =============================================================================
+# Single-account slide generation (original, kept as fallback)
+# =============================================================================
+
 async def _generate_slides_per_lu(context: dict, course_title: str,
                                    config: Dict[str, Any],
                                    progress_callback=None,
@@ -1221,7 +1993,6 @@ async def _generate_slides_per_lu(context: dict, course_title: str,
         hours = 8
     days = max(1, round(hours / 8))
     total_topics = sum(len(lu.get('Topics', [])) for lu in lus)
-    SLIDES_PER_DECK = 20
     if days >= 3:
         target_decks = 11  # ~220 slides
     elif days >= 2:
@@ -1418,64 +2189,68 @@ async def _generate_slides_per_lu(context: dict, course_title: str,
                     except Exception as e:
                         logger.warning(f"{cm['label']} research failed: {e}")
 
-                # Build instructions — ~20 slides per chunk, each topic gets 4-5 slides
-                slides_target = SLIDES_PER_DECK + (5 if cm['is_first'] else 0)
+                # Build instructions — matching supervisor reference PPTX format
+                num_chunk_topics = cm.get('num_topics', len(cm['topic_names']))
+                slides_target = num_chunk_topics * 12 + (15 if cm['is_first'] else 0) + (10 if cm['is_last'] else 0)
                 topic_list = ", ".join(cm['topic_names'])
 
                 instructions = (
                     f"Create a {slide_style.lower()} presentation for this WSQ training course section. "
-                    f"PROFESSIONAL CLIENT DELIVERY — quality is critical.\n\n"
+                    f"This is for PROFESSIONAL CLIENT DELIVERY at Tertiary Infotech — "
+                    f"quality, depth, and completeness are CRITICAL.\n\n"
                 )
 
                 if cm['is_first']:
                     instructions += (
                         f"TITLE: Use exactly \"{course_title}\" on the cover slide.\n\n"
-                        "REQUIRED INTRO PAGES (in order):\n"
-                        "1. Cover Slide (course title + code)\n"
-                        "2. Digital Attendance (WSQ attendance instructions)\n"
-                        "3. Let's Know Each Other (learner introductions)\n"
-                        "4. About the Trainer — Simple slide with the title 'About the Trainer' and creative illustrations/icons. "
-                        "Do NOT add photo placeholders, bio fields, or name fields. Just the heading with decorative design elements.\n"
-                        "5. Ground Rules (class expectations)\n"
-                        "6. Skills Framework (TSC title, code, description)\n"
-                        "7. Knowledge & Ability Statements\n"
-                        "8. Learning Outcomes\n"
-                        "9. Course Outline\n\n"
+                        "REQUIRED INTRO PAGES (in this exact order):\n"
+                        "1. COVER SLIDE — Course title centered, course code, company info\n"
+                        "2. DIGITAL ATTENDANCE — WSQ attendance instructions (AM, PM, Assessment)\n"
+                        "3. ABOUT THE TRAINER — Title only with creative design elements\n"
+                        "4. LET'S KNOW EACH OTHER — Name, role, experience, expectations\n"
+                        "5. GROUND RULES — Silent phones, participation, respect, punctuality, 75% attendance\n"
+                        "6. LESSON PLAN — Day-by-day schedule with Digital Attendance (AM/PM) in BOLD RED\n"
+                        "7. SKILLS FRAMEWORK — TSC title and code\n"
+                        "8. TSC KNOWLEDGE & ABILITY STATEMENTS\n"
+                        "9. LEARNING OUTCOMES\n"
+                        "10. COURSE OUTLINE — Topics with K&A references, sub-topics indented\n"
+                        "11. FINAL ASSESSMENT — Methods, open book, appeal process\n"
+                        "12. BRIEFING FOR ASSESSMENT\n"
+                        "13. CRITERIA FOR FUNDING\n\n"
                     )
 
                 if cm['is_last']:
                     instructions += (
-                        "REQUIRED CLOSING PAGES (at end):\n"
-                        "- Assessment Info & Briefing\n"
-                        "- Criteria for Funding (attendance + competency)\n"
-                        "- TRAQOM Survey\n"
-                        "- Summary & Q&A\n"
-                        "- Thank You\n\n"
+                        "REQUIRED CLOSING PAGES (in this exact order at end):\n"
+                        "1. SUMMARY & Q&A section header, then recap all LOs\n"
+                        "2. TRAQOM SURVEY\n"
+                        "3. CERTIFICATE DELIVERY\n"
+                        "4. DIGITAL ATTENDANCE reminder\n"
+                        "5. FINAL ASSESSMENT section header\n"
+                        "6. RECOMMENDED COURSES\n"
+                        "7. SUPPORT — Contact info\n"
+                        "8. THANK YOU\n\n"
                     )
 
                 instructions += (
                     f"SLIDE COUNT: ~{slides_target} slides for these topics ONLY:\n"
                     f"{topic_list}\n\n"
-                    f"IMPORTANT: Cover ONLY the topics listed in the source material for this deck. "
-                    f"Do NOT repeat content from other decks. Each topic gets 4-5 detailed slides.\n\n"
+                    "TOPIC STRUCTURE (MANDATORY for each topic):\n"
+                    "a) SECTION HEADER SLIDE — 'Topic N' line 1, topic title line 2 (centered, large)\n"
+                    "b) CONCEPT SLIDES (10-12 per topic) — detailed explanations, diagrams, examples\n"
+                    "c) ACTIVITY/LAB SLIDE — MANDATORY after each topic. Title: 'Activity: [Topic]'. "
+                    "Include hands-on instructions and link to assessment method.\n\n"
                     "CONTENT RULES:\n"
                     "- Strictly follow the source material. Do NOT fabricate information.\n"
                     "- Expand each topic with detailed explanations, examples, and practical applications.\n"
-                    "- Each topic gets 4-5 slides: overview, detailed content, examples, key takeaways.\n"
-                    "- Include K&A statement references on relevant slides.\n\n"
-                    "MANDATORY DESIGN THEME — 'WSQ Professional Blue' (ALL slides MUST follow this exactly):\n"
-                    "- BACKGROUND: Plain white (#FFFFFF) or very light grey (#F5F5F5) ONLY. "
-                    "NO colored backgrounds, NO gradients, NO dark slides, NO blue backgrounds, NO images as backgrounds.\n"
-                    "- PRIMARY COLOR: Dark navy blue (#1B3A5C) for all headings and section titles.\n"
-                    "- SECONDARY COLOR: Teal (#2AA198) for accents, icons, and highlights.\n"
-                    "- BODY TEXT: Dark grey (#333333), clean sans-serif font.\n"
-                    "- CONSISTENCY: Every single slide must use this EXACT same color scheme and style. "
-                    "All sections must look like they belong to the SAME presentation. "
-                    "Do NOT change colors, fonts, or style between different topics or sections.\n"
-                    "- CREATIVE ELEMENTS: Use relevant icons, simple illustrations, comparison tables, "
-                    "process flowcharts, timeline diagrams, and infographic-style layouts.\n"
-                    "- LAYOUT VARIETY: Side-by-side columns, numbered steps, "
-                    "highlight boxes for key concepts, quote callouts for important points.\n"
+                    "- Include K&A statement references on relevant slides.\n"
+                    "- Progressive disclosure from simple to complex.\n\n"
+                    "DESIGN THEME — 'WSQ Professional Blue':\n"
+                    "- BACKGROUND: White (#FFFFFF) or light grey (#F5F5F5) ONLY.\n"
+                    "- HEADINGS: Dark navy blue (#1B3A5C). ACCENTS: Teal (#2AA198).\n"
+                    "- BODY TEXT: Dark grey (#333333). Digital Attendance: BOLD RED (#FF0000).\n"
+                    "- CONSISTENCY: Same style on every slide.\n"
+                    "- CREATIVE: Icons, tables, flowcharts, infographic layouts.\n"
                 )
 
                 if include_notes:
@@ -2072,6 +2847,41 @@ def app():
         all_indices = {d[0] for d in deck_options}
         skip_indices = all_indices - selected_indices
 
+        # Account pool status
+        try:
+            from generate_slides.account_pool import AccountPool
+            _pool = AccountPool()
+            _status = _pool.get_status()
+            _needed = _pool.accounts_needed(len(selected_indices))
+
+            with st.expander(f"NotebookLM Accounts ({_status['authenticated']}/{_status['total']} ready)"):
+                cols = st.columns(7)
+                for ai, acct in enumerate(_status["accounts"]):
+                    col = cols[ai % 7]
+                    email_short = acct["email"].split("@")[0].replace("tertiaryinfotech", "")
+                    icon = "✅" if acct["authenticated"] else "❌"
+                    col.markdown(f"{icon} {email_short}")
+
+                if _status["authenticated"] < _needed:
+                    st.warning(
+                        f"Need {_needed} accounts for {len(selected_indices)} decks "
+                        f"(max {_status['max_decks_per_account']}/account). "
+                        f"Only {_status['authenticated']} authenticated.\n\n"
+                        f"Run: `python -m generate_slides.authenticate_accounts`"
+                    )
+                elif _status["authenticated"] == 0:
+                    st.info(
+                        "No accounts authenticated. Will use default single-account mode.\n\n"
+                        "For multi-account: `python -m generate_slides.authenticate_accounts`"
+                    )
+                else:
+                    st.success(
+                        f"{_needed} of {_status['authenticated']} accounts will be used "
+                        f"for {len(selected_indices)} decks."
+                    )
+        except Exception:
+            pass  # Graceful fallback if account pool not configured
+
         # Generate button
         if st.button("Generate Slides", type="primary"):
             _info = extracted_info
@@ -2084,8 +2894,20 @@ def app():
             }
             _skip = skip_indices.copy() if skip_indices else None
 
+            # Progress callback writes to the mutable job dict
+            _job_ref = {"ref": None}
+
+            def _progress(msg, pct):
+                job_dict = _job_ref.get("ref")
+                if job_dict and isinstance(job_dict.get("progress_messages"), list):
+                    job_dict["progress_messages"].append((msg, pct))
+
             async def _generate_slides():
-                return await _generate_slides_per_lu(_info, _title, _config, skip_lu_indices=_skip)
+                return await _generate_slides_multi_account(
+                    _info, _title, _config,
+                    progress_callback=_progress,
+                    skip_lu_indices=_skip
+                )
 
             # Clear previous results for fresh generation
             st.session_state.pop('slides_result', None)
@@ -2094,6 +2916,8 @@ def app():
                 label="Generate Slides",
                 async_fn=_generate_slides,
             )
+            if job:
+                _job_ref["ref"] = job
 
             if job is None:
                 st.warning("Slide generation is already running.")
@@ -2113,6 +2937,16 @@ def app():
         )
 
         if job_status == "running":
+            # Show live progress messages from background thread
+            from utils.agent_runner import get_job
+            _running_job = get_job("generate_slides")
+            if _running_job:
+                msgs = _running_job.get("progress_messages", [])
+                if msgs:
+                    with st.expander("Live Progress", expanded=True):
+                        # Show last 15 messages
+                        for msg, _pct in msgs[-15:]:
+                            st.text(msg)
             st.stop()
 
         # Display Results
@@ -2123,14 +2957,42 @@ def app():
             if result.get("success"):
                 st.success(f"Generated {len(lu_results)} slide decks!")
 
-                st.info(
-                    "**Next steps:**\n"
-                    "1. Open each LU notebook in NotebookLM (links below)\n"
-                    "2. Download each slide deck as PDF\n"
-                    "3. Upload all PDFs below → **Merge PDFs** → download one merged PDF\n"
-                    "4. Convert the merged PDF to PPTX (e.g. using Canva) — just one conversion!\n"
-                    "5. Upload the PPTX below → **Remove Logo** → download clean PPTX"
-                )
+                # Auto-merged PDF download
+                merged_pdf = result.get("merged_pdf_path")
+                if merged_pdf:
+                    try:
+                        with open(merged_pdf, "rb") as f:
+                            pdf_bytes = f.read()
+                        st.download_button(
+                            label=f"Download Merged Slides PDF ({len(lu_results)} decks)",
+                            data=pdf_bytes,
+                            file_name=f"{course_title}_slides.pdf",
+                            mime="application/pdf",
+                            type="primary",
+                        )
+                        st.info(
+                            "**Next steps:**\n"
+                            "1. Convert the merged PDF to PPTX (e.g. using Canva)\n"
+                            "2. Upload the PPTX below → **Remove Logo** → download clean PPTX"
+                        )
+                    except Exception:
+                        st.info(
+                            "**Next steps:**\n"
+                            "1. Open each LU notebook in NotebookLM (links below)\n"
+                            "2. Download each slide deck as PDF\n"
+                            "3. Upload all PDFs below → **Merge PDFs** → download one merged PDF\n"
+                            "4. Convert the merged PDF to PPTX (e.g. using Canva)\n"
+                            "5. Upload the PPTX below → **Remove Logo** → download clean PPTX"
+                        )
+                else:
+                    st.info(
+                        "**Next steps:**\n"
+                        "1. Open each LU notebook in NotebookLM (links below)\n"
+                        "2. Download each slide deck as PDF\n"
+                        "3. Upload all PDFs below → **Merge PDFs** → download one merged PDF\n"
+                        "4. Convert the merged PDF to PPTX (e.g. using Canva)\n"
+                        "5. Upload the PPTX below → **Remove Logo** → download clean PPTX"
+                    )
 
                 # Show link for each LU notebook
                 for lr in lu_results:
@@ -2150,6 +3012,19 @@ def app():
                             f"Sources: {lr.get('total_sources', 1)} | "
                             f"Status: {lr.get('generation_status', 'N/A')}"
                         )
+
+                    # Show account usage if multi-account was used
+                    acct_status = result.get("account_status")
+                    if acct_status:
+                        st.markdown("---")
+                        st.markdown("**Account Usage:**")
+                        for acct in acct_status.get("accounts", []):
+                            if acct["decks_assigned"] > 0:
+                                err = f" | Error: {acct['error']}" if acct.get('error') else ""
+                                st.markdown(
+                                    f"- {acct['email'].split('@')[0]}: "
+                                    f"{acct['decks_completed']}/{acct['decks_assigned']} completed{err}"
+                                )
             else:
                 st.error("Slide generation failed.")
                 st.markdown(result.get("message", "Unknown error occurred."))

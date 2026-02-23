@@ -99,6 +99,7 @@ def submit_agent_job(
         "post_results": None,
         "post_error": None,
         "thread": None,
+        "progress_messages": [],  # List of (message, pct) tuples from background thread
     }
     st.session_state[session_key] = job
 
