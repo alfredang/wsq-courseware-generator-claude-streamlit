@@ -801,6 +801,8 @@ async def generate_all_infographics(
                             "visualization_type": viz_type,
                             "assigned_template": suggested,
                         })
+                    # Write back to skeleton so assemble_final_slides can find them
+                    topic["infographic_assignments"] = assignments
 
                 if not assignments:
                     logger.warning(f"No assignments or blocks for topic '{t_title}' — skipping")

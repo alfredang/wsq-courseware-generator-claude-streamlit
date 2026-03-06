@@ -15,10 +15,11 @@ FAST_MODEL = "claude-3-5-haiku-20241022"    # For simple structured tasks (DSL, 
 PREMIUM_MODEL = "claude-opus-4-5-20251101"
 
 # ---------- Slide count targets ----------
-# 1-day course: 60-100 slides, 2-day course: 130-140 slides
 SLIDE_TARGETS = {
     1: (60, 100),     # 1-day: target 100
     2: (130, 140),    # 2-day: target 140
+    3: (195, 210),    # 3-day: target 210
+    4: (260, 280),    # 4-day: target 280
 }
 SLIDES_PER_DAY_DEFAULT = 70   # Fallback for courses > 2 days
 MIN_SLIDES_PER_TOPIC = 6

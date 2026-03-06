@@ -296,6 +296,7 @@ async def orchestrate_multi_agent_slides(
             lu_data_map=lu_data_map,
             content_map=content_map,
             progress_callback=_progress,
+            company=config.get("company"),
         )
     except Exception as e:
         logger.error(f"PPTX build failed: {e}")
@@ -339,6 +340,7 @@ def _build_infographic_pptx(
     lu_data_map: dict,
     content_map: dict = None,
     progress_callback: Optional[Callable] = None,
+    company: dict = None,
 ) -> dict:
     """Build the final PPTX from assembled infographic slide data.
 
@@ -422,6 +424,7 @@ def _build_infographic_pptx(
                 is_last=is_last,
                 infographic_mode=True,
                 prs=prs,
+                company=company,
             )
             total_slides += slides_added
             lu_results.append({

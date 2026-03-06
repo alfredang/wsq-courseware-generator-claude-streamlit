@@ -52,7 +52,59 @@ LY_SECTION = 5
 LY_TWO_COL = 6
 LY_TITLE_ONLY = 9
 
+# Default copyright (overridden by company data when available)
 COPYRIGHT = "This material belongs to Tertiary Infotech Pte Ltd (UEN: 20120096W). All Rights Reserved"
+
+# Active company info — set by set_company() before building slides
+_company_info = {}
+
+
+def set_company(company: dict):
+    """Set the active company for slide generation.
+
+    company dict keys: name, uen, logo, email, company_url, address
+    """
+    global _company_info, COPYRIGHT
+    _company_info = company or {}
+    if _company_info:
+        name = _company_info.get("name", "")
+        uen = _company_info.get("uen", "")
+        if name:
+            uen_part = f" (UEN: {uen})" if uen else ""
+            COPYRIGHT = f"This material belongs to {name}{uen_part}. All Rights Reserved"
+
+
+def _get_company_logo() -> str:
+    """Get the company logo path. Falls back to Tertiary logo."""
+    if _company_info:
+        # Try company/logo/ directory first
+        name = _company_info.get("name", "")
+        logo_field = _company_info.get("logo", "")
+        if logo_field and os.path.isabs(logo_field) and os.path.exists(logo_field):
+            return logo_field
+        if logo_field and os.path.exists(os.path.join(BASE_DIR, logo_field)):
+            return os.path.join(BASE_DIR, logo_field)
+        # Try by company name
+        if name:
+            safe = name.lower().replace(" ", "_").replace(".", "")
+            logo_dir = os.path.join(BASE_DIR, "company", "logo")
+            for ext in [".png", ".jpg", ".jpeg"]:
+                candidate = os.path.join(logo_dir, safe + ext)
+                if os.path.exists(candidate):
+                    return candidate
+    return TERTIARY_LOGO
+
+
+def _get_company_name() -> str:
+    return _company_info.get("name", "Tertiary Infotech Academy Pte Ltd")
+
+
+def _get_company_website() -> str:
+    return _company_info.get("company_url", "www.tertiarycourses.com.sg")
+
+
+def _get_company_email() -> str:
+    return _company_info.get("email", "enquiry@tertiaryinfotech.com")
 
 
 # ---------------------------------------------------------------------------
@@ -146,15 +198,20 @@ def _fill_body(ph, lines, size=Pt(14)):
     tf = ph.text_frame
     tf.clear()
     tf.word_wrap = True
+    # Tighter spacing for small fonts (dense slides like K&A, Course Outline)
+    is_dense = size <= Pt(10)
+    space_after = Pt(2) if is_dense else Pt(6)
+    space_before = Pt(1) if is_dense else Pt(2)
+    sub_size = min(Pt(12), size)  # sub-items never larger than main font
     for i, line in enumerate(lines):
         p = tf.paragraphs[0] if i == 0 else tf.add_paragraph()
         is_sub = line.startswith("  ")
         p.text = line.strip()
         p.font.name = "Arial"
-        p.font.size = Pt(12) if is_sub else size
+        p.font.size = sub_size if is_sub else size
         p.font.color.rgb = TEXT_COLOR
-        p.space_after = Pt(6)
-        p.space_before = Pt(2)
+        p.space_after = space_after
+        p.space_before = space_before
         p.level = 1 if is_sub else 0
 
 
@@ -190,19 +247,20 @@ def add_cover(prs, course_title, tgs_code=""):
     p.font.name = "Arial"
     p.alignment = PP_ALIGN.CENTER
 
-    # --- WSQ logo (bottom-left) ---
+    # --- WSQ logo (bottom-left, always shown for all companies) ---
     if os.path.exists(WSQ_LOGO):
         slide.shapes.add_picture(WSQ_LOGO, Emu(300000), Emu(3450000), height=Emu(800000))
 
-    # --- Tertiary Infotech logo (below WSQ, fits within slide) ---
-    if os.path.exists(TERTIARY_LOGO):
-        slide.shapes.add_picture(TERTIARY_LOGO, Emu(300000), Emu(4300000), height=Emu(700000))
+    # --- Company logo (below WSQ, above copyright footer) ---
+    company_logo = _get_company_logo()
+    if os.path.exists(company_logo):
+        slide.shapes.add_picture(company_logo, Emu(300000), Emu(4150000), height=Emu(600000))
 
     # --- Version info (bottom-right, black text) ---
     info_text = "Version: 1.0"
     if tgs_code:
         info_text = f"Version: 1.0\nCourse Code: {tgs_code}"
-    info_text += "\nWebsite: www.tertiarycourses.com.sg"
+    info_text += f"\nWebsite: {_get_company_website()}"
     info_box = slide.shapes.add_textbox(
         Emu(5500000), Emu(4100000), Emu(3500000), Emu(700000)
     )
@@ -271,6 +329,11 @@ def add_tb_slide(prs, title, lines, font_size=Pt(14)):
         if ph.placeholder_format.idx == 0:
             _set_ph_text(ph, title, size=Pt(20), bold=True, color=DARK_NAVY)
         elif ph.placeholder_format.idx == 1:
+            # Resize body to fit between accent bar and copyright footer
+            ph.top = Emu(650000)
+            ph.left = Emu(151275)
+            ph.width = Emu(8841450)
+            ph.height = Emu(4220000)  # stops above copyright at ~4870000
             _fill_body(ph, lines, font_size)
     # Accent bar under title
     bar = slide.shapes.add_shape(
@@ -822,7 +885,7 @@ def add_certificate(prs, tsc_code="", course_title=""):
             else:
                 lines.append("  WSQ Statement of Attainment (SOA)")
             lines += [
-                "  Certificate from Tertiary Infotech Academy Pte Ltd",
+                f"  Certificate from {_get_company_name()}",
                 "",
                 "Requirements:",
                 "  Minimum 75% attendance",
@@ -830,7 +893,9 @@ def add_certificate(prs, tsc_code="", course_title=""):
                 "  Complete TRAQOM survey",
             ]
             _fill_body(ph, lines, Pt(12))
-    if os.path.exists(CERT_TEMPLATE):
+    # Only show certificate template image for Tertiary — other companies add their own later
+    _is_tertiary = "tertiary" in _get_company_name().lower()
+    if _is_tertiary and os.path.exists(CERT_TEMPLATE):
         slide.shapes.add_picture(CERT_TEMPLATE, Emu(6000000), Emu(700000), height=Emu(3800000))
     _add_copyright(slide)
 
@@ -1034,13 +1099,23 @@ def add_closing_slides(prs, context):
 
     add_section(prs, "Final Assessment")
 
-    add_tb_slide(prs, "Support", [
-        "If you have any enquiries during and after the class, you can contact us below",
-        "",
-        "  Email: enquiry@tertiaryinfotech.com",
-        "  Tel: +65 6318 4588",
-        "  Website: www.tertiarycourses.com.sg",
-    ])
+    _is_tertiary = "tertiary" in _get_company_name().lower()
+    if _is_tertiary:
+        add_tb_slide(prs, "Support", [
+            "If you have any enquiries during and after the class, you can contact us below",
+            "",
+            "  Email: enquiry@tertiaryinfotech.com",
+            "  Tel: +65 6318 4588",
+            "  Website: www.tertiarycourses.com.sg",
+        ])
+    else:
+        add_tb_slide(prs, "Support", [
+            "If you have any enquiries during and after the class, you can contact us below",
+            "",
+            f"  Email: {_get_company_email()}",
+            "  Tel: ",
+            f"  Website: {_get_company_website()}",
+        ])
 
     add_section(prs, "Thank You!")
 
@@ -1224,7 +1299,7 @@ def build_topic_slides(prs, topic_data, image_paths=None, topic_idx=0, lu_label=
 
 def build_lu_deck(context, lu_idx, slides_data, is_first=False, is_last=False,
                   image_paths=None, images_per_topic=None, infographic_mode=False,
-                  prs=None):
+                  prs=None, company=None):
     """Build an editable PPTX deck for a Learning Unit.
 
     Args:
@@ -1246,6 +1321,10 @@ def build_lu_deck(context, lu_idx, slides_data, is_first=False, is_last=False,
         Tuple of (pptx_path, slide_count) when prs is None (creates new file).
         Tuple of (None, slides_added) when prs is provided (caller manages saving).
     """
+    # Set company branding if provided
+    if company:
+        set_company(company)
+
     lus = context.get('Learning_Units', [])
     lu = lus[lu_idx] if lu_idx < len(lus) else {}
     lu_num = lu.get('LU_Number', f'LU{lu_idx + 1}')

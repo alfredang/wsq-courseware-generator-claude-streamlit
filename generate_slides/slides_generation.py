@@ -33,6 +33,34 @@ from typing import Optional, Dict, Any, List
 logger = logging.getLogger(__name__)
 
 
+def _auto_match_company(org_name: str) -> dict:
+    """Match organisation name from CP against company database.
+
+    Returns the matching company dict, or empty dict if no match.
+    """
+    if not org_name:
+        return {}
+    try:
+        from generate_ap_fg_lg.utils.organizations import get_organizations
+        organizations = get_organizations()
+        if not organizations:
+            return {}
+        def _norm(s: str) -> str:
+            return s.lower().strip().replace(".", "").replace(",", "")
+        target = _norm(org_name)
+        for org in organizations:
+            if _norm(org.get("name", "")) == target:
+                return org
+        # Fallback: substring match
+        for org in organizations:
+            org_norm = _norm(org.get("name", ""))
+            if target in org_norm or org_norm in target:
+                return org
+    except Exception:
+        pass
+    return {}
+
+
 # =============================================================================
 # Helpers for building lesson plan and activity source text
 # =============================================================================
@@ -6500,8 +6528,12 @@ def app():
         # 1 deck per LU — single large deck with ALL topics per Learning Unit
         _lu_with_topics = [i for i in range(num_lus) if len(lus[i].get('Topics', [])) > 0]
         total_decks = len(_lu_with_topics)
-        _min_slides = _days * 60
-        _max_slides = _days * 100
+        from generate_slides.multi_agent_config import SLIDE_TARGETS, SLIDES_PER_DAY_DEFAULT
+        if _days in SLIDE_TARGETS:
+            _min_slides, _max_slides = SLIDE_TARGETS[_days]
+        else:
+            _min_slides = 140 + (_days - 2) * SLIDES_PER_DAY_DEFAULT
+            _max_slides = _min_slides + 20
         st.caption(
             f"**{course_title}** | {_hours:.0f} hours | **{_days} day{'s' if _days > 1 else ''}** | "
             f"{num_lus} LUs | {num_topics} topics | **{total_decks} deck(s)** (1 per LU) | "
@@ -6630,6 +6662,13 @@ def app():
             if use_multi_agent:
                 from generate_slides.multi_agent_orchestrator import orchestrate_multi_agent_slides
                 _ma_cfg = _multi_agent_config.copy()
+                # Pass selected company info for branding
+                _selected_co = st.session_state.get('selected_company', {})
+                # Fallback: auto-match from CP's Registered Training Provider
+                if not _selected_co and _info.get('Name_of_Organisation'):
+                    _selected_co = _auto_match_company(_info['Name_of_Organisation'])
+                if _selected_co:
+                    _ma_cfg["company"] = _selected_co
 
                 async def _generate_slides():
                     return await orchestrate_multi_agent_slides(
@@ -6770,173 +6809,3 @@ def app():
                         f"Uncheck completed decks and click **Generate Editable Slides** to retry."
                     )
 
-    # =================================================================
-    # Section 2: Stamp Logos on PPTX cover slide (manual upload)
-    # =================================================================
-    st.divider()
-    st.subheader("Step 1: Stamp Logos on PPTX Cover Slide")
-    st.caption(
-        "Upload a PPTX file. WSQ logo (top-left) and Tertiary Infotech Academy logo (top-right) "
-        "will be stamped on the **cover slide (first slide)** only, with copyright footer on all slides."
-    )
-
-    stamp_pptx = st.file_uploader(
-        "Upload PPTX to stamp logos",
-        type=["pptx"],
-        accept_multiple_files=False,
-        key="pptx_logo_stamper",
-    )
-
-    if stamp_pptx:
-        st.caption(f"Uploaded: {stamp_pptx.name}")
-        if st.button("Stamp Logos on Cover", type="primary"):
-            with st.spinner("Stamping WSQ and Tertiary Infotech logos on cover slide..."):
-                try:
-                    import tempfile
-
-                    # Save uploaded PPTX to temp file
-                    pptx_bytes = stamp_pptx.read()
-                    tmp_pptx = tempfile.mktemp(suffix="_stamp.pptx")
-                    with open(tmp_pptx, "wb") as f:
-                        f.write(pptx_bytes)
-
-                    # Stamp logos and replace certificate
-                    _stamp_logos_on_pptx(tmp_pptx)
-                    _replace_certificate_in_pptx(tmp_pptx)
-
-                    # Read stamped PPTX
-                    with open(tmp_pptx, "rb") as f:
-                        stamped_bytes = f.read()
-
-                    # Cleanup temp file
-                    try:
-                        os.unlink(tmp_pptx)
-                    except OSError:
-                        pass
-
-                    st.success("Logos stamped on cover slide!")
-
-                    # Show logo preview info
-                    from pathlib import Path as _P
-                    _logo_dir = _P(__file__).resolve().parent.parent / "assets" / "slide_logos"
-                    _logos_found = []
-                    if (_logo_dir / "wsq_logo.png").exists():
-                        _logos_found.append("WSQ (top-left)")
-                    if (_logo_dir / "tertiary_infotech_logo.png").exists():
-                        _logos_found.append("Tertiary Infotech Academy (top-right)")
-                    if _logos_found:
-                        st.info(f"Logos applied: {', '.join(_logos_found)}")
-
-                    # Download button
-                    course_name = st.session_state.get('extracted_course_info', {}).get('Course_Title', 'Slides')
-                    safe_name = re.sub(r'[^\w\s\-]', '', course_name).strip().replace(' ', '_')[:50]
-                    stamped_filename = f"{safe_name}_with_logos.pptx"
-
-                    st.download_button(
-                        label="Download PPTX with Logos",
-                        data=stamped_bytes,
-                        file_name=stamped_filename,
-                        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                        type="primary",
-                    )
-
-                except Exception as e:
-                    st.error(f"Error stamping logos: {e}")
-                    logger.exception("Logo stamping error")
-
-    # =================================================================
-    # Section 3: Remove Logo from PPTX (always visible)
-    # =================================================================
-    st.divider()
-    st.subheader("Step 2: Remove NotebookLM Logo from PPTX")
-    st.caption(
-        "Upload a PPTX file to automatically remove NotebookLM branding."
-    )
-
-    uploaded_pptx = st.file_uploader(
-        "Upload PPTX file",
-        type=["pptx"],
-        accept_multiple_files=False,
-        key="pptx_cleaner",
-    )
-
-    if uploaded_pptx:
-        st.caption(f"Uploaded: {uploaded_pptx.name}")
-
-        col_a, col_b = st.columns([1, 1])
-        with col_a:
-            if st.button("Remove Logo", type="primary"):
-                progress_box = st.empty()
-                with st.spinner("Removing NotebookLM branding..."):
-                    try:
-                        pptx_bytes = uploaded_pptx.read()
-                        file_size_kb = len(pptx_bytes) // 1024
-
-                        # Diagnostic scan
-                        diag = _diagnose_pptx(pptx_bytes)
-                        st.session_state['pptx_diagnostic'] = diag
-
-                        progress_box.info(f"Processing {file_size_kb} KB PPTX file...")
-
-                        # Run logo removal
-                        clean_bytes, logos_removed = _remove_notebooklm_logo(
-                            pptx_bytes, progress_container=progress_box
-                        )
-
-                        import io
-                        from pptx import Presentation
-                        prs = Presentation(io.BytesIO(clean_bytes))
-                        total_slides = len(prs.slides)
-
-                        # Verify images were actually modified
-                        import zipfile
-                        from PIL import Image
-                        orig_z = zipfile.ZipFile(io.BytesIO(pptx_bytes), 'r')
-                        clean_z = zipfile.ZipFile(io.BytesIO(clean_bytes), 'r')
-                        changed = 0
-                        for name in orig_z.namelist():
-                            if 'ppt/media/' in name.lower():
-                                orig_data = orig_z.read(name)
-                                clean_data = clean_z.read(name)
-                                if orig_data != clean_data:
-                                    changed += 1
-                        orig_z.close()
-                        clean_z.close()
-
-                        progress_box.empty()
-                        st.success(
-                            f"**{total_slides} slides** | "
-                            f"Processed {logos_removed} elements | "
-                            f"**{changed} images modified**"
-                        )
-
-                        if changed == 0:
-                            st.warning(
-                                "No images were modified. This may indicate the logo "
-                                "removal function could not process the images. "
-                                "Check the diagnostic info below."
-                            )
-
-                        course_name = st.session_state.get('extracted_course_info', {}).get('Course_Title', 'Slides')
-                        safe_name = re.sub(r'[^\w\s\-]', '', course_name).strip().replace(' ', '_')[:50]
-                        clean_filename = f"{safe_name}_clean.pptx"
-
-                        st.download_button(
-                            label=f"Download Clean PPTX ({total_slides} slides)",
-                            data=clean_bytes,
-                            file_name=clean_filename,
-                            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation",
-                            type="primary",
-                        )
-                    except Exception as e:
-                        progress_box.empty()
-                        st.error(f"Error removing logo: {e}")
-                        import traceback
-                        st.code(traceback.format_exc())
-                        logger.exception("Logo removal error")
-
-        # Show diagnostic info if available
-        diag = st.session_state.get('pptx_diagnostic')
-        if diag:
-            with st.expander("PPTX Diagnostic Info"):
-                st.text(diag)
