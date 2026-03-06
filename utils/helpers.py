@@ -179,6 +179,9 @@ def get_courseware_folder(context: dict) -> Optional[str]:
     folder_name = tgs_ref
     if course_title:
         folder_name = f"{folder_name} - {course_title}"
+    # Sanitize: remove characters invalid in Windows directory names
+    folder_name = folder_name.replace(":", "-").replace("<", "").replace(">", "")
+    folder_name = folder_name.replace('"', "").replace("|", "").replace("?", "").replace("*", "")
     course_dir = os.path.join(COURSEWARE_DIR, folder_name)
     for subfolder in COURSEWARE_SUBFOLDERS:
         os.makedirs(os.path.join(course_dir, subfolder), exist_ok=True)

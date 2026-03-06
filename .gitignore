@@ -75,3 +75,8 @@ nul
 temp/
 tmp/
 remove_soon/
+
+# Test files
+test*.html
+test*.png
+test_screenshot.png

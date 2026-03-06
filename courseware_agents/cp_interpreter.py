@@ -121,15 +121,19 @@ Follow the JSON schema exactly as specified in your instructions.
 
 Return ONLY the JSON object, no additional text."""
 
-    tools = ["Read", "Glob", "Grep"]
+    # Minimal tools — full CP text is already in the prompt.
+    tools = ["Read"]
+    max_turns = 3
     if course_url:
         tools.append("WebFetch")
+        max_turns = 5
 
     context = await run_agent_json(
         prompt=prompt,
         system_prompt=SYSTEM_PROMPT,
         tools=tools,
-        max_turns=10,
+        max_turns=max_turns,
+        model="claude-sonnet-4-20250514",
     )
 
     # Save to output file

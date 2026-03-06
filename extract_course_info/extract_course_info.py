@@ -11,7 +11,7 @@ import os
 import tempfile
 import pandas as pd
 
-from generate_ap_fg_lg.courseware_generation import parse_cp_document
+from generate_ap_fg_lg.courseware_generation import parse_cp_document, apply_tsc_defaults
 from courseware_agents.cp_interpreter import interpret_cp
 from utils.helpers import get_courseware_folder, copy_to_courseware
 
@@ -250,6 +250,8 @@ def app():
             user_tgs = st.session_state.get('_user_tgs_ref_no', '')
             if user_tgs and not result.get('TGS_Ref_No'):
                 result['TGS_Ref_No'] = user_tgs
+            # Fill Skills Framework, Sector, Proficiency Level from TSC Code
+            result = apply_tsc_defaults(result)
             st.session_state['extracted_course_info'] = result
             # Clear downstream contexts so they pick up the new data
             st.session_state.pop('context', None)

@@ -139,18 +139,58 @@ def parse_cp_document(uploaded_file):
         text_content = []
 
         if ext == ".docx":
+            from docx.oxml.ns import qn as docx_qn
+            from docx.table import Table as DocxTable
+            from docx.text.paragraph import Paragraph as DocxParagraph
             doc = DocxDocument(temp_file_path)
-            for para in doc.paragraphs:
-                if para.text.strip():
-                    text_content.append(para.text.strip())
-            for table in doc.tables:
-                for row in table.rows:
-                    row_text = []
-                    for cell in row.cells:
-                        if cell.text.strip():
-                            row_text.append(cell.text.strip())
-                    if row_text:
-                        text_content.append(" | ".join(row_text))
+
+            # Iterate body elements in DOCUMENT ORDER (paragraphs + tables interleaved)
+            for element in doc.element.body:
+                tag = element.tag
+
+                if tag == docx_qn('w:p'):
+                    para = DocxParagraph(element, doc)
+                    txt = para.text.strip()
+                    if not txt:
+                        continue
+                    style = (para.style.name or "").lower()
+                    if "heading" in style:
+                        level = 2
+                        for ch in style:
+                            if ch.isdigit():
+                                level = int(ch)
+                                break
+                        text_content.append(f"\n{'#' * level} {txt}")
+                    else:
+                        text_content.append(txt)
+
+                elif tag == docx_qn('w:tbl'):
+                    table = DocxTable(element, doc)
+                    rows_data = []
+                    for row in table.rows:
+                        # Deduplicate merged cells
+                        raw = [cell.text.strip() for cell in row.cells]
+                        deduped = []
+                        prev = None
+                        for val in raw:
+                            if val != prev:
+                                deduped.append(val)
+                                prev = val
+                        if any(deduped):
+                            rows_data.append(deduped)
+                    if not rows_data:
+                        continue
+                    max_cols = max(len(r) for r in rows_data)
+                    header = rows_data[0]
+                    while len(header) < max_cols:
+                        header.append("")
+                    text_content.append("")
+                    text_content.append("| " + " | ".join(h.replace("\n", " ").replace("|", "/") for h in header[:max_cols]) + " |")
+                    text_content.append("| " + " | ".join(["---"] * max_cols) + " |")
+                    for row_text in rows_data[1:]:
+                        while len(row_text) < max_cols:
+                            row_text.append("")
+                        text_content.append("| " + " | ".join(v.replace("\n", " ").replace("|", "/") for v in row_text[:max_cols]) + " |")
 
         elif ext == ".xlsx":
             wb = openpyxl.load_workbook(temp_file_path, data_only=True)
@@ -164,6 +204,9 @@ def parse_cp_document(uploaded_file):
             wb.close()
 
         markdown_text = "\n".join(text_content)
+
+        # Collapse consecutive blank lines to reduce prompt size
+        markdown_text = re.sub(r'\n{3,}', '\n\n', markdown_text).strip()
 
         # Trim based on file extension
         if ext == ".docx":
@@ -223,6 +266,8 @@ SECTOR_MAPPING = {
     "PUB": ("Public Service", "Skills Framework for Public Service"),
     "SOC": ("Social Service", "Skills Framework for Social Service"),
     "EAC": ("Early Childhood", "Skills Framework for Early Childhood"),
+    "EPW": ("Employability Skills", "Skills Framework for Employability Skills"),
+    "CEX": ("Customer Experience", "Skills Framework for Customer Experience"),
 }
 
 

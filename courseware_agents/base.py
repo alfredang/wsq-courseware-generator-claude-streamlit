@@ -36,6 +36,7 @@ async def run_agent(
     """
     if tools is None:
         tools = ["Read", "Glob", "Grep"]
+    # Allow explicitly passing empty list [] to disable tools
 
     if working_dir is None:
         working_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
