@@ -194,8 +194,8 @@ async def research_all_topics(
     Returns:
         Dict mapping topic_title → research results.
     """
-    # 5 parallel agent sessions for faster research
-    sem = asyncio.Semaphore(5)
+    # 8 parallel agent sessions for faster research
+    sem = asyncio.Semaphore(8)
 
     async def _bounded_research(t, i):
         async with sem:

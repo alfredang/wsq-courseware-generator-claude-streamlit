@@ -563,6 +563,10 @@ def assemble_final_slides(
         Dict mapping lu_number → {topics: [{title, infographic_slides, activity}]}.
     """
     lu_data_map = {}
+    logger.info(
+        f"[ASSEMBLY] infographic_results keys: {list(infographic_results.keys())}, "
+        f"content_map keys: {list(content_map.keys())}"
+    )
 
     for lo in skeleton.get("learning_outcomes", []):
         lo_num = lo.get("lo_number", "LO?")
@@ -591,16 +595,19 @@ def assemble_final_slides(
                 assignments = topic.get("infographic_assignments", [])
                 infographic_slides = []
 
-                for assignment in assignments:
+                for ai_idx, assignment in enumerate(assignments):
                     pos = assignment.get("slide_position", len(infographic_slides))
                     block_idx = assignment.get("content_block_index")
 
-                    # Find matching infographic result
+                    # Find matching infographic result by slide_position
                     matching_infographic = None
                     for info in topic_infographics:
                         if info.get("slide_position") == pos:
                             matching_infographic = info
                             break
+                    # Fallback: match by index if position match fails
+                    if not matching_infographic and ai_idx < len(topic_infographics):
+                        matching_infographic = topic_infographics[ai_idx]
 
                     # Get caption from content block
                     caption = ""
@@ -638,6 +645,14 @@ def assemble_final_slides(
                         "caption": caption,
                         "fallback_bullets": fallback_bullets,
                     })
+
+                # Log assembly results for this topic
+                img_count = sum(1 for s in infographic_slides if s.get("image_path"))
+                logger.info(
+                    f"[ASSEMBLY] {lu_num}/{t_num} '{t_title[:40]}': "
+                    f"{len(assignments)} assignments, {len(topic_infographics)} results, "
+                    f"{img_count}/{len(infographic_slides)} with images"
+                )
 
                 topics_data.append({
                     "title": t_title,

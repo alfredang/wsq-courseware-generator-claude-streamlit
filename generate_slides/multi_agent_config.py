@@ -19,11 +19,11 @@ SLIDE_TARGETS = {
     1: (60, 100),     # 1-day: target 100
     2: (130, 140),    # 2-day: target 140
     3: (195, 210),    # 3-day: target 210
-    4: (260, 280),    # 4-day: target 280
+    4: (230, 250),    # 4-day: target 250
 }
 SLIDES_PER_DAY_DEFAULT = 70   # Fallback for courses > 2 days
 MIN_SLIDES_PER_TOPIC = 6
-MAX_SLIDES_PER_TOPIC = 20    # Allow up to 20 for padding to reach target
+MAX_SLIDES_PER_TOPIC = 16    # Max infographics per topic (reduced for speed)
 
 # ---------- Phase 1: Research Agent ----------
 DEFAULT_RESEARCH_DEPTH = 5    # Sources per topic (~20-30 total across all topics)
@@ -142,10 +142,10 @@ def compute_per_topic_distribution(total_training_hours: float, num_topics: int)
     base_per_topic = max(MIN_SLIDES_PER_TOPIC, content_budget // num_topics)
     base_per_topic = min(base_per_topic, MAX_SLIDES_PER_TOPIC)
 
-    # Distribute remainder to first N topics
+    # Distribute remainder to first N topics (capped at num_topics)
     remainder = content_budget - (base_per_topic * num_topics)
     distribution = [base_per_topic] * num_topics
-    for i in range(max(0, remainder)):
+    for i in range(min(max(0, remainder), num_topics)):
         if distribution[i] < MAX_SLIDES_PER_TOPIC:
             distribution[i] += 1
 

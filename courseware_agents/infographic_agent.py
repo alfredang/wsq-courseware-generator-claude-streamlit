@@ -1027,15 +1027,15 @@ async def _html_to_png(html_path: str, png_path: str, browser=None) -> bool:
             finally:
                 await page.close()
 
-        # First attempt
-        await asyncio.wait_for(_do_screenshot(5000), timeout=45)
+        # First attempt (3s wait — AntV renders fast with performRender())
+        await asyncio.wait_for(_do_screenshot(3000), timeout=30)
 
         # Validate PNG size — retry once if too small
         if os.path.exists(png_path):
             png_size = os.path.getsize(png_path)
             if png_size < MIN_PNG_SIZE:
                 logger.warning(f"PNG small ({png_size}B), retrying with longer wait")
-                await asyncio.wait_for(_do_screenshot(8000), timeout=45)
+                await asyncio.wait_for(_do_screenshot(5000), timeout=30)
                 if os.path.exists(png_path):
                     png_size = os.path.getsize(png_path)
                     if png_size < MIN_PNG_SIZE:
