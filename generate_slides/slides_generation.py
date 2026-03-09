@@ -6484,8 +6484,7 @@ async def _generate_editable_pptx(context: dict, course_title: str,
 def app():
     """Streamlit page for Slides Generation."""
     st.title("Generate Slides")
-    st.write("Generate editable presentation slides with diagrams, flowcharts, and researched content.")
-    st.caption("Claude AI researches topics and generates knowledge-rich slides with professional shape diagrams. Fully editable PPTX.")
+    st.write("NotebookLM Version 2 Generate Slides")
 
     # Prompt Templates (editable, collapsed)
     from utils.prompt_template_editor import render_prompt_templates
