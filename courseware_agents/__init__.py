@@ -1,52 +1,78 @@
 """
-Courseware Agents Module
+WSQ Courseware Agents — AI-powered course material generation
 
-Provides agentic AI capabilities using the Claude Agent SDK.
-Each agent specializes in a specific courseware generation task.
+Architecture:
+    courseware_agents/
+    ├── base.py                  # Core: run_agent(), run_agent_json()
+    ├── cp_interpreter.py        # Shared: CP Interpretation Agent
+    │
+    ├── slides/                  # Slide Generation (5-phase pipeline)
+    │   ├── research_agent.py    # Phase 1: Web Research
+    │   ├── content_generator_agent.py  # Phase 2 & 5: Content + Assembly
+    │   ├── editor_agent.py      # Phase 3: Slide Skeleton
+    │   ├── infographic_agent.py # Phase 4: AntV → PNG
+    │   └── slides_agent.py      # Legacy: Document Analysis
+    │
+    ├── assessment/              # Assessment Generation
+    │   └── assessment_generator.py  # SAQ/PP/CS/PRJ/OI/DEM questions
+    │
+    └── audit/                   # Courseware Audit
+        └── audit_agent.py       # Cross-document consistency checks
 
-Agents:
-- CP Interpreter: Extracts structured course data from Course Proposals
-- Assessment Generator: Generates assessment questions from Facilitator Guides
-- Slides Agent: AI-enhanced slide generation analysis
-- Editor Agent: Slide skeleton with infographic assignments (Phase 3)
-- Research Agent: Web research for slide content (Phase 1)
-- Content Generator Agent: Structured content blocks + assembly (Phase 2 & 5)
-- Infographic Agent: AntV infographic image generation (Phase 4)
+Agent Pipeline (Slides):
+    CP Interpreter → Research → Content → Editor → Infographic → Assembly → PPTX
+
+See AGENTS.md for full architecture documentation.
 """
 
+# Core
 from courseware_agents.base import run_agent
+
+# Shared agent
 from courseware_agents.cp_interpreter import interpret_cp
-from courseware_agents.assessment_generator import generate_assessments
-from courseware_agents.slides_agent import analyze_document_for_slides
-from courseware_agents.editor_agent import generate_skeleton
-from courseware_agents.research_agent import research_topic, research_all_topics
-from courseware_agents.content_generator_agent import (
+
+# Slide generation agents (5-phase pipeline)
+from courseware_agents.slides import (
+    research_topic,
+    research_all_topics,
     generate_content_blocks,
     generate_all_content_blocks,
     assemble_final_slides,
-)
-from courseware_agents.infographic_agent import (
-    build_antv_dsl,
-    generate_dsl_with_ai,
+    generate_skeleton,
     generate_single_infographic,
     generate_topic_infographics,
     generate_all_infographics,
+    build_antv_dsl,
+    generate_slide_content,
+    extract_slides_text,
 )
 
+# Assessment agent
+from courseware_agents.assessment import generate_assessments
+
+# Audit agent
+from courseware_agents.audit import extract_audit_fields
+
 __all__ = [
+    # Core
     "run_agent",
+    # Shared
     "interpret_cp",
-    "generate_assessments",
-    "analyze_document_for_slides",
-    "generate_skeleton",
+    # Slides pipeline
     "research_topic",
     "research_all_topics",
     "generate_content_blocks",
     "generate_all_content_blocks",
     "assemble_final_slides",
-    "build_antv_dsl",
-    "generate_dsl_with_ai",
+    "generate_skeleton",
     "generate_single_infographic",
     "generate_topic_infographics",
     "generate_all_infographics",
+    "build_antv_dsl",
+    "generate_slide_content",
+    "extract_slides_text",
+    # Assessment
+    "generate_assessments",
+    # Audit
+    "extract_audit_fields",
 ]

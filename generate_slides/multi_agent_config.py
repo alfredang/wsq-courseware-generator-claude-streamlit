@@ -23,7 +23,7 @@ SLIDE_TARGETS = {
 }
 SLIDES_PER_DAY_DEFAULT = 70   # Fallback for courses > 2 days
 MIN_SLIDES_PER_TOPIC = 6
-MAX_SLIDES_PER_TOPIC = 16    # Max infographics per topic (reduced for speed)
+MAX_SLIDES_PER_TOPIC = 30    # Must be high enough to hit 4-day (250) targets with fewer topics
 
 # ---------- Phase 1: Research Agent ----------
 DEFAULT_RESEARCH_DEPTH = 5    # Sources per topic (~20-30 total across all topics)
@@ -123,7 +123,8 @@ def compute_per_topic_distribution(total_training_hours: float, num_topics: int)
     """Compute exact block count per topic to hit the total target exactly.
 
     Distributes extra slides across topics evenly when content_budget
-    doesn't divide evenly by num_topics.
+    doesn't divide evenly by num_topics. No hard cap — the deterministic
+    DSL builder handles any block count efficiently.
 
     Args:
         total_training_hours: Total course duration in hours.
@@ -140,13 +141,11 @@ def compute_per_topic_distribution(total_training_hours: float, num_topics: int)
     content_budget = total_target - standard_slides
 
     base_per_topic = max(MIN_SLIDES_PER_TOPIC, content_budget // num_topics)
-    base_per_topic = min(base_per_topic, MAX_SLIDES_PER_TOPIC)
 
-    # Distribute remainder to first N topics (capped at num_topics)
+    # Distribute remainder to first N topics
     remainder = content_budget - (base_per_topic * num_topics)
     distribution = [base_per_topic] * num_topics
     for i in range(min(max(0, remainder), num_topics)):
-        if distribution[i] < MAX_SLIDES_PER_TOPIC:
-            distribution[i] += 1
+        distribution[i] += 1
 
     return distribution

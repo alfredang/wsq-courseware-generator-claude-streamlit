@@ -4817,7 +4817,7 @@ async def _generate_hybrid_slides(context: dict, course_title: str,
 
                 # --- STEP 1.5: Extract TEXT from NotebookLM images (OCR via Claude) ---
                 # nblm_img_dirs_per_lu is {base_lu: [dir1, dir2, ...]} (multiple topic dirs per LU)
-                from courseware_agents.slides_agent import extract_slides_text
+                from courseware_agents.slides.slides_agent import extract_slides_text
                 nblm_text_per_lu = {}
                 text_tasks = []
                 text_task_labels = []
@@ -5253,7 +5253,7 @@ async def _convert_notebooklm_to_editable_from_images(
 
     # Extract text using Claude Agent SDK (Read tool supports images)
     # Uses Claude Code subscription — no separate API key needed
-    from courseware_agents.slides_agent import extract_slides_text
+    from courseware_agents.slides.slides_agent import extract_slides_text
 
     # The images are already saved as files — find their parent directory
     if slide_images:
@@ -6210,7 +6210,7 @@ async def _generate_editable_pptx(context: dict, course_title: str,
     - 1-day course (8h): 60-100 slides
     - 2-day course (16h): 120-160 slides
     """
-    from courseware_agents.slides_agent import generate_slide_content
+    from courseware_agents.slides.slides_agent import generate_slide_content
     from generate_slides.build_pptx import (
         build_lu_deck, Presentation, TEMPLATE_PATH, SLIDE_W, SLIDE_H,
         _remove_all_slides, _strip_template_footers,
@@ -6566,39 +6566,14 @@ def app():
         all_indices = {d[0] for d in deck_options}
         skip_indices = all_indices - selected_indices
 
-        # Generation mode — default to V2
-        gen_mode = st.radio(
-            "Generation mode",
-            [
-                "NotebookLM + Editable (Images + Diagrams + Text)",
-                "NotebookLM V2 (Research + Infographics)",
-            ],
-            index=1,
-            horizontal=True,
-            help=(
-                "**NotebookLM + Editable**: Uses NotebookLM for realistic images + Claude AI "
-                "for editable text with professional shape diagrams. "
-                "Requires NotebookLM auth.\n\n"
-                "**NotebookLM V2**: 5-phase pipeline — Research (web sources per topic), "
-                "Content Generator, Editor, Infographic Agent (AntV images). "
-                "ALL topic content becomes infographic images. No API key needed."
-            ),
-        )
-        use_hybrid = gen_mode.startswith("NotebookLM")
-        use_multi_agent = gen_mode.startswith("NotebookLM V2")
+        # Generation mode — V2 pipeline only
+        use_multi_agent = True
+        use_hybrid = False
 
-        # NotebookLM auth check (silent — no UI clutter)
-        if use_hybrid and not use_multi_agent:
-            import pathlib as _pl
-            _storage_paths = _get_nblm_storage_paths()
-            _browser_profile = _pl.Path.home() / ".notebooklm" / "browser_profile"
-            if not _storage_paths and not _browser_profile.exists():
-                st.warning("No NotebookLM accounts found. Run `uv run notebooklm login` in terminal first.")
-
-        # NotebookLM V2 configuration panel
+        # V2 configuration panel
         _multi_agent_config = {}
         if use_multi_agent:
-            with st.expander("NotebookLM V2 Configuration", expanded=False):
+            with st.expander("Slide Generation Configuration", expanded=False):
                 _ma_col1, _ma_col2 = st.columns(2)
                 with _ma_col1:
                     _research_depth = st.select_slider(
@@ -6641,12 +6616,7 @@ def app():
                 st.success("**Infographics**: Skipped — using text fallback slides")
 
         # Generate button
-        if use_multi_agent:
-            button_label = "Generate Slides (NotebookLM V2)"
-        elif use_hybrid:
-            button_label = "Generate Slides + NotebookLM Images"
-        else:
-            button_label = "Generate Slides"
+        button_label = "Generate Slides"
         if st.button(button_label, type="primary"):
             _info = extracted_info
             _title = course_title
@@ -6675,14 +6645,6 @@ def app():
                         context=_info,
                         config=_ma_cfg,
                         progress_callback=_progress,
-                    )
-            elif use_hybrid:
-                async def _generate_slides():
-                    return await _generate_editable_pptx(
-                        _info, _title, _config,
-                        progress_callback=_progress,
-                        skip_lu_indices=_skip,
-                        use_nblm=True,
                     )
             else:
                 async def _generate_slides():
@@ -6720,7 +6682,7 @@ def app():
             on_complete=_on_slides_complete,
             running_message=(
                 f"Generating {len(selected_indices)} slide deck(s)... "
-                + ("NotebookLM V2: Research → Content → Editor → Infographic → PPTX"
+                + ("Research → Content → Editor → Infographic → PPTX"
                    if use_multi_agent else "Claude AI is building editable PPTX")
             ),
         )

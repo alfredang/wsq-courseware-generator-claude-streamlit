@@ -803,7 +803,7 @@ def app():
 
                 return {"fg_data": result, "generated_files": generated_files}
 
-            from courseware_agents.assessment_generator import generate_assessments
+            from courseware_agents.assessment.assessment_generator import generate_assessments
             job = submit_agent_job(
                 key="generate_assessment",
                 label="Generate Assessment",

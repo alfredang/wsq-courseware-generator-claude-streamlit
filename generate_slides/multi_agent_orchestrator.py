@@ -17,13 +17,13 @@ import os
 import tempfile
 from typing import Callable, Optional
 
-from courseware_agents.research_agent import research_all_topics
-from courseware_agents.content_generator_agent import (
+from courseware_agents.slides.research_agent import research_all_topics
+from courseware_agents.slides.content_generator_agent import (
     generate_all_content_blocks,
     assemble_final_slides,
 )
-from courseware_agents.editor_agent import generate_skeleton
-from courseware_agents.infographic_agent import generate_all_infographics
+from courseware_agents.slides.editor_agent import generate_skeleton
+from courseware_agents.slides.infographic_agent import generate_all_infographics
 from generate_slides.multi_agent_config import (
     DEFAULT_MODEL,
     DEFAULT_RESEARCH_DEPTH,
@@ -295,6 +295,7 @@ async def orchestrate_multi_agent_slides(
             skeleton=skeleton,
             lu_data_map=lu_data_map,
             content_map=content_map,
+            infographic_results=infographic_map,
             progress_callback=_progress,
             company=config.get("company"),
         )
@@ -334,11 +335,101 @@ async def orchestrate_multi_agent_slides(
     }
 
 
+def _recover_infographic_images(infographic_data: dict, infographic_results: dict):
+    """Fill in missing image_path on infographic_slides from infographic_results.
+
+    This is the critical safety net: even if assembly or fallback lost image paths,
+    this function recovers them by fuzzy-matching topic titles and slide positions
+    against the infographic agent's actual output.
+    """
+    if not infographic_results:
+        return
+
+    def _norm(s):
+        return s.lower().replace(" ", "").replace("_", "").replace("-", "").strip()
+
+    def _find_results(topic_title):
+        """Find infographic results for a topic using fuzzy matching."""
+        if topic_title in infographic_results:
+            return infographic_results[topic_title]
+        norm_key = _norm(topic_title)
+        for k, v in infographic_results.items():
+            if _norm(k) == norm_key:
+                return v
+        key_lower = topic_title.lower().strip()
+        for k, v in infographic_results.items():
+            k_lower = k.lower().strip()
+            if key_lower in k_lower or k_lower in key_lower:
+                return v
+        return []
+
+    for topic in infographic_data.get("topics", []):
+        t_title = topic.get("title", "")
+        infographic_slides = topic.get("infographic_slides", [])
+        missing_count = sum(1 for s in infographic_slides if not s.get("image_path") or not os.path.exists(str(s.get("image_path", ""))))
+        if missing_count == 0:
+            continue
+
+        # Find matching infographic results
+        results = _find_results(t_title)
+        if not results:
+            logger.warning(f"[IMAGE RECOVERY] No infographic results found for '{t_title}'")
+            continue
+
+        recovered = 0
+        for slide in infographic_slides:
+            img_path = slide.get("image_path")
+            if img_path and os.path.exists(img_path):
+                continue  # Already has valid image
+
+            pos = slide.get("position", -1)
+            slide_title = slide.get("title", "")
+
+            # Try matching by slide_position
+            match = None
+            for r in results:
+                if r.get("generated") and r.get("image_path") and r.get("slide_position") == pos:
+                    if os.path.exists(r["image_path"]):
+                        match = r
+                        break
+
+            # Fallback: match by sub_title
+            if not match:
+                for r in results:
+                    if r.get("generated") and r.get("image_path") and os.path.exists(r["image_path"]):
+                        r_sub = _norm(r.get("sub_title", ""))
+                        s_title = _norm(slide_title)
+                        if r_sub and s_title and (r_sub == s_title or r_sub in s_title or s_title in r_sub):
+                            match = r
+                            break
+
+            # Fallback: match by index
+            if not match:
+                idx = infographic_slides.index(slide)
+                if idx < len(results) and results[idx].get("generated") and results[idx].get("image_path"):
+                    if os.path.exists(results[idx]["image_path"]):
+                        match = results[idx]
+
+            if match:
+                slide["image_path"] = match["image_path"]
+                recovered += 1
+
+        if recovered > 0:
+            logger.info(
+                f"[IMAGE RECOVERY] '{t_title}': recovered {recovered}/{missing_count} images"
+            )
+        else:
+            logger.warning(
+                f"[IMAGE RECOVERY] '{t_title}': could NOT recover any of {missing_count} missing images"
+            )
+
+
 def _build_infographic_pptx(
     context: dict,
     skeleton: dict,
     lu_data_map: dict,
     content_map: dict = None,
+    infographic_results: dict = None,
     progress_callback: Optional[Callable] = None,
     company: dict = None,
 ) -> dict:
@@ -386,42 +477,32 @@ def _build_infographic_pptx(
         is_first = (lu_idx == 0)
         is_last = (lu_idx == num_lus - 1)
 
-        # Get assembled infographic slide data for this LU (fuzzy key match)
-        infographic_data = lu_data_map.get(lu_num)
-        if infographic_data is None:
-            infographic_data = lu_data_normalized.get(_normalize_lu(lu_num))
-        if infographic_data is None:
-            # Try by index — skeleton may use different numbering
-            all_lu_entries = list(lu_data_map.values())
-            if lu_idx < len(all_lu_entries):
-                infographic_data = all_lu_entries[lu_idx]
-                logger.info(f"Matched {lu_num} to lu_data_map by index ({lu_idx})")
-
-        # Check if we got topics — if empty, build from content_map directly
-        has_topics = (
-            infographic_data is not None
-            and len(infographic_data.get("topics", [])) > 0
+        # ALWAYS build from CONTEXT topics — this guarantees correct topic-to-LU
+        # mapping regardless of skeleton quality. The skeleton often misassigns
+        # topics to wrong LUs, causing missing or duplicated topics.
+        infographic_data = _build_lu_data_from_content_map(
+            lu, content_map, lu_idx,
+        )
+        logger.info(
+            f"Built {lu_num} from context: "
+            f"{len(infographic_data.get('topics', []))} topics "
+            f"({[t.get('title','')[:40] for t in infographic_data.get('topics', [])]})"
         )
 
-        if not has_topics:
-            logger.warning(
-                f"No assembled topics for {lu_num} — building from content_map directly"
-            )
-            infographic_data = _build_lu_data_from_content_map(
-                lu, content_map, lu_idx,
-            )
-            logger.info(
-                f"Built fallback data for {lu_num}: "
-                f"{len(infographic_data.get('topics', []))} topics"
-            )
+        # ── IMAGE RECOVERY ──
+        # Fill in image_path from infographic_results for EVERY topic.
+        if infographic_results:
+            _recover_infographic_images(infographic_data, infographic_results)
 
         try:
+            # NEVER pass is_last=True here — closing slides are added AFTER
+            # padding to ensure correct slide ordering.
             _, slides_added = build_lu_deck(
                 context=context,
                 lu_idx=lu_idx,
                 slides_data=infographic_data,
                 is_first=is_first,
-                is_last=is_last,
+                is_last=False,
                 infographic_mode=True,
                 prs=prs,
                 company=company,
@@ -440,6 +521,90 @@ def _build_infographic_pptx(
                 "lu_number": lu_num,
                 "error": str(e),
             })
+
+    # ── TARGET ENFORCEMENT ──
+    # RULE: Slide count must ALWAYS hit the target for the course duration.
+    # If pipeline produced fewer slides than target, pad with additional content slides.
+    total_hours_raw = (
+        context.get("Total_Course_Duration_Hours", "")
+        or context.get("Total_Training_Hours", "")
+        or ""
+    )
+    import re as _re
+    _hrs_str = str(total_hours_raw).lower().replace("hours", "").replace("hrs", "").replace("hr", "").replace("h", "").strip()
+    if _hrs_str in ("n/a", "na", "nil", "none", "-", ""):
+        _hrs_str = ""
+    _hrs_match = _re.search(r'[\d.]+', _hrs_str)
+    try:
+        _total_hours = float(_hrs_match.group()) if _hrs_match else 8.0
+    except (ValueError, TypeError):
+        _total_hours = 8.0
+    if _total_hours < 8.0:
+        _total_hours = 8.0
+
+    slide_target = compute_total_target(_total_hours)
+    current_count = len(prs.slides)
+    # Account for ~7 closing slides that will be added after padding
+    CLOSING_SLIDES_COUNT = 7
+    shortfall = slide_target - current_count - CLOSING_SLIDES_COUNT
+
+    if shortfall > 0:
+        logger.warning(
+            f"SLIDE TARGET ENFORCEMENT: {current_count} slides < {slide_target} target. "
+            f"Adding {shortfall} padding slides."
+        )
+        from generate_slides.build_pptx import add_content_slide, add_infographic_slide
+
+        # Gather all topic titles for padding content
+        all_topic_titles = []
+        for lu in lus:
+            for t in lu.get("Topics", []):
+                all_topic_titles.append(t.get("Topic_Title", "Topic"))
+
+        # Build a flat list of ALL available infographic images (with generated=True)
+        # for use in padding slides
+        _all_infographic_images = []
+        if infographic_results:
+            for _t_title, _results in infographic_results.items():
+                for r in _results:
+                    if r.get("generated") and r.get("image_path") and os.path.exists(r["image_path"]):
+                        _all_infographic_images.append(r)
+
+        # Add padding slides distributed across topics — USE IMAGES when available
+        for pad_i in range(shortfall):
+            topic_title = all_topic_titles[pad_i % len(all_topic_titles)] if all_topic_titles else "Course Content"
+            # Get content blocks for this topic if available
+            topic_content = content_map.get(topic_title, {}) if content_map else {}
+            blocks = topic_content.get("content_blocks", [])
+
+            if blocks:
+                block = blocks[pad_i % len(blocks)]
+                items = block.get("data", {}).get("items", [])
+                bullets = [
+                    f"{it.get('label', '')}: {it.get('desc', '')}"
+                    for it in items[:6]
+                ] or [f"Key concepts in {topic_title}"]
+                slide_title = block.get("sub_title", topic_title)
+            else:
+                bullets = [f"Key concepts in {topic_title}"]
+                slide_title = topic_title
+
+            # Try to use infographic image for padding slide
+            if _all_infographic_images:
+                img_info = _all_infographic_images[pad_i % len(_all_infographic_images)]
+                add_infographic_slide(prs, slide_title, img_info["image_path"], img_info.get("caption", ""))
+            else:
+                add_content_slide(prs, slide_title, bullets)
+
+        logger.info(
+            f"SLIDE TARGET ENFORCEMENT: Padded {shortfall} slides. "
+            f"Final count: {len(prs.slides)} (target: {slide_target})"
+        )
+
+    # ── CLOSING SLIDES ── (added AFTER padding so they appear at the end)
+    from generate_slides.build_pptx import add_closing_slides
+    add_closing_slides(prs, context)
+    logger.info(f"Added closing slides. Total: {len(prs.slides)}")
 
     # Save the single PPTX
     course_title = context.get("Course_Title", "Course")
@@ -470,9 +635,27 @@ def _build_lu_data_from_content_map(lu: dict, content_map: dict, lu_idx: int) ->
     lo_title = lu.get("LO", "")
     topics_data = []
 
+    def _fuzzy_content(title):
+        """Fuzzy lookup in content_map."""
+        if not content_map or not title:
+            return {}
+        if title in content_map:
+            return content_map[title]
+        norm = lambda s: s.lower().replace(" ", "").replace("_", "").replace("-", "").strip()
+        nk = norm(title)
+        for k, v in content_map.items():
+            if norm(k) == nk:
+                return v
+        tl = title.lower().strip()
+        for k, v in content_map.items():
+            kl = k.lower().strip()
+            if tl in kl or kl in tl:
+                return v
+        return {}
+
     for ti, t in enumerate(topics):
         t_title = t.get("Topic_Title", f"Topic {ti + 1}")
-        t_content = content_map.get(t_title, {})
+        t_content = _fuzzy_content(t_title)
         blocks = t_content.get("content_blocks", [])
         activity_data = t_content.get("activity", {})
 

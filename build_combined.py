@@ -214,7 +214,7 @@ def format_topic_as_source(topic_data: dict, course_title: str, lu_title: str) -
 # ---------------------------------------------------------------------------
 
 async def build():
-    from courseware_agents.slides_agent import generate_slide_content
+    from courseware_agents.slides.slides_agent import generate_slide_content
     from generate_slides.build_pptx import build_lu_deck
 
     ctx = json.loads(CONTEXT_PATH.read_text())

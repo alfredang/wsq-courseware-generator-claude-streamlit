@@ -678,12 +678,16 @@ async def generate_topic_infographics(
     output_dir: str,
     model: Optional[str] = None,
     browser=None,
+    pw=None,
 ) -> list:
     """Generate ALL infographics for a single topic SEQUENTIALLY.
 
     Uses a shared browser instance passed from generate_all_infographics().
-    Sequential processing is the most reliable approach on Windows.
+    Restarts browser every MAX_PAGES_PER_BROWSER infographics to prevent
+    memory exhaustion. If browser dies mid-render, auto-relaunches.
     """
+    MAX_PAGES_PER_BROWSER = 8  # Restart browser every 8 infographics
+
     _FALLBACK_TEMPLATES = [
         "list-grid-badge-card",
         "list-grid-candy-card-lite",
@@ -691,9 +695,49 @@ async def generate_topic_infographics(
         "list-column-done-list",
     ]
 
-    infographic_list = []
+    _BROWSER_ARGS = [
+        "--disable-gpu", "--no-sandbox",
+        "--disable-dev-shm-usage", "--disable-web-security",
+        "--allow-file-access-from-files",
+    ]
 
-    for assignment in infographic_assignments:
+    async def _ensure_browser():
+        """Ensure we have a working browser. Relaunch if dead."""
+        nonlocal browser
+        if browser is not None:
+            try:
+                # Health check: try to create and close a page
+                test_page = await browser.new_page()
+                await test_page.close()
+                return browser
+            except Exception:
+                logger.warning(f"Browser health check failed for '{topic_title}' — relaunching")
+                try:
+                    await browser.close()
+                except Exception:
+                    pass
+                browser = None
+
+        if pw is None:
+            logger.error("No Playwright instance available to relaunch browser")
+            return None
+
+        for attempt in range(3):
+            try:
+                browser = await pw.chromium.launch(headless=True, args=_BROWSER_ARGS)
+                logger.info(f"Browser relaunched for '{topic_title}' (attempt {attempt + 1})")
+                return browser
+            except Exception as e:
+                logger.warning(f"Browser relaunch attempt {attempt + 1} failed: {e}")
+                await asyncio.sleep(1)
+
+        logger.error(f"Failed to relaunch browser after 3 attempts for '{topic_title}'")
+        return None
+
+    infographic_list = []
+    pages_since_restart = 0
+
+    for ai_idx, assignment in enumerate(infographic_assignments):
         block_idx = assignment.get("content_block_index", 0)
         slide_pos = assignment.get("slide_position", 0)
         assigned_template = assignment.get("assigned_template", "list-grid-badge-card")
@@ -710,6 +754,27 @@ async def generate_topic_infographics(
                 },
             }
 
+        # Restart browser periodically to prevent memory exhaustion
+        if pages_since_restart >= MAX_PAGES_PER_BROWSER:
+            logger.info(f"Restarting browser after {pages_since_restart} infographics in '{topic_title}'")
+            try:
+                await browser.close()
+            except Exception:
+                pass
+            browser = None
+            pages_since_restart = 0
+
+        # Ensure browser is alive before rendering
+        browser = await _ensure_browser()
+        if browser is None:
+            infographic_list.append({
+                "topic": topic_title,
+                "slide_position": slide_pos,
+                "generated": False,
+                "error": "Browser unavailable",
+            })
+            continue
+
         result = None
         try:
             result = await generate_single_infographic(
@@ -721,13 +786,23 @@ async def generate_topic_infographics(
                 model=model,
                 browser=browser,
             )
+            pages_since_restart += 1
         except Exception as e:
             logger.error(f"Infographic exception for '{topic_title}' pos {slide_pos}: {e}")
+            # Browser might be dead — force restart on next iteration
+            try:
+                await browser.close()
+            except Exception:
+                pass
+            browser = None
+            pages_since_restart = 0
 
-        # Retry with fallback if failed
+        # Retry with fallback template + fresh browser if failed
         if not result or not result.get("generated"):
             fallback = _FALLBACK_TEMPLATES[slide_pos % len(_FALLBACK_TEMPLATES)]
-            if fallback != assigned_template:
+            # Ensure browser is alive for retry
+            browser = await _ensure_browser()
+            if browser is not None:
                 try:
                     result = await generate_single_infographic(
                         content_block=block,
@@ -738,8 +813,15 @@ async def generate_topic_infographics(
                         model=model,
                         browser=browser,
                     )
+                    pages_since_restart += 1
                 except Exception as e2:
                     logger.error(f"Fallback failed for pos {slide_pos}: {e2}")
+                    try:
+                        await browser.close()
+                    except Exception:
+                        pass
+                    browser = None
+                    pages_since_restart = 0
 
         infographic_list.append(result or {
             "topic": topic_title,
@@ -750,7 +832,7 @@ async def generate_topic_infographics(
 
     generated = sum(1 for r in infographic_list if r.get("generated"))
     logger.info(f"Topic '{topic_title}': {generated}/{len(infographic_list)} infographics generated")
-    return infographic_list
+    return infographic_list, browser  # Return browser so caller can track its state
 
 
 async def generate_all_infographics(
@@ -833,7 +915,26 @@ async def generate_all_infographics(
     try:
         from playwright.async_api import async_playwright
         pw = await async_playwright().start()
-        browser = await pw.chromium.launch(headless=True)
+        # Robust Chromium launch with retry
+        browser = None
+        for _attempt in range(3):
+            try:
+                browser = await pw.chromium.launch(
+                    headless=True,
+                    args=[
+                        "--disable-gpu",
+                        "--no-sandbox",
+                        "--disable-dev-shm-usage",
+                        "--disable-web-security",
+                        "--allow-file-access-from-files",
+                    ],
+                )
+                break
+            except Exception as launch_err:
+                logger.warning(f"Browser launch attempt {_attempt + 1} failed: {launch_err}")
+                await asyncio.sleep(1)
+        if browser is None:
+            raise RuntimeError("Failed to launch Chromium after 3 attempts")
         logger.info("Playwright browser launched for infographic generation")
     except Exception as e:
         logger.error(f"Failed to launch Playwright: {e}")
@@ -842,30 +943,63 @@ async def generate_all_infographics(
             infographic_map[task["title"]] = []
         return infographic_map
 
+    _BROWSER_ARGS = [
+        "--disable-gpu", "--no-sandbox",
+        "--disable-dev-shm-usage", "--disable-web-security",
+        "--allow-file-access-from-files",
+    ]
+
+    async def _fresh_browser():
+        """Launch a fresh browser instance."""
+        return await pw.chromium.launch(headless=True, args=_BROWSER_ARGS)
+
     try:
-        # Process topics SEQUENTIALLY with the shared browser
+        # Process topics SEQUENTIALLY — browser is managed per-infographic
+        # inside generate_topic_infographics (restarts every 8 renders).
         for ti, task in enumerate(topic_tasks):
             logger.info(f"Rendering topic {ti + 1}/{len(topic_tasks)}: '{task['title']}' ({len(task['assignments'])} infographics)")
             try:
-                result = await generate_topic_infographics(
+                result, browser = await generate_topic_infographics(
                     topic_title=task["title"],
                     content_blocks=task["blocks"],
                     infographic_assignments=task["assignments"],
                     output_dir=task["dir"],
                     model=model,
                     browser=browser,
+                    pw=pw,
                 )
                 infographic_map[task["title"]] = result
                 gen = sum(1 for r in result if r.get("generated"))
                 total_generated += gen
                 total_attempted += len(result)
             except Exception as e:
-                logger.error(f"All infographics failed for '{task['title']}': {e}")
+                logger.error(f"All infographics failed for '{task['title']}': {e}", exc_info=True)
                 infographic_map[task["title"]] = []
+
+            # ALWAYS restart browser between topics for clean state
+            if ti < len(topic_tasks) - 1:
+                try:
+                    if browser:
+                        await browser.close()
+                except Exception:
+                    pass
+                browser = None
+                for _attempt in range(3):
+                    try:
+                        browser = await _fresh_browser()
+                        logger.info(f"Browser restarted between topics ({ti + 1}/{len(topic_tasks)})")
+                        break
+                    except Exception as restart_err:
+                        logger.warning(f"Browser restart attempt {_attempt + 1} failed: {restart_err}")
+                        await asyncio.sleep(1)
+                if browser is None:
+                    logger.error("Browser restart failed 3x — remaining topics will use text fallback")
+                    break
     finally:
         # Always close browser and playwright
         try:
-            await browser.close()
+            if browser:
+                await browser.close()
         except Exception:
             pass
         try:
@@ -892,12 +1026,43 @@ def _safe_filename(title: str) -> str:
     return safe[:30]
 
 
+_ANTV_SCRIPT_CACHE = None
+
+
+def _get_antv_script_content() -> str:
+    """Load the AntV infographic script content from local file (no CDN dependency).
+
+    The script is inlined into the HTML to avoid file:// cross-origin issues
+    on Windows that prevent external script loading via <script src>.
+    Cached after first read — 864KB read once, reused for all infographics.
+    """
+    global _ANTV_SCRIPT_CACHE
+    if _ANTV_SCRIPT_CACHE is not None:
+        return _ANTV_SCRIPT_CACHE
+
+    local_path = os.path.join(
+        os.path.dirname(__file__), "templates", "infographic.min.js"
+    )
+    if os.path.exists(local_path):
+        try:
+            with open(local_path, "r", encoding="utf-8") as f:
+                _ANTV_SCRIPT_CACHE = f.read()
+                return _ANTV_SCRIPT_CACHE
+        except Exception:
+            pass
+    _ANTV_SCRIPT_CACHE = ""
+    return ""
+
+
 def _write_antv_html(html_path: str, syntax: str, title: str) -> None:
     """Write a self-contained HTML file that renders an AntV Infographic.
 
     Uses setOptions() + performRender() API (compatible with v0.2.15+).
     The `syntax` param is now a JSON string with {template, title, data:{items}}.
     Falls back to DSL string if syntax doesn't start with '{'.
+
+    INLINES the AntV script directly into HTML for 100% reliable rendering
+    (no CDN, no file:// cross-origin issues).
     """
     import json as _json
     safe_title = title.replace("<", "&lt;").replace(">", "&gt;")
@@ -908,6 +1073,14 @@ def _write_antv_html(html_path: str, syntax: str, title: str) -> None:
     else:
         # Legacy DSL string — convert to JSON options
         options_json = _dsl_to_json_options(syntax)
+
+    # Inline the script for reliability — no network, no file:// issues
+    antv_js = _get_antv_script_content()
+    if antv_js:
+        script_tag = f"<script>{antv_js}</script>"
+    else:
+        # Fallback to CDN only if local file is missing
+        script_tag = '<script src="https://unpkg.com/@antv/infographic@0.2.15/dist/infographic.min.js"></script>'
 
     html_content = f"""<!DOCTYPE html>
 <html lang="en">
@@ -922,7 +1095,7 @@ def _write_antv_html(html_path: str, syntax: str, title: str) -> None:
 </head>
 <body>
   <div id="container"></div>
-  <script src="https://unpkg.com/@antv/infographic@0.2.15/dist/infographic.min.js"></script>
+  {script_tag}
   <script>
     AntVInfographic.registerResourceLoader(async (config) => {{
       const {{ data, scene }} = config;
@@ -931,7 +1104,10 @@ def _write_antv_html(html_path: str, syntax: str, title: str) -> None:
         if (scene === 'icon') url = `https://api.iconify.design/${{data}}.svg`;
         else if (scene === 'illus') url = `https://raw.githubusercontent.com/balazser/undraw-svg-collection/refs/heads/main/svgs/${{data}}.svg`;
         else return null;
-        const r = await fetch(url, {{ referrerPolicy: 'no-referrer' }});
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        const r = await fetch(url, {{ referrerPolicy: 'no-referrer', signal: controller.signal }});
+        clearTimeout(timeoutId);
         if (!r.ok) return null;
         const text = await r.text();
         if (!text || !text.trim().startsWith('<svg')) return null;
@@ -940,16 +1116,22 @@ def _write_antv_html(html_path: str, syntax: str, title: str) -> None:
     }});
   </script>
   <script>
-    const ig = new AntVInfographic.Infographic({{
-      container: '#container',
-      width: 1792,
-      height: 1024,
-    }});
-    const opts = {options_json};
-    ig.setOptions(opts);
-    ig.performRender();
-    setTimeout(() => ig.performRender(), 1500);
-    setTimeout(() => ig.performRender(), 3000);
+    window.__RENDERED__ = false;
+    try {{
+      const ig = new AntVInfographic.Infographic({{
+        container: '#container',
+        width: 1792,
+        height: 1024,
+      }});
+      const opts = {options_json};
+      ig.setOptions(opts);
+      ig.performRender();
+      setTimeout(() => {{ try {{ ig.performRender(); }} catch(e) {{}} window.__RENDERED__ = true; }}, 2000);
+      setTimeout(() => {{ try {{ ig.performRender(); }} catch(e) {{}} window.__RENDERED__ = true; }}, 4000);
+    }} catch (e) {{
+      console.error('AntV render error:', e);
+      window.__RENDERED__ = true;
+    }}
   </script>
 </body>
 </html>"""
@@ -1004,8 +1186,9 @@ def _dsl_to_json_options(dsl: str) -> str:
 async def _html_to_png(html_path: str, png_path: str, browser=None) -> bool:
     """Convert HTML to PNG using a provided browser instance.
 
-    Uses a single long-lived browser — just opens a new page/tab for each screenshot.
-    The browser is created once in generate_all_infographics() and reused for ALL screenshots.
+    AntV script is INLINED in the HTML — no CDN wait needed.
+    Uses domcontentloaded (fast) + __RENDERED__ flag for reliable screenshots.
+    Browser is restarted between topics to prevent memory exhaustion.
     """
     MIN_PNG_SIZE = 10000
 
@@ -1021,29 +1204,53 @@ async def _html_to_png(html_path: str, png_path: str, browser=None) -> bool:
             page = await browser.new_page(viewport={"width": 1792, "height": 1024})
             try:
                 page.set_default_timeout(30000)
+                # domcontentloaded is enough — script is inlined, no network needed
                 await page.goto(file_url, wait_until="domcontentloaded")
-                await page.wait_for_timeout(wait_ms)
+                # Wait for AntV to finish rendering (set by our HTML template)
+                try:
+                    await page.wait_for_function(
+                        "() => window.__RENDERED__ === true",
+                        timeout=wait_ms,
+                    )
+                except Exception:
+                    await page.wait_for_timeout(wait_ms)
+                # Brief buffer for final render pass
+                await page.wait_for_timeout(500)
                 await page.screenshot(path=png_path, full_page=True)
             finally:
                 await page.close()
 
-        # First attempt (3s wait — AntV renders fast with performRender())
-        await asyncio.wait_for(_do_screenshot(3000), timeout=30)
+        # Attempt 1: fast (script is inlined, 5s is plenty for render)
+        try:
+            await asyncio.wait_for(_do_screenshot(5000), timeout=20)
+        except (asyncio.TimeoutError, Exception) as e:
+            logger.warning(f"Attempt 1 failed for {os.path.basename(html_path)}: {e}")
 
-        # Validate PNG size — retry once if too small
+        # Validate PNG size
         if os.path.exists(png_path):
             png_size = os.path.getsize(png_path)
-            if png_size < MIN_PNG_SIZE:
-                logger.warning(f"PNG small ({png_size}B), retrying with longer wait")
-                await asyncio.wait_for(_do_screenshot(5000), timeout=30)
-                if os.path.exists(png_path):
-                    png_size = os.path.getsize(png_path)
-                    if png_size < MIN_PNG_SIZE:
-                        logger.warning(f"PNG still small ({png_size}B) after retry")
-                        return True
+            if png_size >= MIN_PNG_SIZE:
+                return True
+            logger.warning(f"PNG small ({png_size}B), retrying")
+
+        # Attempt 2: longer wait
+        try:
+            await asyncio.wait_for(_do_screenshot(8000), timeout=25)
+        except (asyncio.TimeoutError, Exception) as e:
+            logger.warning(f"Attempt 2 failed for {os.path.basename(html_path)}: {e}")
 
         if os.path.exists(png_path):
-            logger.debug(f"PNG: {png_path} ({os.path.getsize(png_path)}B)")
+            png_size = os.path.getsize(png_path)
+            if png_size >= MIN_PNG_SIZE:
+                return True
+
+        # Attempt 3: last try with max wait
+        try:
+            await asyncio.wait_for(_do_screenshot(12000), timeout=30)
+        except (asyncio.TimeoutError, Exception) as e:
+            logger.warning(f"Attempt 3 failed for {os.path.basename(html_path)}: {e}")
+
+        if os.path.exists(png_path) and os.path.getsize(png_path) > 0:
             return True
 
         return False
@@ -1051,11 +1258,8 @@ async def _html_to_png(html_path: str, png_path: str, browser=None) -> bool:
     except ImportError:
         logger.error("Playwright not installed — cannot generate PNGs")
         return False
-    except asyncio.TimeoutError:
-        logger.warning(f"Playwright timed out for {html_path}")
-        if os.path.exists(png_path) and os.path.getsize(png_path) > 5000:
-            return True
-        return False
     except Exception as e:
-        logger.warning(f"Playwright failed for {html_path}: {e}")
+        logger.warning(f"Playwright failed for {os.path.basename(html_path)}: {e}")
+        if os.path.exists(png_path) and os.path.getsize(png_path) > 0:
+            return True
         return False

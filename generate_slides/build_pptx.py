@@ -247,14 +247,25 @@ def add_cover(prs, course_title, tgs_code=""):
     p.font.name = "Arial"
     p.alignment = PP_ALIGN.CENTER
 
-    # --- WSQ logo (bottom-left, always shown for all companies) ---
-    if os.path.exists(WSQ_LOGO):
-        slide.shapes.add_picture(WSQ_LOGO, Emu(300000), Emu(3450000), height=Emu(800000))
-
-    # --- Company logo (below WSQ, above copyright footer) ---
+    # --- Logos (bottom-left) ---
+    # WSQ logo always shown; Tertiary full logo (with tagline) or company logo below
     company_logo = _get_company_logo()
-    if os.path.exists(company_logo):
-        slide.shapes.add_picture(company_logo, Emu(300000), Emu(4150000), height=Emu(600000))
+    is_tertiary = (
+        company_logo == TERTIARY_LOGO
+        or not _company_info
+        or "tertiary" in _company_info.get("name", "").lower()
+    )
+
+    if os.path.exists(WSQ_LOGO):
+        slide.shapes.add_picture(WSQ_LOGO, Emu(300000), Emu(3350000), height=Emu(700000))
+
+    if is_tertiary and os.path.exists(TERTIARY_LOGO):
+        # Full Tertiary logo with tagline below WSQ
+        slide.shapes.add_picture(
+            TERTIARY_LOGO, Emu(300000), Emu(4050000), height=Emu(600000)
+        )
+    elif os.path.exists(company_logo):
+        slide.shapes.add_picture(company_logo, Emu(300000), Emu(4050000), height=Emu(600000))
 
     # --- Version info (bottom-right, black text) ---
     info_text = "Version: 1.0"
