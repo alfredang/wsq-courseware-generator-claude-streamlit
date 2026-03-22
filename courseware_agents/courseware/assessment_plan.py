@@ -76,8 +76,8 @@ def combine_assessment_methods(structured_data, evidence_data):
     return structured_data
 
 
-AP_TEMPLATE_DIR = ".claude/skills/generate_assessment_plan/templates/AP_TGS-Ref-No_Course-Title_v1.docx"
-ASR_TEMPLATE_DIR = ".claude/skills/generate_assessment_plan/templates/ASR_TGS-Ref-No_Course-Title_v1.docx"
+AP_TEMPLATE_DIR = "courseware_agents/courseware/templates/AP_TGS-Ref-No_Course-Title_v1.docx"
+ASR_TEMPLATE_DIR = "courseware_agents/courseware/templates/ASR_TGS-Ref-No_Course-Title_v1.docx"
 
 
 def is_evidence_extracted(context):

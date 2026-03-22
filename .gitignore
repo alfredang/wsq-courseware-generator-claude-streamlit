@@ -5,6 +5,11 @@ venv/
 ENV/
 env/
 
+# Test artifacts
+test*.html
+test*.png
+test*.pdf
+
 # Python
 __pycache__/
 *.py[cod]
@@ -70,6 +75,12 @@ nul
 !.claude/skills/**/templates/*.pptx
 !.claude/skills/**/data/*.xlsx
 !.claude/skills/**/prompts/*.md
+
+# Allow agent directories and their DOCX/PPTX templates
+!courseware_agents/
+!courseware_agents/**/
+!courseware_agents/**/templates/*.docx
+!courseware_agents/**/templates/*.pptx
 
 # Temporary files
 temp/

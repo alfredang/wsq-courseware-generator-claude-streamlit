@@ -13,7 +13,7 @@ import tempfile
 from docxtpl import DocxTemplate
 from generate_ap_fg_lg.utils.helper import process_logo_image
 
-LG_TEMPLATE_DIR = ".claude/skills/generate_learner_guide/templates/LG_TGS-Ref-No_Course-Title_v1.docx"
+LG_TEMPLATE_DIR = "courseware_agents/courseware/templates/LG_TGS-Ref-No_Course-Title_v1.docx"
 
 
 def generate_learning_guide(context: dict, name_of_organisation: str) -> str:

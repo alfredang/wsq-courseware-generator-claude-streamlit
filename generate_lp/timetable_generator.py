@@ -337,7 +337,7 @@ def build_lesson_plan_schedule(context: dict) -> dict:
 # Template-based Cover Page & Version Control
 # =============================================================================
 
-LP_TEMPLATE_PATH = ".claude/skills/generate_lesson_plan/templates/LP_template_v2.docx"
+LP_TEMPLATE_PATH = "courseware_agents/lesson_plan/templates/LP_template_v2.docx"
 
 
 def _render_lp_template(context: dict, company: dict) -> Document:

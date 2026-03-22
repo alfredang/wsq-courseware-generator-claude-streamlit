@@ -6569,50 +6569,14 @@ def app():
         use_multi_agent = True
         use_hybrid = False
 
-        # V2 configuration panel
+        # V2 uses default configuration (no user-facing config panel)
         _multi_agent_config = {}
         if use_multi_agent:
-            with st.expander("Slide Generation Configuration", expanded=False):
-                _ma_col1, _ma_col2 = st.columns(2)
-                with _ma_col1:
-                    _research_depth = st.select_slider(
-                        "Research depth (sources per topic)",
-                        options=[10, 15, 20, 25, 30],
-                        value=20,
-                        help="Light=10, Normal=20, Deep=30. More sources = richer content but slower.",
-                    )
-                    _content_model = st.selectbox(
-                        "Content model",
-                        ["claude-sonnet-4-20250514", "claude-opus-4-5-20251101"],
-                        index=0,
-                        help="Sonnet 4 is fast and balanced. Opus 4.5 produces richer content but costs more.",
-                    )
-                with _ma_col2:
-                    _blocks_options = ["Auto"] + list(range(4, 15))
-                    _blocks_per_topic_raw = st.select_slider(
-                        "Infographic slides per topic",
-                        options=_blocks_options,
-                        value="Auto",
-                        help="Auto = computed from course duration (recommended). "
-                             "1-day → ~6/topic, 2-day → ~12/topic. Override manually if needed.",
-                    )
-                    _blocks_per_topic = None if _blocks_per_topic_raw == "Auto" else int(_blocks_per_topic_raw)
-                    _skip_infographics = st.checkbox(
-                        "Skip infographic generation",
-                        value=False,
-                        help="If checked, uses text fallback slides instead of infographic images.",
-                    )
-                _multi_agent_config = {
-                    "research_depth": _research_depth,
-                    "model": _content_model,
-                    "skip_infographics": _skip_infographics,
-                }
-                if _blocks_per_topic is not None:
-                    _multi_agent_config["num_blocks_per_topic"] = _blocks_per_topic
-
-            # Status check
-            if _multi_agent_config.get("skip_infographics"):
-                st.success("**Infographics**: Skipped — using text fallback slides")
+            _multi_agent_config = {
+                "research_depth": 20,
+                "model": "claude-sonnet-4-20250514",
+                "skip_infographics": False,
+            }
 
         # Generate button
         button_label = "Generate Slides"
@@ -6705,7 +6669,16 @@ def app():
             lu_results = result.get('lu_results', [])
 
             if result.get("success"):
+                # Get actual slide count from the saved PPTX (includes padding + closing)
+                merged_path = result.get("merged_pptx_path")
                 total_slides = sum(lr.get("slide_count", 0) for lr in lu_results)
+                if merged_path and os.path.exists(merged_path):
+                    try:
+                        from pptx import Presentation as _CountPrs
+                        _count_prs = _CountPrs(merged_path)
+                        total_slides = len(_count_prs.slides)
+                    except Exception:
+                        pass
                 st.success(f"Generated **{total_slides} editable slides** in a single PPTX!")
 
                 # Removed verbose stats and info messages — keep UI clean
@@ -6714,7 +6687,6 @@ def app():
                 safe_name = re.sub(r'[^\w\s\-]', '', course_name).strip().replace(' ', '_')[:50]
 
                 # Primary download: single merged PPTX (all LUs in one file)
-                merged_path = result.get("merged_pptx_path")
                 if merged_path and os.path.exists(merged_path):
                     try:
                         with open(merged_path, "rb") as f:

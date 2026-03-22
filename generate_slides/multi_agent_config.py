@@ -17,9 +17,10 @@ PREMIUM_MODEL = "claude-opus-4-5-20251101"
 # ---------- Slide count targets ----------
 SLIDE_TARGETS = {
     1: (60, 100),     # 1-day: target 100
-    2: (130, 140),    # 2-day: target 140
+    2: (140, 160),    # 2-day: target 160
     3: (195, 210),    # 3-day: target 210
     4: (230, 250),    # 4-day: target 250
+    5: (290, 320),    # 5-day: target 320
 }
 SLIDES_PER_DAY_DEFAULT = 70   # Fallback for courses > 2 days
 MIN_SLIDES_PER_TOPIC = 6
@@ -114,17 +115,16 @@ def compute_slides_per_topic(total_training_hours: float, num_topics: int) -> in
 
     total_target = compute_total_target(total_training_hours)
     standard_slides = compute_standard_slide_count(num_topics)
-    content_budget = total_target - standard_slides
-    per_topic = max(MIN_SLIDES_PER_TOPIC, content_budget // num_topics)
+    content_budget = max(num_topics, total_target - standard_slides)
+    per_topic = max(1, content_budget // num_topics)
     return min(per_topic, MAX_SLIDES_PER_TOPIC)
 
 
 def compute_per_topic_distribution(total_training_hours: float, num_topics: int) -> list:
-    """Compute exact block count per topic to hit the total target exactly.
+    """Compute exact block count per topic to fit within the total target.
 
-    Distributes extra slides across topics evenly when content_budget
-    doesn't divide evenly by num_topics. No hard cap — the deterministic
-    DSL builder handles any block count efficiently.
+    Distributes content budget across topics evenly. When many topics exist,
+    per-topic count may go below MIN_SLIDES_PER_TOPIC to stay within target.
 
     Args:
         total_training_hours: Total course duration in hours.
@@ -138,12 +138,15 @@ def compute_per_topic_distribution(total_training_hours: float, num_topics: int)
 
     total_target = compute_total_target(total_training_hours)
     standard_slides = compute_standard_slide_count(num_topics)
-    content_budget = total_target - standard_slides
+    content_budget = max(num_topics, total_target - standard_slides)  # At least 1 per topic
 
-    base_per_topic = max(MIN_SLIDES_PER_TOPIC, content_budget // num_topics)
+    base_per_topic = max(1, content_budget // num_topics)
+    # Cap so total doesn't exceed target
+    base_per_topic = min(base_per_topic, MAX_SLIDES_PER_TOPIC)
 
-    # Distribute remainder to first N topics
-    remainder = content_budget - (base_per_topic * num_topics)
+    # Distribute remainder to first N topics (only if under budget)
+    used = base_per_topic * num_topics
+    remainder = content_budget - used
     distribution = [base_per_topic] * num_topics
     for i in range(min(max(0, remainder), num_topics)):
         distribution[i] += 1

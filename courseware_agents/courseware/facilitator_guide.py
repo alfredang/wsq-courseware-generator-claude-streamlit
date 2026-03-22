@@ -42,7 +42,7 @@ import tempfile
 from docxtpl import DocxTemplate
 from generate_ap_fg_lg.utils.helper import retrieve_excel_data, process_logo_image
 
-FG_TEMPLATE_DIR = ".claude/skills/generate_facilitator_guide/templates/FG_TGS-Ref-No_Course-Title_v1.docx"
+FG_TEMPLATE_DIR = "courseware_agents/courseware/templates/FG_TGS-Ref-No_Course-Title_v1.docx"
 
 def generate_facilitators_guide(context: dict, name_of_organisation: str, sfw_dataset_dir=None) -> str:
     """

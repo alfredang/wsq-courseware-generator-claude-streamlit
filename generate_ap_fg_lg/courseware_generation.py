@@ -1,7 +1,7 @@
-from generate_ap_fg_lg.utils.agentic_LG import generate_learning_guide
-from generate_ap_fg_lg.utils.agentic_AP import generate_assessment_documents
-from generate_ap_fg_lg.utils.agentic_LP import generate_lesson_plan
-from generate_ap_fg_lg.utils.agentic_FG import generate_facilitators_guide
+from courseware_agents.courseware.learner_guide import generate_learning_guide
+from courseware_agents.courseware.assessment_plan import generate_assessment_documents
+from courseware_agents.lesson_plan import generate_lesson_plan
+from courseware_agents.courseware.facilitator_guide import generate_facilitators_guide
 import os
 import io
 import zipfile
@@ -211,7 +211,7 @@ def parse_cp_document(uploaded_file):
         # Trim based on file extension
         if ext == ".docx":
             start_pattern = re.compile(r"Part\s*1.*?Particulars\s+of\s+Course", re.IGNORECASE)
-            end_pattern = re.compile(r"Part\s*4.*?Facilities\s+and\s+Resources", re.IGNORECASE)
+            end_pattern = re.compile(r"Part\s*\d+.*?Facilities\s+and\s+Resources", re.IGNORECASE)
         elif ext == ".xlsx":
             start_pattern = re.compile(r"1\s*-\s*Course\s*Particulars", re.IGNORECASE)
             end_pattern = re.compile(r"4\s*-\s*Declarations", re.IGNORECASE)

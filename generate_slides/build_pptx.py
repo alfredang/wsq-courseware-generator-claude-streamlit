@@ -1163,16 +1163,18 @@ def build_infographic_topic_slides(prs, topic_data, topic_idx=0, lu_label=""):
     title = _re.sub(r'\s*[-–—]\s*[KA]\d+[\s,KA\d]*$', '', title).strip()
     title = _re.sub(r'\s*[KA]\d+\s*[,&]\s*[KA]\d+[\s,&KA\d]*$', '', title).strip()
 
-    # Section header: LO | LU | T format (matching approved PPTX)
-    t_num = topic_data.get("topic_number", f"T{topic_idx + 1}")
+    # Section header: LO | LU | Topic X: Name (follows CP numbering)
     lo_num = topic_data.get("lo_number", "")
     lu_num = topic_data.get("lu_number", lu_label)
+    # Strip existing "Topic X:" prefix if present to avoid duplication
+    clean_title = _re.sub(r'^Topic\s*\d+\s*:\s*', '', title).strip() or title
+    topic_label = f"Topic {topic_idx + 1}: {clean_title}"
     if lo_num and lu_num:
-        section_title = f"{lo_num} | {lu_num} | {t_num}: {title}"
+        section_title = f"{lo_num} | {lu_num} | {topic_label}"
     elif lu_num:
-        section_title = f"{lu_num} | {t_num}: {title}"
+        section_title = f"{lu_num} | {topic_label}"
     else:
-        section_title = f"{t_num}: {title}"
+        section_title = topic_label
     add_section(prs, section_title)
 
     # Infographic content slides
@@ -1234,12 +1236,13 @@ def build_topic_slides(prs, topic_data, image_paths=None, topic_idx=0, lu_label=
     activity = topic_data.get("activity", [])
     diagram = topic_data.get("diagram")
 
-    # Section header for topic — includes LU and topic number
-    topic_num = f"T{topic_idx + 1}"
+    # Section header for topic — follows CP numbering: "Topic X: Name"
+    clean_title = _re.sub(r'^Topic\s*\d+\s*:\s*', '', title).strip() or title
+    topic_label = f"Topic {topic_idx + 1}: {clean_title}"
     if lu_label:
-        section_title = f"{lu_label} | {topic_num}: {title}"
+        section_title = f"{lu_label} | {topic_label}"
     else:
-        section_title = f"{topic_num}: {title}"
+        section_title = topic_label
     add_section(prs, section_title)
 
     # Content slides — with images (two-column) or full-width text

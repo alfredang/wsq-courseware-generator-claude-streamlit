@@ -1,13 +1,15 @@
 """
 Courseware Audit Module
 
-Upload a CP (source of truth) + any AP/FG/LG/LP documents.
-Cross-checks each document against the CP and auto-fixes mismatches.
+Two modes:
+  1. Quick Check — after generation, uses session state data
+  2. Upload & Check — upload existing CP + courseware documents
+
+Cross-checks selected fields against the CP (source of truth).
 """
 
 import streamlit as st
 import os
-import asyncio
 import tempfile
 import pandas as pd
 from docx import Document
@@ -23,8 +25,26 @@ except ImportError:
     except ImportError:
         pass
 
+# Optional Excel support
+OPENPYXL_AVAILABLE = False
+try:
+    import openpyxl
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    pass
+
 
 DOC_TYPES = ["AP", "FG", "LG", "LP"]
+
+
+def _get_audit_checks():
+    """Load audit check items from the audit skill template (single source of truth).
+
+    Returns list of (display_name, field_key, field_type, applicable_types).
+    All rules live in: courseware_agents/audit/templates/audit_extraction.md
+    """
+    from courseware_agents.audit.audit_agent import get_audit_checks
+    return get_audit_checks()
 
 
 def extract_text_from_docx(file_bytes):
@@ -77,231 +97,250 @@ def extract_text_from_pdf(file_bytes):
         os.remove(tmp_path)
 
 
-def _extract_cp_fields(cp_context: dict) -> dict:
-    """Extract audit-comparable fields from CP interpreter output (source of truth)."""
-    learning_units = cp_context.get("Learning_Units", [])
+def extract_text_from_excel(file_bytes):
+    """Extract text from an Excel file (.xlsx / .xls).
 
-    # Learning outcomes
-    los = []
-    for lu in learning_units:
-        lo = lu.get("LO", "")
-        if lo:
-            los.append(lo)
+    For CP Excel files (SSG format), only extract from content sheets —
+    skip reference/lookup sheets (TSC_Skill_Codes, checks, etc.) that
+    contain thousands of rows of irrelevant data which confuse the AI.
+    """
+    if not OPENPYXL_AVAILABLE:
+        return ""
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+        tmp.write(file_bytes)
+        tmp_path = tmp.name
 
-    # All topics across all LUs
-    topics = []
-    for lu in learning_units:
-        for topic in lu.get("Topics", []):
-            title = topic.get("Topic_Title", "")
-            if title:
-                topics.append(title)
+    try:
+        wb = openpyxl.load_workbook(tmp_path, data_only=True)
+        # Skip reference/lookup sheets that pollute extraction
+        skip_sheets = {
+            "tsc_skill_codes", "tsc_ccs_k&a", "tsc_sector_track", "ssoc_5d",
+            "checks", "other_ref", "change_log", "read before filling",
+        }
+        parts = []
+        for ws in wb.worksheets:
+            if ws.title.strip().lower() in skip_sheets:
+                continue
+            parts.append(f"--- Sheet: {ws.title} ---")
+            for row in ws.iter_rows(values_only=True):
+                cells = [str(c).strip() for c in row if c is not None and str(c).strip()]
+                if cells:
+                    parts.append(" | ".join(cells))
+        return "\n".join(parts)
+    finally:
+        os.remove(tmp_path)
 
-    # LU structure: number of LUs, topics per LU
-    lu_structure = []
-    for i, lu in enumerate(learning_units):
-        lu_topics = [t.get("Topic_Title", "") for t in lu.get("Topics", []) if t.get("Topic_Title")]
-        lu_structure.append({
-            "lu_number": i + 1,
-            "lo": lu.get("LO", ""),
-            "topic_count": len(lu_topics),
-            "topic_titles": lu_topics,
-        })
 
-    # Assessment methods
-    assessment_methods = cp_context.get("Assessment_Methods", [])
-
-    # Durations
-    durations = {
-        "training_hours": cp_context.get("Total_Training_Hours"),
-        "assessment_hours": cp_context.get("Total_Assessment_Hours"),
-        "total_hours": cp_context.get("Total_Course_Duration_Hours"),
-    }
-
-    return {
-        "tgs_ref_code": cp_context.get("TGS_Ref_No"),
-        "course_title": cp_context.get("Course_Title"),
-        "company_name": cp_context.get("Name_of_Organisation"),
-        "tsc_ref_code": cp_context.get("TSC_Code"),
-        "tsc_title": cp_context.get("TSC_Title"),
-        "num_lus": len(learning_units),
-        "learning_outcomes": los,
-        "lu_structure": lu_structure,
-        "durations": durations,
-        "topics": topics,
-        "assessment_methods": assessment_methods,
-        "instructional_methods": [],  # CP may not have this
-    }
+def _extract_text(file_bytes, ext):
+    """Extract text from a file based on its extension."""
+    if ext == "docx" or ext == "doc":
+        return extract_text_from_docx(file_bytes)
+    elif ext == "pdf":
+        return extract_text_from_pdf(file_bytes)
+    elif ext in ("xlsx", "xls"):
+        return extract_text_from_excel(file_bytes)
+    return ""
 
 
 def _normalize(val):
-    """Normalize a string for comparison — case-insensitive, strip punctuation."""
+    """Normalize a string for comparison."""
     if val is None:
         return ""
     import re
     s = str(val).strip().lower()
-    # Remove trailing dots/periods (e.g., "LTD." → "LTD")
     s = re.sub(r'\.+$', '', s)
-    # Normalize internal periods in abbreviations (e.g., "PTE. LTD" → "PTE LTD")
     s = s.replace('.', '')
-    # Normalize hyphens to spaces (e.g., "Role-Play" → "Role Play")
     s = s.replace('-', ' ')
-    # Remove parenthetical abbreviations (e.g., "Written Exam (WE)" → "Written Exam")
     s = re.sub(r'\s*\([^)]*\)\s*', ' ', s)
-    # Remove topic/LO number prefixes (e.g., "T1: Topic Name" → "Topic Name", "LO1: ..." → "...")
     s = re.sub(r'^(t\d+|lo\d+|lu\d+|topic\s*\d+)\s*[:.\-]\s*', '', s)
-    # Collapse multiple spaces
+    # Remove common business suffixes for company name matching
+    s = re.sub(r'\b(pte|ltd|private|limited|inc|llc|academy|institute|school|centre|center|group|sdn|bhd)\b', '', s)
     s = re.sub(r'\s+', ' ', s).strip()
     return s
 
 
 def _normalize_number(val_str):
-    """Extract numeric value from a duration string like '22 hrs', '22.0 hrs', '2'."""
+    """Extract numeric value from a duration string, normalized to hours.
+
+    Handles: '22 hrs', '22.0', '30 mins', '1.5 hours', '90 minutes',
+             '1 hour 30 minutes', '1 hr', '30 min'.
+    """
     import re
     if not val_str:
         return None
-    # Find the first number (int or float)
-    match = re.search(r'(\d+\.?\d*)', str(val_str))
+    s = str(val_str).strip().lower()
+
+    # Check if value is in minutes (e.g. "30 mins", "90 minutes", "30 min")
+    if re.search(r'\bmin', s):
+        match = re.search(r'(\d+\.?\d*)', s)
+        if match:
+            mins = float(match.group(1))
+            hours = mins / 60
+            return int(hours) if hours == int(hours) else round(hours, 2)
+        return None
+
+    # Otherwise treat as hours (default)
+    match = re.search(r'(\d+\.?\d*)', s)
     if match:
         num = float(match.group(1))
-        # Return as int if whole number (22.0 → 22)
         return int(num) if num == int(num) else num
     return None
 
 
-def _compare_to_cp(cp_val, doc_val, field_type):
-    """Compare a document field value against CP (source of truth).
-    Returns (status, detail)."""
+def _extract_cp_fields(cp_context: dict) -> dict:
+    """Extract audit-comparable fields from CP interpreter output (source of truth)."""
+    learning_units = cp_context.get("Learning_Units", [])
+
+    topics = []
+    learning_outcomes = []
+    k_statements = []
+    a_statements = []
+    assessment_methods = set()
+    instructional_methods = set()
+
+    for lu in learning_units:
+        for topic in lu.get("Topics", []):
+            title = topic.get("Topic_Title", "")
+            if title:
+                topics.append(title)
+        lo = lu.get("LO", "")
+        if lo:
+            learning_outcomes.append(lo)
+        for k in lu.get("K_numbering_description", []):
+            desc = k.get("Description", "")
+            k_num = k.get("K_number", "")
+            if desc:
+                k_statements.append(f"{k_num}: {desc}" if k_num else desc)
+        for a in lu.get("A_numbering_description", []):
+            desc = a.get("Description", "")
+            a_num = a.get("A_number", "")
+            if desc:
+                a_statements.append(f"{a_num}: {desc}" if a_num else desc)
+        for am in lu.get("Assessment_Methods", []):
+            if am:
+                assessment_methods.add(am)
+        for im in lu.get("Instructional_Methods", []):
+            if im:
+                instructional_methods.add(im)
+
+    return {
+        "course_title": cp_context.get("Course_Title"),
+        "tgs_ref_code": cp_context.get("TGS_Ref_No"),
+        "topics": topics,
+        "training_hours": cp_context.get("Total_Training_Hours"),
+        "assessment_hours": cp_context.get("Total_Assessment_Hours"),
+        "company_name": cp_context.get("Name_of_Organisation"),
+        "uen": cp_context.get("UEN"),
+        "learning_outcomes": learning_outcomes,
+        "k_statements": k_statements,
+        "a_statements": a_statements,
+        "assessment_methods": sorted(assessment_methods),
+        "instructional_methods": sorted(instructional_methods),
+        "tsc_code": cp_context.get("TSC_Code"),
+        "tsc_title": cp_context.get("TSC_Title"),
+    }
+
+
+def _compare_field(cp_val, doc_val, field_type, extra_cp=None, field_key=None):
+    """Compare a document field value against CP.
+    Returns (status, detail).
+
+    If a field is not found in the document, it is treated as N/A (skip),
+    not a failure — different courseware documents contain different fields.
+    Only flag as mismatch when BOTH CP and doc have a value but they differ.
+    """
     if field_type == "string":
         cp_norm = _normalize(cp_val)
         doc_norm = _normalize(doc_val)
         if not cp_norm and not doc_norm:
-            return "missing", "Not in CP or document"
+            return "skip", "N/A"
         if not doc_norm:
-            return "missing_in_doc", "Missing in document"
+            return "skip", "Not in document"
         if not cp_norm:
-            return "skip", "Not in CP"
+            # Document has value but CP doesn't — show as pass (info present)
+            return "match", "Found in document"
         if cp_norm == doc_norm:
             return "match", "Matches CP"
         return "mismatch", "Does NOT match CP"
 
     elif field_type == "list":
-        cp_set = set(_normalize(v) for v in (cp_val or []) if v)
-        doc_set = set(_normalize(v) for v in (doc_val or []) if v)
-        if not cp_set and not doc_set:
-            return "missing", "Not in CP or document"
-        if not doc_set:
-            return "missing_in_doc", "Missing in document"
-        if not cp_set:
-            return "skip", "Not in CP"
-        if cp_set == doc_set:
-            return "match", "Matches CP"
-        # Check subset relationships
-        missing = cp_set - doc_set
-        extra = doc_set - cp_set
-        details = []
-        if missing:
-            details.append(f"Missing: {len(missing)} item(s)")
-        if extra:
-            details.append(f"Extra: {len(extra)} item(s)")
-        return "mismatch", "; ".join(details) if details else "Does NOT match CP"
-
-    elif field_type == "list_count":
-        # Only compare the count of items, not the content
-        cp_count = len(cp_val) if isinstance(cp_val, list) else 0
-        doc_count = len(doc_val) if isinstance(doc_val, list) else 0
+        cp_count = len([v for v in (cp_val or []) if v])
+        doc_count = len([v for v in (doc_val or []) if v])
         if cp_count == 0 and doc_count == 0:
-            return "missing", "Not in CP or document"
+            return "skip", "N/A"
         if doc_count == 0:
-            return "missing_in_doc", "Missing in document"
+            return "skip", "Not in document"
         if cp_count == 0:
             return "skip", "Not in CP"
-        if cp_count == doc_count:
-            return "match", f"Matches CP ({cp_count})"
-        return "mismatch", f"CP={cp_count} vs Doc={doc_count}"
 
-    elif field_type == "duration":
-        # Compare each duration field individually (training, assessment, total)
-        if not isinstance(cp_val, dict) and not isinstance(doc_val, dict):
-            return "missing", "Not in CP or document"
+        # Content match: extract significant keywords and check overlap
+        import re as _re
+        _stop_words = {
+            'the', 'and', 'for', 'with', 'that', 'this', 'from', 'will', 'are',
+            'was', 'has', 'have', 'been', 'able', 'learner', 'identify', 'apply',
+            'evaluate', 'develop', 'use', 'using', 'based', 'types', 'methods',
+            'techniques', 'how', 'what', 'can', 'may', 'its', 'their', 'into',
+            'such', 'also', 'between', 'within', 'through', 'about', 'which',
+            'criteria', 'factors', 'various', 'different', 'key', 'relevant',
+            'appropriate', 'effective', 'process', 'processes', 'systems',
+        }
 
-        cp_dict = cp_val if isinstance(cp_val, dict) else {}
-        doc_dict = doc_val if isinstance(doc_val, dict) else {}
+        def _extract_keywords(items):
+            """Extract significant keywords (4+ chars) from list items."""
+            words = set()
+            for item in items:
+                if not item:
+                    continue
+                cleaned = _re.sub(r'^(T\d+|LU\d+|K\d+|A\d+|ELO?\d+|Topic\s*\d+)\s*[:.]?\s*', '', str(item), flags=_re.IGNORECASE).strip()
+                for w in _re.findall(r'[a-zA-Z]{4,}', cleaned.lower()):
+                    if w not in _stop_words:
+                        words.add(w)
+            return words
 
-        mismatches = []
-        matches = 0
-        for key in ["training_hours", "assessment_hours", "total_hours"]:
-            cp_num = _normalize_number(cp_dict.get(key))
-            doc_num = _normalize_number(doc_dict.get(key))
-            if cp_num is None and doc_num is None:
-                continue
-            if cp_num is not None and doc_num is not None:
-                if cp_num == doc_num:
-                    matches += 1
-                else:
-                    label = key.replace("_", " ").title()
-                    mismatches.append(f"{label}: CP={cp_num} vs Doc={doc_num}")
-            elif cp_num is not None and doc_num is None:
-                # Doc missing this field — not a mismatch if other fields match
-                continue
+        cp_keywords = _extract_keywords(cp_val or [])
+        doc_keywords = _extract_keywords(doc_val or [])
 
-        if mismatches:
-            return "mismatch", "; ".join(mismatches)
-        if matches > 0:
+        if not cp_keywords or not doc_keywords:
             return "match", "Matches CP"
-        return "missing", "Not in CP or document"
 
-    elif field_type == "count":
-        # Compare simple counts (number of LUs, etc.)
-        cp_num = int(cp_val) if cp_val is not None else None
-        doc_num = int(doc_val) if doc_val is not None else None
+        # Bidirectional check: overlap from both sides
+        overlap = cp_keywords & doc_keywords
+        cp_ratio = len(overlap) / len(cp_keywords) if cp_keywords else 0
+        doc_ratio = len(overlap) / len(doc_keywords) if doc_keywords else 0
+        # Use the higher ratio — if either side has good coverage, it's a match
+        best_ratio = max(cp_ratio, doc_ratio)
+
+        if best_ratio >= 0.25:
+            return "match", "Matches CP"
+        return "mismatch", "Topics do not match CP"
+
+    elif field_type == "duration_field":
+        cp_num = _normalize_number(cp_val)
+        doc_num = _normalize_number(doc_val)
         if cp_num is None and doc_num is None:
-            return "missing", "Not in CP or document"
+            return "skip", "N/A"
         if doc_num is None:
-            return "missing_in_doc", "Missing in document"
+            return "skip", "Not in document"
         if cp_num is None:
             return "skip", "Not in CP"
         if cp_num == doc_num:
             return "match", "Matches CP"
+        # Check if document shows total hours (training + assessment)
+        # or a portion of the total (e.g. individual assessment = 30 mins of 1 hr total)
+        if extra_cp and field_key:
+            cp_training = _normalize_number(extra_cp.get("training_hours"))
+            cp_assessment = _normalize_number(extra_cp.get("assessment_hours"))
+            if cp_training is not None and cp_assessment is not None:
+                total = cp_training + cp_assessment
+                if doc_num == total:
+                    return "match", "Matches total course hours"
+                if doc_num == cp_training or doc_num == cp_assessment:
+                    return "match", "Matches CP"
+            # Doc shows a portion of the CP value (e.g. 30 mins is part of 1 hr)
+            # Valid when individual assessment methods split the total
+            if cp_num and doc_num and doc_num <= cp_num:
+                return "match", "Matches CP"
         return "mismatch", f"CP={cp_num} vs Doc={doc_num}"
-
-    elif field_type == "lu_structure":
-        # Compare LU structure: number of LUs, topics per LU, topic titles
-        cp_lus = cp_val if isinstance(cp_val, list) else []
-        doc_lus = doc_val if isinstance(doc_val, list) else []
-        if not cp_lus and not doc_lus:
-            return "missing", "Not in CP or document"
-        if not doc_lus:
-            return "missing_in_doc", "Missing in document"
-        if not cp_lus:
-            return "skip", "Not in CP"
-
-        issues = []
-
-        # Check LU count
-        if len(cp_lus) != len(doc_lus):
-            issues.append(f"LU count: CP={len(cp_lus)} vs Doc={len(doc_lus)}")
-
-        # Check each LU's topic count and titles
-        for i in range(min(len(cp_lus), len(doc_lus))):
-            cp_lu = cp_lus[i]
-            doc_lu = doc_lus[i]
-            cp_topics = cp_lu.get("topic_titles", [])
-            doc_topics = doc_lu.get("topic_titles", [])
-
-            if len(cp_topics) != len(doc_topics):
-                issues.append(f"LU{i+1} topics: CP={len(cp_topics)} vs Doc={len(doc_topics)}")
-
-            # Check topic title matches
-            cp_topic_set = set(_normalize(t) for t in cp_topics)
-            doc_topic_set = set(_normalize(t) for t in doc_topics)
-            if cp_topic_set != doc_topic_set:
-                missing_topics = cp_topic_set - doc_topic_set
-                if missing_topics:
-                    issues.append(f"LU{i+1} missing topics: {len(missing_topics)}")
-
-        if issues:
-            return "mismatch", "; ".join(issues)
-        return "match", "Matches CP"
 
     return "unknown", ""
 
@@ -309,100 +348,75 @@ def _compare_to_cp(cp_val, doc_val, field_type):
 def _format_val(val):
     """Format a value for display in the comparison table."""
     if isinstance(val, list):
-        # Check if it's lu_structure (list of dicts with lu_number)
-        if val and isinstance(val[0], dict) and "lu_number" in val[0]:
-            parts = []
-            for lu in val:
-                n = lu.get("topic_count", 0)
-                parts.append(f"LU{lu['lu_number']}: {n} topics")
-            return ", ".join(parts)
-        return ", ".join(str(v) for v in val) if val else "-"
-    elif isinstance(val, dict):
-        parts = [f"{k}: {v}" for k, v in val.items() if v]
-        return "; ".join(parts) if parts else "-"
-    return str(val) if val else "-"
+        return ", ".join(str(v) for v in val) if val else "N/A"
+    return str(val) if val else "N/A"
 
 
-# Which doc types are expected to contain each field
-# None = all doc types should have it
-AUDIT_FIELDS = [
-    ("TGS Ref Code", "tgs_ref_code", "string", None),
-    ("Course Title", "course_title", "string", None),
-    ("Company Name", "company_name", "string", None),
-    ("TSC Ref Code", "tsc_ref_code", "string", ["AP", "FG", "LG"]),
-    ("TSC Title", "tsc_title", "string", ["AP", "FG", "LG"]),
-    ("No. of Learning Units", "num_lus", "count", ["AP", "FG", "LG", "LP"]),
-    ("Learning Outcomes (Count)", "learning_outcomes", "list_count", ["AP", "FG", "LG"]),
-    ("LU Structure (Topics per LU)", "lu_structure", "lu_structure", ["FG", "LG"]),
-    ("Durations", "durations", "duration", None),
-    ("Topics (All)", "topics", "list", None),
-    ("Assessment Methods", "assessment_methods", "list", ["AP"]),
-    ("Instructional Methods", "instructional_methods", "list", ["FG", "LG", "LP"]),
-]
+def _status_icon(status):
+    """Return a visual status indicator."""
+    if status == "match":
+        return "Matches CP"
+    elif status == "mismatch":
+        return "MISMATCH"
+    elif status == "missing_in_doc":
+        return "Missing in doc"
+    elif status == "skip":
+        return "N/A"
+    return "-"
 
 
-def _extract_doc_type(label: str) -> str:
-    """Extract doc type (AP/FG/LG/LP) from audit label like 'LP: filename.docx'."""
-    for dt in DOC_TYPES:
-        if label.upper().startswith(dt):
-            return dt
-    return ""
-
-
-def run_cp_cross_check(cp_fields: dict, doc_results: dict):
-    """Compare each document's extracted fields against CP source of truth.
-
-    Returns list of rows: [{Field, Status, CP (Source of Truth), doc1_label, doc2_label, ...}]
-    """
-    results = []
-    for display_name, field_key, field_type, applicable_types in AUDIT_FIELDS:
-        cp_val = cp_fields.get(field_key)
-
-        row = {"Field": display_name, "CP (Source of Truth)": _format_val(cp_val)}
-
-        worst_status = "match"
-        has_applicable_doc = False
-
-        for doc_label, doc_data in doc_results.items():
-            doc_type = _extract_doc_type(doc_label)
-
-            # Skip this field if not applicable to this doc type
-            if applicable_types and doc_type and doc_type not in applicable_types:
-                row[doc_label] = "N/A"
-                continue
-
-            has_applicable_doc = True
-            doc_val = doc_data.get(field_key)
-            status, detail = _compare_to_cp(cp_val, doc_val, field_type)
-            row[doc_label] = _format_val(doc_val)
-
-            if status == "mismatch":
-                worst_status = "mismatch"
-            elif status == "missing_in_doc" and worst_status != "mismatch":
-                worst_status = "missing_in_doc"
-
-        # If no documents were applicable for this field, mark as skip
-        if not has_applicable_doc:
-            worst_status = "skip"
-
-        row["Status"] = "MISMATCH" if worst_status == "mismatch" else (
-            "Missing in doc" if worst_status == "missing_in_doc" else (
-                "N/A" if worst_status == "skip" else "Matches CP"
-            )
-        )
-        row["_status"] = worst_status
-        results.append(row)
-
-    return results
-
-
-def _fix_text_in_docx(file_bytes: bytes, replacements: list[tuple[str, str]]) -> bytes:
-    """Apply text replacements to a DOCX file. Returns fixed file bytes.
+def run_audit(cp_fields: dict, doc_results: dict, selected_checks: list[str]):
+    """Run audit on selected checks only.
 
     Args:
-        file_bytes: Original DOCX content
-        replacements: List of (old_text, new_text) pairs to replace
+        cp_fields: Extracted CP fields (source of truth)
+        doc_results: Dict of {doc_label: extracted_fields_dict}
+        selected_checks: List of field_key strings to check
+
+    Returns:
+        List of result rows for the comparison table.
     """
+    results = []
+    cell_statuses = []  # Parallel list: dict of {col_name: status} per row
+    cell_details = []   # Parallel list: dict of {col_name: detail_string} per row
+
+    for display_name, field_key, field_type, applicable_types in _get_audit_checks():
+        if field_key not in selected_checks:
+            continue
+
+        cp_val = cp_fields.get(field_key)
+        row = {"Field": display_name, "CP (Source of Truth)": _format_val(cp_val)}
+        row_statuses = {"Field": "neutral", "CP (Source of Truth)": "neutral"}
+        row_details = {}
+
+        for doc_label, doc_data in doc_results.items():
+            # Detect doc type from label
+            doc_type = ""
+            for dt in DOC_TYPES:
+                if doc_label.upper().startswith(dt):
+                    doc_type = dt
+                    break
+
+            if applicable_types and doc_type and doc_type not in applicable_types:
+                row[doc_label] = "N/A"
+                row_statuses[doc_label] = "skip"
+                continue
+
+            doc_val = doc_data.get(field_key)
+            status, detail = _compare_field(cp_val, doc_val, field_type, extra_cp=cp_fields, field_key=field_key)
+            row[doc_label] = _format_val(doc_val)
+            row_statuses[doc_label] = status
+            row_details[doc_label] = detail
+
+        results.append(row)
+        cell_statuses.append(row_statuses)
+        cell_details.append(row_details)
+
+    return results, cell_statuses, cell_details
+
+
+def _fix_text_in_docx(file_bytes: bytes, replacements: list[tuple[str, str]]) -> tuple[bytes, int]:
+    """Apply text replacements to a DOCX file. Returns (fixed_bytes, fix_count)."""
     with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp:
         tmp.write(file_bytes)
         tmp_path = tmp.name
@@ -415,7 +429,6 @@ def _fix_text_in_docx(file_bytes: bytes, replacements: list[tuple[str, str]]) ->
             if not old_text or not new_text or old_text == new_text:
                 continue
 
-            # Replace in paragraphs
             for para in doc.paragraphs:
                 if old_text in para.text:
                     for run in para.runs:
@@ -423,7 +436,6 @@ def _fix_text_in_docx(file_bytes: bytes, replacements: list[tuple[str, str]]) ->
                             run.text = run.text.replace(old_text, new_text)
                             fix_count += 1
 
-            # Replace in tables
             for table in doc.tables:
                 for row in table.rows:
                     for cell in row.cells:
@@ -434,7 +446,6 @@ def _fix_text_in_docx(file_bytes: bytes, replacements: list[tuple[str, str]]) ->
                                         run.text = run.text.replace(old_text, new_text)
                                         fix_count += 1
 
-            # Replace in headers/footers
             for section in doc.sections:
                 for header_footer in [section.header, section.footer]:
                     if header_footer:
@@ -445,7 +456,6 @@ def _fix_text_in_docx(file_bytes: bytes, replacements: list[tuple[str, str]]) ->
                                         run.text = run.text.replace(old_text, new_text)
                                         fix_count += 1
 
-        # Save to bytes
         out_path = tmp_path + "_fixed.docx"
         doc.save(out_path)
         with open(out_path, "rb") as f:
@@ -456,11 +466,14 @@ def _fix_text_in_docx(file_bytes: bytes, replacements: list[tuple[str, str]]) ->
         os.remove(tmp_path)
 
 
-def _build_replacements(cp_fields: dict, doc_fields: dict) -> list[tuple[str, str]]:
-    """Build a list of (old_text, new_text) replacements from mismatches."""
+def _build_replacements(cp_fields: dict, doc_fields: dict, selected_checks: list[str]) -> list[tuple[str, str]]:
+    """Build (old_text, new_text) replacements from mismatches for selected checks only."""
     replacements = []
 
-    for _, field_key, field_type, _applicable in AUDIT_FIELDS:
+    for _, field_key, field_type, _ in _get_audit_checks():
+        if field_key not in selected_checks:
+            continue
+
         cp_val = cp_fields.get(field_key)
         doc_val = doc_fields.get(field_key)
         if not cp_val or not doc_val:
@@ -472,15 +485,12 @@ def _build_replacements(cp_fields: dict, doc_fields: dict) -> list[tuple[str, st
             if cp_str and doc_str and _normalize(cp_str) != _normalize(doc_str):
                 replacements.append((doc_str, cp_str))
 
-        elif field_type == "duration":
-            if isinstance(cp_val, dict) and isinstance(doc_val, dict):
-                for dur_key in ["training_hours", "assessment_hours", "total_hours"]:
-                    cv = str(cp_val.get(dur_key, "")).strip()
-                    dv = str(doc_val.get(dur_key, "")).strip()
-                    if cv and dv and _normalize(cv) != _normalize(dv):
-                        replacements.append((dv, cv))
+        elif field_type == "duration_field":
+            cp_str = str(cp_val).strip()
+            doc_str = str(doc_val).strip()
+            if cp_str and doc_str and _normalize_number(cp_str) != _normalize_number(doc_str):
+                replacements.append((doc_str, cp_str))
 
-        # For lists (topics, LOs, assessment methods) — match by position
         elif field_type == "list":
             cp_list = cp_val if isinstance(cp_val, list) else []
             doc_list = doc_val if isinstance(doc_val, list) else []
@@ -488,15 +498,8 @@ def _build_replacements(cp_fields: dict, doc_fields: dict) -> list[tuple[str, st
                 doc_str = str(doc_item).strip()
                 if not doc_str:
                     continue
-                # Try to find best match from CP
-                matched = False
-                for cp_item in cp_list:
-                    cp_str = str(cp_item).strip()
-                    if _normalize(cp_str) == _normalize(doc_str):
-                        matched = True
-                        break
+                matched = any(_normalize(str(cp_item)) == _normalize(doc_str) for cp_item in cp_list)
                 if not matched and i < len(cp_list):
-                    # Position-based replacement
                     cp_str = str(cp_list[i]).strip()
                     if cp_str and doc_str:
                         replacements.append((doc_str, cp_str))
@@ -504,249 +507,408 @@ def _build_replacements(cp_fields: dict, doc_fields: dict) -> list[tuple[str, st
     return replacements
 
 
+def _get_clear_id():
+    """Get unique suffix for file uploaders — changes on clear to reset them."""
+    return st.session_state.get("_audit_clear_count", 0)
+
+
 def app():
     st.title("Courseware Audit")
-    st.caption("Cross-check your AP, FG, LG, LP against the CP (source of truth) and auto-fix mismatches.")
+    st.caption("Cross-check your courseware documents against the CP (source of truth).")
 
-    # Initialize session state
-    if "audit_cp_context" not in st.session_state:
-        st.session_state.audit_cp_context = None
-    if "audit_docs" not in st.session_state:
-        st.session_state.audit_docs = {}
-    if "audit_results" not in st.session_state:
-        st.session_state.audit_results = {}
-    if "audit_cp_fields" not in st.session_state:
-        st.session_state.audit_cp_fields = {}
-    if "audit_comparison" not in st.session_state:
-        st.session_state.audit_comparison = []
+    # ── Initialize session state ──
+    for key, default in [
+        ("audit_cp_fields", {}),
+        ("audit_docs", {}),
+        ("audit_results", {}),
+        ("audit_comparison", []),
+        ("audit_cell_statuses", []),
+        ("audit_cell_details", []),
+        ("audit_selected_checks", []),
+    ]:
+        if key not in st.session_state:
+            st.session_state[key] = default
 
-    # Prompt templates (editable, collapsed)
-    from utils.prompt_template_editor import render_prompt_templates
-    render_prompt_templates("courseware_audit", "Prompt Templates (Courseware Audit)")
+    # ── Clear All button ──
+    if st.session_state.get("_audit_clear_requested"):
+        # Increment uploader counter to force file uploaders to reset
+        clear_count = st.session_state.get("_audit_clear_count", 0) + 1
+        st.session_state["_audit_clear_count"] = clear_count
+        for key in list(st.session_state.keys()):
+            if key.startswith("audit_") or key.startswith("_audit_"):
+                if key != "_audit_clear_count":
+                    del st.session_state[key]
+        st.session_state["_audit_clear_requested"] = False
+        st.rerun()
 
-    # ── CP Source of Truth (from Extract Course Info page) ──
-    _existing_cp = st.session_state.get("extracted_course_info")
-    if not _existing_cp:
-        st.warning(
-            "No CP data found. Please go to **Extract Course Info** first, "
-            "upload your CP, and extract the course information. "
-            "Then come back here to audit your documents."
+    pass  # clear_id accessed via _get_clear_id() helper
+
+    # ── Step 1: CP Source of Truth ──
+    _has_session_cp = st.session_state.get("extracted_course_info") is not None
+    cp_fields = {}
+
+    if _has_session_cp:
+        # Auto-use CP from session
+        cp_context = st.session_state["extracted_course_info"]
+        cp_fields = _extract_cp_fields(cp_context)
+        _apply_company_overrides(cp_fields)
+        st.success("CP data loaded from session (Extract Course Info).")
+    else:
+        # Need to upload CP
+        st.subheader("Upload Course Proposal (CP)")
+        st.info("No CP data in session. Upload your CP document, or go to **Extract Course Info** first.")
+        cp_file = st.file_uploader(
+            "Upload CP document",
+            type=["docx", "doc", "xlsx", "xls"],
+            key=f"audit_cp_uploader_{_get_clear_id()}",
         )
+
+        if cp_file:
+            # Detect if a NEW CP file was uploaded (different from previous)
+            prev_cp_name = st.session_state.get("_audit_cp_filename", "")
+            if cp_file.name != prev_cp_name:
+                # New CP — clear old cached fields so they get re-extracted
+                st.session_state["_audit_cp_filename"] = cp_file.name
+                st.session_state.audit_cp_fields = {}
+                st.session_state.audit_results = {}
+                st.session_state.audit_comparison = []
+                st.session_state.audit_cell_statuses = []
+
+            st.session_state["audit_cp_file"] = cp_file
+            st.success(f"CP uploaded: {cp_file.name}")
+
+    # If we already extracted CP fields from a previous run, reuse them
+    if not cp_fields:
+        cp_fields = st.session_state.get("audit_cp_fields", {})
+
+    # If no CP at all (no session data, no upload, no previous extraction), stop here
+    if not cp_fields and "audit_cp_file" not in st.session_state:
         return
 
-    # Only initialize from CP data on first load — don't overwrite edits
-    if st.session_state.audit_cp_context is None:
-        st.session_state.audit_cp_context = _existing_cp
+    # ── TGS Reference Code (always visible — CP usually doesn't contain it) ──
+    tgs_val = cp_fields.get("tgs_ref_code") or st.session_state.get("audit_tgs_input", "")
+    tgs_input = st.text_input(
+        "Course Ref Code (TGS) *",
+        value=tgs_val,
+        placeholder="e.g. TGS-2024001234",
+        key=f"audit_tgs_input_{_get_clear_id()}",
+    )
+    cp_fields["tgs_ref_code"] = tgs_input
 
-    if st.session_state.audit_cp_context:
-        cp_ctx = st.session_state.audit_cp_context
+    st.session_state.audit_cp_fields = cp_fields
 
-        # Editable company name override
-        current_company = cp_ctx.get("Name_of_Organisation", "")
-        if "audit_company_override" not in st.session_state:
-            st.session_state.audit_company_override = current_company
+    st.divider()
 
-        new_company = st.text_input(
-            "Company Name (editable — overrides CP value for audit)",
-            value=st.session_state.audit_company_override,
-            key="audit_company_input",
-        )
-        if new_company != st.session_state.audit_company_override:
-            st.session_state.audit_company_override = new_company
+    # ── Step 2: Audit Checklist ──
+    audit_checks = _get_audit_checks()
+    all_field_keys = [field_key for _, field_key, _, _ in audit_checks]
+    all_display_names = [display_name for display_name, _, _, _ in audit_checks]
 
-        # Apply company override to CP context for audit
-        cp_ctx_for_audit = dict(cp_ctx)
-        cp_ctx_for_audit["Name_of_Organisation"] = st.session_state.audit_company_override
-
-        cp_fields = _extract_cp_fields(cp_ctx_for_audit)
-        st.session_state.audit_cp_fields = cp_fields
-
-        with st.expander("CP Source of Truth (extracted fields)", expanded=False):
-            st.json(cp_fields)
-
-        # ── Upload documents to audit ──
-        st.subheader("Upload Documents to Audit")
-        st.write("Upload your AP, FG, LG, and/or LP documents to check against the CP.")
-
-        uploaded_files = st.file_uploader(
-            "Upload courseware documents",
-            type=["docx", "pdf"],
-            accept_multiple_files=True,
-            key="audit_doc_uploader",
+    with st.expander("Audit Checklist", expanded=False):
+        st.caption("All items are checked by default. Deselect any items you want to skip.")
+        selected_checks = st.multiselect(
+            "Fields to audit",
+            options=all_field_keys,
+            default=all_field_keys,
+            format_func=lambda k: next(
+                (d for d, fk, _, _ in audit_checks if fk == k), k
+            ),
+            key="audit_checklist",
+            label_visibility="collapsed",
         )
 
-        if uploaded_files:
-            for uploaded_file in uploaded_files:
-                fname = uploaded_file.name
-                # Auto-detect doc type from filename
-                default_type = 0
-                fname_upper = fname.upper()
-                for i, dt in enumerate(DOC_TYPES):
-                    if fname_upper.startswith(dt) or f"_{dt}_" in fname_upper or f"_{dt}." in fname_upper:
-                        default_type = i
-                        break
+    if not selected_checks:
+        st.warning("Select at least one item to check.")
+        return
 
-                col1, col2 = st.columns([3, 1])
-                with col1:
-                    st.text(fname)
-                with col2:
-                    doc_type = st.selectbox(
-                        "Type",
-                        DOC_TYPES,
-                        index=default_type,
-                        key=f"audit_type_{fname}",
-                        label_visibility="collapsed",
-                    )
+    st.session_state.audit_selected_checks = selected_checks
 
-                st.session_state.audit_docs[f"{doc_type}: {fname}"] = {
-                    "file": uploaded_file,
-                    "type": doc_type,
-                    "name": fname,
-                }
+    st.divider()
 
-        # ── Run Audit ──
-        if st.button("Run Audit Against CP", type="primary"):
-            docs = st.session_state.audit_docs
-            if not docs:
-                st.error("Please upload at least 1 document to audit.")
-            else:
-                from courseware_agents.audit.audit_agent import extract_audit_fields
+    # ── Step 3: Upload Courseware Documents ──
+    st.subheader("Upload Courseware Documents")
+    _upload_docs_section()
 
-                # Extract text + run audit agent on each document
-                audit_results = {}
-                for label, doc_info in docs.items():
-                    file_obj = doc_info["file"]
-                    fname = doc_info["name"]
-                    file_bytes = file_obj.getvalue()
-
-                    with st.spinner(f"Parsing {fname}..."):
-                        ext = fname.rsplit(".", 1)[-1].lower()
-                        if ext == "docx":
-                            text = extract_text_from_docx(file_bytes)
-                        elif ext == "pdf":
-                            text = extract_text_from_pdf(file_bytes)
-                        else:
-                            text = ""
-
-                    if not text.strip():
-                        st.warning(f"No text extracted from {fname}")
-                        continue
-
-                    with st.spinner(f"Auditing {label} against CP..."):
-                        try:
-                            result = asyncio.run(extract_audit_fields(text, doc_info["type"]))
-                            audit_results[label] = result
-                        except Exception as e:
-                            st.error(f"Error auditing {label}: {e}")
-                            audit_results[label] = {}
-
-                st.session_state.audit_results = audit_results
-
-                # Run comparison against CP
-                comparison = run_cp_cross_check(cp_fields, audit_results)
-                st.session_state.audit_comparison = comparison
-
-                st.success(f"Audit complete. Checked {len(audit_results)} document(s) against CP.")
-                st.rerun()
+    # ── Run Audit ──
+    _run_audit_button(cp_fields, selected_checks)
 
     # ── Display Results ──
-    if st.session_state.audit_comparison:
-        comparison = st.session_state.audit_comparison
-        audit_results = st.session_state.audit_results
-        cp_fields = st.session_state.audit_cp_fields
+    _display_results(selected_checks)
 
-        st.subheader("Audit Results — CP vs Documents")
 
-        # Build DataFrame
-        df = pd.DataFrame(comparison)
-        status_col = df.pop("_status")
+def _apply_company_overrides(cp_fields: dict):
+    """Fill in company name + UEN from company list only if it matches the CP.
 
-        def highlight_row(row):
-            idx = row.name
-            status = status_col.iloc[idx]
-            if status == "mismatch":
-                return ["background-color: #fca5a5; color: #000000"] * len(row)
-            elif status == "match":
-                return ["background-color: #86efac; color: #000000"] * len(row)
-            elif status in ("missing_in_doc", "skip"):
-                return ["background-color: #fde68a; color: #000000"] * len(row)
-            return [""] * len(row)
+    The CP is the source of truth. The company list is only used when:
+    1. The CP company name matches the company list (same company), OR
+    2. The CP doesn't have a company name at all.
+    This prevents overriding with a completely different company's data.
+    """
+    try:
+        from company.company_manager import get_selected_company
+        default_org = get_selected_company()
+        if not default_org:
+            return
 
-        styled = df.style.apply(highlight_row, axis=1)
-        st.dataframe(styled, use_container_width=True, hide_index=True)
+        cp_company = cp_fields.get("company_name", "")
+        list_company = default_org.get("name", "")
 
-        # Summary metrics
-        statuses = status_col.tolist()
-        mismatches = statuses.count("mismatch")
-        matches = statuses.count("match")
-        missing = statuses.count("missing_in_doc") + statuses.count("missing") + statuses.count("skip")
+        # Check if the company list matches the CP's company
+        cp_norm = _normalize(cp_company)
+        list_norm = _normalize(list_company)
+        is_same_company = (not cp_norm) or (cp_norm and list_norm and cp_norm == list_norm)
 
-        col1, col2, col3 = st.columns(3)
-        col1.metric("Matches CP", matches)
-        col2.metric("Mismatches", mismatches)
-        col3.metric("Missing/Skipped", missing)
+        if is_same_company:
+            if not cp_fields.get("company_name") and default_org.get("name"):
+                cp_fields["company_name"] = default_org["name"]
+            if not cp_fields.get("uen") and default_org.get("uen"):
+                cp_fields["uen"] = default_org["uen"]
+    except Exception:
+        pass
 
-        # ── Auto-Fix ──
-        if mismatches > 0:
-            st.warning(f"Found {mismatches} field(s) that don't match the CP.")
 
-            st.subheader("Auto-Fix Mismatches")
-            st.write("Replace mismatched values in your documents with the correct CP values.")
+def _upload_docs_section():
+    """Shared file uploader for courseware documents."""
+    uploaded_files = st.file_uploader(
+        "Upload AP, FG, LG, LP documents",
+        type=["docx", "doc", "xlsx", "xls"],
+        accept_multiple_files=True,
+        key=f"audit_doc_uploader_{_get_clear_id()}",
+    )
 
-            if st.button("Auto-Fix All Documents", type="primary"):
-                fixed_files = {}
-                docs = st.session_state.audit_docs
+    # Rebuild audit_docs fresh from current uploads (don't accumulate old files)
+    current_docs = {}
 
-                for label, doc_info in docs.items():
-                    fname = doc_info["name"]
-                    ext = fname.rsplit(".", 1)[-1].lower()
+    if uploaded_files:
+        # Clear old results when files change
+        current_names = sorted(f.name for f in uploaded_files)
+        prev_names = sorted(d["name"] for d in st.session_state.audit_docs.values()) if st.session_state.audit_docs else []
+        if current_names != prev_names:
+            st.session_state.audit_results = {}
+            st.session_state.audit_comparison = []
+            st.session_state.audit_cell_statuses = []
 
-                    if ext != "docx":
-                        st.warning(f"Cannot auto-fix {fname} — only DOCX files are supported for auto-fix.")
-                        continue
+        for uploaded_file in uploaded_files:
+            fname = uploaded_file.name
+            # Auto-detect doc type from filename
+            default_type = 0
+            fname_upper = fname.upper()
+            for i, dt in enumerate(DOC_TYPES):
+                if fname_upper.startswith(dt) or f"_{dt}_" in fname_upper or f"_{dt}." in fname_upper:
+                    default_type = i
+                    break
 
-                    doc_fields = audit_results.get(label, {})
-                    replacements = _build_replacements(cp_fields, doc_fields)
+            col1, col2 = st.columns([3, 1])
+            with col1:
+                st.text(fname)
+            with col2:
+                doc_type = st.selectbox(
+                    "Type",
+                    DOC_TYPES,
+                    index=default_type,
+                    key=f"audit_type_{fname}",
+                    label_visibility="collapsed",
+                )
 
-                    if not replacements:
-                        st.info(f"{label}: No fixable mismatches found.")
-                        continue
+            current_docs[f"{doc_type}: {fname}"] = {
+                "file": uploaded_file,
+                "type": doc_type,
+                "name": fname,
+            }
 
-                    with st.spinner(f"Fixing {fname}... ({len(replacements)} replacement(s))"):
-                        file_bytes = doc_info["file"].getvalue()
-                        try:
-                            fixed_bytes, fix_count = _fix_text_in_docx(file_bytes, replacements)
-                            fixed_files[label] = {
-                                "bytes": fixed_bytes,
-                                "name": fname.replace(".docx", "_FIXED.docx"),
-                                "replacements": replacements,
-                                "fix_count": fix_count,
-                            }
-                        except Exception as e:
-                            st.error(f"Error fixing {fname}: {e}")
+    st.session_state.audit_docs = current_docs
 
-                if fixed_files:
-                    st.success(f"Fixed {len(fixed_files)} document(s)!")
 
-                    for label, fix_info in fixed_files.items():
-                        with st.expander(f"{label} — {fix_info['fix_count']} fix(es) applied"):
-                            for old_text, new_text in fix_info["replacements"]:
-                                st.markdown(f"- ~~{old_text}~~ → **{new_text}**")
+def _run_audit_button(cp_fields: dict, selected_checks: list[str]):
+    """Run audit button and processing."""
+    if st.button("Run Audit", type="primary"):
+        docs = st.session_state.audit_docs
+        if not docs:
+            st.error("Please upload at least 1 courseware document to audit.")
+            return
 
-                            st.download_button(
-                                f"Download {fix_info['name']}",
-                                data=fix_info["bytes"],
-                                file_name=fix_info["name"],
-                                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                                key=f"download_{label}",
-                            )
+        from courseware_agents.audit.audit_agent import extract_audit_fields
+
+        # ── Always re-extract CP fields from uploaded file ──
+        # This ensures fresh data on every audit run (no stale cache from previous courses)
+        if "audit_cp_file" in st.session_state:
+            cp_file = st.session_state["audit_cp_file"]
+            fname = cp_file.name
+            file_bytes = cp_file.getvalue()
+            ext = fname.rsplit(".", 1)[-1].lower()
+
+            with st.spinner(f"Extracting CP fields from {fname}..."):
+                cp_text = _extract_text(file_bytes, ext)
+                if cp_text.strip():
+                    try:
+                        cp_extracted = extract_audit_fields(cp_text, "CP")
+                        # Preserve manually entered TGS if CP doesn't have one
+                        manual_tgs = cp_fields.get("tgs_ref_code", "")
+                        cp_fields = {
+                            "course_title": cp_extracted.get("course_title"),
+                            "tgs_ref_code": cp_extracted.get("tgs_ref_code") or manual_tgs,
+                            "topics": cp_extracted.get("topics", []),
+                            "training_hours": cp_extracted.get("durations", {}).get("training_hours") if isinstance(cp_extracted.get("durations"), dict) else None,
+                            "assessment_hours": cp_extracted.get("durations", {}).get("assessment_hours") if isinstance(cp_extracted.get("durations"), dict) else None,
+                            "company_name": cp_extracted.get("company_name"),
+                            "uen": cp_extracted.get("uen"),
+                            "learning_outcomes": cp_extracted.get("learning_outcomes", []),
+                            "k_statements": cp_extracted.get("k_statements", []),
+                            "a_statements": cp_extracted.get("a_statements", []),
+                            "assessment_methods": cp_extracted.get("assessment_methods", []),
+                            "instructional_methods": cp_extracted.get("instructional_methods", []),
+                            "tsc_code": cp_extracted.get("tsc_code"),
+                            "tsc_title": cp_extracted.get("tsc_title"),
+                        }
+                        _apply_company_overrides(cp_fields)
+                        st.session_state.audit_cp_fields = cp_fields
+                    except Exception as e:
+                        st.error(f"Error extracting CP fields: {e}")
+                        return
                 else:
-                    st.info("No documents needed fixing or only non-DOCX files were uploaded.")
-        else:
-            st.success("All documents match the CP perfectly!")
+                    st.error(f"No text could be extracted from {fname}")
+                    return
 
-        # Raw extraction details
-        with st.expander("Raw Extracted Fields (per document)", expanded=False):
-            for label, data in audit_results.items():
-                st.markdown(f"**{label}**")
-                st.json(data)
+        if not cp_fields:
+            st.error("No CP data available. Upload a CP document first.")
+            return
+
+        # ── Extract fields from each courseware document ──
+        audit_results = {}
+        for label, doc_info in docs.items():
+            file_obj = doc_info["file"]
+            fname = doc_info["name"]
+            file_bytes = file_obj.getvalue()
+
+            with st.spinner(f"Parsing {fname}..."):
+                ext = fname.rsplit(".", 1)[-1].lower()
+                text = _extract_text(file_bytes, ext)
+
+            if not text.strip():
+                st.warning(f"No text extracted from {fname}")
+                continue
+
+            with st.spinner(f"Auditing {label}..."):
+                try:
+                    result = extract_audit_fields(text, doc_info["type"])
+                    # Map duration fields for our simplified checks
+                    if isinstance(result.get("durations"), dict):
+                        result["training_hours"] = result["durations"].get("training_hours")
+                        result["assessment_hours"] = result["durations"].get("assessment_hours")
+                    # Ensure list fields default to empty lists
+                    for list_key in ("learning_outcomes", "k_statements", "a_statements",
+                                     "assessment_methods", "instructional_methods"):
+                        if list_key not in result or result[list_key] is None:
+                            result[list_key] = []
+                    audit_results[label] = result
+                except Exception as e:
+                    st.error(f"Error auditing {label}: {e}")
+                    audit_results[label] = {}
+
+        st.session_state.audit_results = audit_results
+
+        # Always apply company overrides before comparison
+        # so UEN and company_name are sourced from company list
+        _apply_company_overrides(cp_fields)
+        st.session_state.audit_cp_fields = cp_fields
+
+        comparison, cell_statuses, cell_details = run_audit(cp_fields, audit_results, selected_checks)
+        st.session_state.audit_comparison = comparison
+        st.session_state.audit_cell_statuses = cell_statuses
+        st.session_state.audit_cell_details = cell_details
+
+        st.success(f"Audit complete. Checked {len(audit_results)} document(s).")
+        st.rerun()
+
+
+def _display_results(selected_checks):
+    """Display audit results as a per-document checklist with pass/fail icons."""
+    if not st.session_state.audit_comparison:
+        return
+
+    comparison = st.session_state.audit_comparison
+    cell_statuses = st.session_state.get("audit_cell_statuses", [])
+    cell_details = st.session_state.get("audit_cell_details", [])
+    audit_results = st.session_state.audit_results
+    cp_fields = st.session_state.audit_cp_fields
+
+    st.subheader("Audit Results")
+
+    # Reorganise data: per document → list of (field, cp_val, doc_val, status)
+    # Get all doc columns (everything except "Field" and "CP (Source of Truth)")
+    doc_columns = [c for c in comparison[0].keys() if c not in ("Field", "CP (Source of Truth)")] if comparison else []
+
+    total_pass = 0
+    total_fail = 0
+    total_na = 0
+    failed_docs = []
+
+    for doc_col in doc_columns:
+        doc_pass = 0
+        doc_fail = 0
+        doc_items = []
+
+        for row_idx, row in enumerate(comparison):
+            status = cell_statuses[row_idx].get(doc_col, "neutral") if row_idx < len(cell_statuses) else "neutral"
+            detail = cell_details[row_idx].get(doc_col, "") if row_idx < len(cell_details) else ""
+            field_name = row["Field"]
+            cp_val = row.get("CP (Source of Truth)", "N/A")
+            doc_val = row.get(doc_col, "N/A")
+
+            if status == "skip":
+                total_na += 1
+                continue  # Not applicable — don't show
+
+            if status == "match":
+                icon = ":green[PASS]"
+                doc_pass += 1
+                total_pass += 1
+            elif status == "mismatch":
+                icon = ":red[FAIL]"
+                doc_fail += 1
+                total_fail += 1
+            elif status in ("missing_in_doc", "missing"):
+                icon = ":orange[MISSING]"
+                doc_fail += 1
+                total_fail += 1
+            else:
+                icon = ":gray[—]"
+                total_na += 1
+                continue
+
+            doc_items.append((icon, field_name, cp_val, doc_val, status, detail))
+
+        # Expandable box per document with full checklist
+        all_passed = doc_fail == 0
+        header_icon = ":white_check_mark:" if all_passed else ":x:"
+        header_summary = f"{doc_pass} passed" if all_passed else f"{doc_pass} passed, {doc_fail} failed"
+
+        with st.expander(f"{header_icon} {doc_col} — {header_summary}", expanded=(not all_passed)):
+            for icon, field_name, cp_val, doc_val, status, detail in doc_items:
+                display_val = str(doc_val)[:100] + ("..." if len(str(doc_val)) > 100 else "")
+
+                if status == "match":
+                    st.markdown(f"&ensp; :white_check_mark: &ensp; **{field_name}** — {display_val}")
+                elif status == "mismatch":
+                    st.markdown(f"&ensp; :x: &ensp; **{field_name}** — {display_val}")
+                    st.caption(f"&emsp;&emsp;&emsp; Expected: {str(cp_val)[:100]}")
+                elif status in ("missing_in_doc", "missing"):
+                    st.markdown(f"&ensp; :warning: &ensp; **{field_name}** — Missing in document")
+
+        if not all_passed:
+            failed_docs.append(doc_col)
+
+    # Overall summary
+    st.divider()
+    if total_fail == 0:
+        st.success(f"All {total_pass} checks passed across all documents!")
+    else:
+        st.warning(f"{total_fail} issue(s) found in: {', '.join(failed_docs)}")
+
+        pass  # Issues already shown inline above
+
+    # ── Clear All ──
+    st.divider()
+    if st.button("Clear All & Start New Audit", key="audit_clear_btn"):
+        st.session_state["_audit_clear_requested"] = True
+        st.rerun()
