@@ -116,6 +116,8 @@ def extract_text_from_excel(file_bytes):
         skip_sheets = {
             "tsc_skill_codes", "tsc_ccs_k&a", "tsc_sector_track", "ssoc_5d",
             "checks", "other_ref", "change_log", "read before filling",
+            "annex a", "annex b", "annex c",
+            "(not for tp use) outcome", "4 - declarations",
         }
         parts = []
         for ws in wb.worksheets:
@@ -127,6 +129,107 @@ def extract_text_from_excel(file_bytes):
                 if cells:
                     parts.append(" | ".join(cells))
         return "\n".join(parts)
+    finally:
+        os.remove(tmp_path)
+
+
+def extract_cp_fields_from_excel(file_bytes):
+    """Directly extract CP fields from SSG Excel format using known cell positions.
+
+    This is more reliable than AI extraction for structured Excel CPs.
+    Returns dict of CP fields, or None if the format is not recognised.
+    """
+    if not OPENPYXL_AVAILABLE:
+        return None
+    import re
+    with tempfile.NamedTemporaryFile(delete=False, suffix=".xlsx") as tmp:
+        tmp.write(file_bytes)
+        tmp_path = tmp.name
+
+    try:
+        wb = openpyxl.load_workbook(tmp_path, data_only=True)
+
+        fields = {}
+
+        # ── Sheet: 1 - Course Particulars ──
+        cp_sheet = None
+        for name in wb.sheetnames:
+            if "course particulars" in name.lower() or name == "1 - Course Particulars":
+                cp_sheet = wb[name]
+                break
+
+        if cp_sheet:
+            # Course Title — typically C3
+            for row in range(2, 10):
+                label = cp_sheet.cell(row=row, column=2).value
+                val = cp_sheet.cell(row=row, column=3).value
+                if label and "course title" in str(label).lower() and val:
+                    fields["course_title"] = str(val).strip()
+                    break
+
+            # TSC Code — typically C10 (format: "CODE: Title")
+            for row in range(8, 20):
+                label = cp_sheet.cell(row=row, column=2).value
+                val = cp_sheet.cell(row=row, column=3).value
+                if label and "tsc" in str(label).lower() and val and str(val).strip():
+                    tsc_full = str(val).strip()
+                    # Parse "ICT-BAS-0047-1.1: Title Name"
+                    m = re.match(r'^([A-Z]{2,4}-[A-Z]{2,4}-\d{4}-[\d.]+)\s*:\s*(.+)', tsc_full)
+                    if m:
+                        fields["tsc_code"] = m.group(1)
+                        fields["tsc_title"] = m.group(2).strip()
+                    else:
+                        fields["tsc_code"] = tsc_full
+                    break
+
+            # Company Name — typically C2
+            for row in range(1, 5):
+                label = cp_sheet.cell(row=row, column=2).value
+                val = cp_sheet.cell(row=row, column=3).value
+                if label and ("training provider" in str(label).lower() or "organisation" in str(label).lower()) and val:
+                    fields["company_name"] = str(val).strip()
+                    break
+
+        # ── Sheet: 3 - Summary ──
+        sum_sheet = None
+        for name in wb.sheetnames:
+            if "summary" in name.lower() or name == "3 - Summary":
+                sum_sheet = wb[name]
+                break
+
+        if sum_sheet:
+            # Scan for training/assessment hours
+            for row in sum_sheet.iter_rows(min_row=1, max_row=10, values_only=False):
+                for cell in row:
+                    val = str(cell.value or "").strip().lower()
+                    if "total instructional" in val or "total training" in val:
+                        # Hours value is in the next column
+                        hours_cell = sum_sheet.cell(row=cell.row, column=cell.column + 1)
+                        if hours_cell.value:
+                            fields["training_hours"] = str(hours_cell.value).strip()
+                    if "total assessment" in val:
+                        hours_cell = sum_sheet.cell(row=cell.row, column=cell.column + 1)
+                        if hours_cell.value:
+                            fields["assessment_hours"] = str(hours_cell.value).strip()
+
+            # Extract topics from learning unit rows
+            topics = []
+            for row in sum_sheet.iter_rows(min_row=6, max_row=sum_sheet.max_row, values_only=False):
+                # Topics are typically in column E, with "T1:", "T2:" prefixes
+                for cell in row:
+                    val = str(cell.value or "").strip()
+                    if re.search(r'T\d+\s*:', val):
+                        # Extract individual topic titles
+                        for t_match in re.finditer(r'T\d+\s*:\s*([^\n]+)', val):
+                            topic = t_match.group(1).strip()
+                            if topic and topic not in topics:
+                                topics.append(topic)
+            if topics:
+                fields["topics"] = topics
+
+        return fields if fields else None
+    except Exception:
+        return None
     finally:
         os.remove(tmp_path)
 
@@ -163,15 +266,23 @@ def _normalize_number(val_str):
     """Extract numeric value from a duration string, normalized to hours.
 
     Handles: '22 hrs', '22.0', '30 mins', '1.5 hours', '90 minutes',
-             '1 hour 30 minutes', '1 hr', '30 min'.
+             '1 hour 30 minutes', '30 hour 0 minutes', '1 hr', '30 min'.
     """
     import re
     if not val_str:
         return None
     s = str(val_str).strip().lower()
 
-    # Check if value is in minutes (e.g. "30 mins", "90 minutes", "30 min")
-    if re.search(r'\bmin', s):
+    # Compound format: "X hour(s) Y minute(s)" (e.g. "30 hour 0 minutes")
+    compound = re.match(r'(\d+\.?\d*)\s*hours?\s+(\d+\.?\d*)\s*min', s)
+    if compound:
+        hours = float(compound.group(1))
+        mins = float(compound.group(2))
+        total = hours + mins / 60
+        return int(total) if total == int(total) else round(total, 2)
+
+    # Minutes only (e.g. "30 mins", "90 minutes") — but NOT compound format
+    if re.search(r'\bmin', s) and not re.search(r'\bhour', s):
         match = re.search(r'(\d+\.?\d*)', s)
         if match:
             mins = float(match.group(1))
@@ -179,7 +290,7 @@ def _normalize_number(val_str):
             return int(hours) if hours == int(hours) else round(hours, 2)
         return None
 
-    # Otherwise treat as hours (default)
+    # Hours (default): "22 hrs", "30.0", "1.5 hours"
     match = re.search(r'(\d+\.?\d*)', s)
     if match:
         num = float(match.group(1))
@@ -261,6 +372,17 @@ def _compare_field(cp_val, doc_val, field_type, extra_cp=None, field_key=None):
             return "match", "Found in document"
         if cp_norm == doc_norm:
             return "match", "Matches CP"
+        # Substring match: if one contains the other, it's a match
+        # Handles "Problem Solving with AI" vs "Fast and Creative Problem Solving with Generative AI"
+        if cp_norm in doc_norm or doc_norm in cp_norm:
+            return "match", "Matches CP"
+        # TSC code: match if numeric part is the same (e.g. ICT-BAS-0047-1.1 vs ICT-INT-0047-1.1)
+        import re as _re
+        if field_key and "tsc_code" in field_key:
+            cp_nums = _re.findall(r'\d+', str(cp_val or ""))
+            doc_nums = _re.findall(r'\d+', str(doc_val or ""))
+            if cp_nums and doc_nums and cp_nums == doc_nums:
+                return "match", "Matches CP"
         return "mismatch", "Does NOT match CP"
 
     elif field_type == "list":
@@ -273,7 +395,7 @@ def _compare_field(cp_val, doc_val, field_type, extra_cp=None, field_key=None):
         if cp_count == 0:
             return "skip", "Not in CP"
 
-        # Content match: extract significant keywords and check overlap
+        # Content match: extract domain-specific keywords and check overlap
         import re as _re
         _stop_words = {
             'the', 'and', 'for', 'with', 'that', 'this', 'from', 'will', 'are',
@@ -283,10 +405,16 @@ def _compare_field(cp_val, doc_val, field_type, extra_cp=None, field_key=None):
             'such', 'also', 'between', 'within', 'through', 'about', 'which',
             'criteria', 'factors', 'various', 'different', 'key', 'relevant',
             'appropriate', 'effective', 'process', 'processes', 'systems',
+            'understanding', 'developing', 'applying', 'identifying', 'making',
+            'analysis', 'plan', 'plans', 'planning', 'overview', 'introduction',
+            'describe', 'explain', 'discuss', 'learners', 'knowledge', 'skills',
+            'ability', 'competency', 'performance', 'assessment', 'training',
+            'course', 'unit', 'module', 'learning', 'outcome', 'outcomes',
+            'topics', 'topic', 'title', 'name', 'statement', 'statements',
         }
 
         def _extract_keywords(items):
-            """Extract significant keywords (4+ chars) from list items."""
+            """Extract domain-specific keywords (4+ chars) from list items."""
             words = set()
             for item in items:
                 if not item:
@@ -297,21 +425,42 @@ def _compare_field(cp_val, doc_val, field_type, extra_cp=None, field_key=None):
                         words.add(w)
             return words
 
+        def _extract_stems(items):
+            """Extract word stems (first 5 chars) for fuzzy matching."""
+            stems = set()
+            for item in items:
+                if not item:
+                    continue
+                cleaned = _re.sub(r'^(T\d+|LU\d+|K\d+|A\d+|ELO?\d+|Topic\s*\d+)\s*[:.]?\s*', '', str(item), flags=_re.IGNORECASE).strip()
+                for w in _re.findall(r'[a-zA-Z]{5,}', cleaned.lower()):
+                    if w not in _stop_words:
+                        stems.add(w[:5])
+            return stems
+
         cp_keywords = _extract_keywords(cp_val or [])
         doc_keywords = _extract_keywords(doc_val or [])
 
         if not cp_keywords or not doc_keywords:
             return "match", "Matches CP"
 
-        # Bidirectional check: overlap from both sides
+        # Level 1: exact keyword overlap
         overlap = cp_keywords & doc_keywords
         cp_ratio = len(overlap) / len(cp_keywords) if cp_keywords else 0
         doc_ratio = len(overlap) / len(doc_keywords) if doc_keywords else 0
-        # Use the higher ratio — if either side has good coverage, it's a match
         best_ratio = max(cp_ratio, doc_ratio)
 
-        if best_ratio >= 0.25:
+        if best_ratio >= 0.2:
             return "match", "Matches CP"
+
+        # Level 2: stem matching (handles rephrasing like "identifying" vs "identification")
+        cp_stems = _extract_stems(cp_val or [])
+        doc_stems = _extract_stems(doc_val or [])
+        stem_overlap = cp_stems & doc_stems
+        stem_ratio = len(stem_overlap) / len(cp_stems) if cp_stems else 0
+
+        if stem_ratio >= 0.2:
+            return "match", "Matches CP"
+
         return "mismatch", "Topics do not match CP"
 
     elif field_type == "duration_field":
@@ -538,6 +687,11 @@ def app():
             if key.startswith("audit_") or key.startswith("_audit_"):
                 if key != "_audit_clear_count":
                     del st.session_state[key]
+        # Also clear CP/TGS session data so audit starts completely fresh
+        st.session_state.pop("extracted_course_info", None)
+        st.session_state.pop("_extract_cp_file_path", None)
+        st.session_state.pop("_extract_cp_file_name", None)
+        st.session_state.pop("_user_tgs_ref_no", None)
         st.session_state["_audit_clear_requested"] = False
         st.rerun()
 
@@ -547,35 +701,87 @@ def app():
     _has_session_cp = st.session_state.get("extracted_course_info") is not None
     cp_fields = {}
 
+    # Detect if the CP file changed since last audit (prevents stale data)
+    current_cp_name = st.session_state.get("_extract_cp_file_name", "")
+    prev_audit_cp = st.session_state.get("_audit_last_cp_name", "")
+    if current_cp_name and current_cp_name != prev_audit_cp:
+        # CP changed — clear old audit data
+        st.session_state["_audit_last_cp_name"] = current_cp_name
+        st.session_state.audit_cp_fields = {}
+        st.session_state.audit_results = {}
+        st.session_state.audit_comparison = []
+        st.session_state.audit_cell_statuses = []
+
+    # Always show CP uploader — uploaded CP overrides session data
+    st.subheader("Upload Course Proposal (CP)")
     if _has_session_cp:
-        # Auto-use CP from session
-        cp_context = st.session_state["extracted_course_info"]
-        cp_fields = _extract_cp_fields(cp_context)
+        st.info("CP data available from Extract Course Info. You can also upload a different CP below.")
+    cp_file = st.file_uploader(
+        "Upload CP document",
+        type=["docx", "doc", "xlsx", "xls"],
+        key=f"audit_cp_uploader_{_get_clear_id()}",
+    )
+
+    if cp_file:
+        # Detect if a NEW CP file was uploaded (different from previous)
+        prev_cp_name = st.session_state.get("_audit_cp_filename", "")
+        if cp_file.name != prev_cp_name:
+            # New CP — clear old cached fields so they get re-extracted
+            st.session_state["_audit_cp_filename"] = cp_file.name
+            st.session_state.audit_cp_fields = {}
+            st.session_state.audit_results = {}
+            st.session_state.audit_comparison = []
+            st.session_state.audit_cell_statuses = []
+
+        st.session_state["audit_cp_file"] = cp_file
+
+        # For Excel CPs: immediately extract key fields using direct cell parsing
+        # This gives accurate CP fields without waiting for "Run Audit"
+        ext = cp_file.name.rsplit(".", 1)[-1].lower()
+        if ext in ("xlsx", "xls"):
+            excel_fields = extract_cp_fields_from_excel(cp_file.getvalue())
+            if excel_fields:
+                cp_fields = excel_fields
+                _apply_company_overrides(cp_fields)
+                st.session_state.audit_cp_fields = cp_fields
+
+        st.success(f"CP uploaded: {cp_file.name}")
+    elif _has_session_cp:
+        # No uploaded CP — use session data from Extract Course Info
+        # IMPORTANT: Always try to re-extract from the actual CP file first,
+        # because extracted_course_info may be stale if the user extracted
+        # a different course since the last audit.
+        cp_file_path = st.session_state.get("_extract_cp_file_path")
+        cp_file_name = st.session_state.get("_extract_cp_file_name", "")
+        _used_direct = False
+
+        if cp_file_path and os.path.exists(cp_file_path):
+            is_excel = cp_file_name.lower().endswith((".xlsx", ".xls"))
+            if is_excel:
+                try:
+                    with open(cp_file_path, "rb") as f:
+                        excel_fields = extract_cp_fields_from_excel(f.read())
+                    if excel_fields and excel_fields.get("course_title"):
+                        cp_fields = excel_fields
+                        # Supplement with session data for fields Excel can't extract
+                        cp_context = st.session_state["extracted_course_info"]
+                        session_fields = _extract_cp_fields(cp_context)
+                        for key in ("learning_outcomes", "k_statements", "a_statements",
+                                    "assessment_methods", "instructional_methods"):
+                            if not cp_fields.get(key) and session_fields.get(key):
+                                cp_fields[key] = session_fields[key]
+                        _used_direct = True
+                except Exception:
+                    pass
+
+        if not _used_direct:
+            # Fallback: use session extracted_course_info (DOCX CPs or Excel extraction failed)
+            cp_context = st.session_state["extracted_course_info"]
+            cp_fields = _extract_cp_fields(cp_context)
+
         _apply_company_overrides(cp_fields)
-        st.success("CP data loaded from session (Extract Course Info).")
-    else:
-        # Need to upload CP
-        st.subheader("Upload Course Proposal (CP)")
-        st.info("No CP data in session. Upload your CP document, or go to **Extract Course Info** first.")
-        cp_file = st.file_uploader(
-            "Upload CP document",
-            type=["docx", "doc", "xlsx", "xls"],
-            key=f"audit_cp_uploader_{_get_clear_id()}",
-        )
-
-        if cp_file:
-            # Detect if a NEW CP file was uploaded (different from previous)
-            prev_cp_name = st.session_state.get("_audit_cp_filename", "")
-            if cp_file.name != prev_cp_name:
-                # New CP — clear old cached fields so they get re-extracted
-                st.session_state["_audit_cp_filename"] = cp_file.name
-                st.session_state.audit_cp_fields = {}
-                st.session_state.audit_results = {}
-                st.session_state.audit_comparison = []
-                st.session_state.audit_cell_statuses = []
-
-            st.session_state["audit_cp_file"] = cp_file
-            st.success(f"CP uploaded: {cp_file.name}")
+        st.session_state.audit_cp_fields = cp_fields
+        st.success(f"CP data loaded from session: {cp_file_name or 'Extract Course Info'}.")
 
     # If we already extracted CP fields from a previous run, reuse them
     if not cp_fields:
@@ -586,7 +792,17 @@ def app():
         return
 
     # ── TGS Reference Code (always visible — CP usually doesn't contain it) ──
-    tgs_val = cp_fields.get("tgs_ref_code") or st.session_state.get("audit_tgs_input", "")
+    # Auto-fill from Extract Course Info if available
+    tgs_val = cp_fields.get("tgs_ref_code") or ""
+    if not tgs_val:
+        # Try from Extract Course Info session
+        ext_info = st.session_state.get("extracted_course_info", {})
+        if ext_info:
+            tgs_val = ext_info.get("TGS_Ref_No", "") or ""
+        if not tgs_val:
+            tgs_val = st.session_state.get("_user_tgs_ref_no", "") or ""
+    if not tgs_val:
+        tgs_val = st.session_state.get("audit_tgs_input", "") or ""
     tgs_input = st.text_input(
         "Course Ref Code (TGS) *",
         value=tgs_val,
@@ -729,8 +945,32 @@ def _run_audit_button(cp_fields: dict, selected_checks: list[str]):
 
         from courseware_agents.audit.audit_agent import extract_audit_fields
 
-        # ── Always re-extract CP fields from uploaded file ──
-        # This ensures fresh data on every audit run (no stale cache from previous courses)
+        # ── Always re-extract CP fields fresh ──
+        # This ensures no stale cache from previous courses
+
+        # If no CP was uploaded in audit, but we have the CP file from Extract Course Info
+        if "audit_cp_file" not in st.session_state:
+            cp_file_path = st.session_state.get("_extract_cp_file_path")
+            cp_file_name = st.session_state.get("_extract_cp_file_name", "")
+            if cp_file_path and os.path.exists(cp_file_path):
+                is_excel = cp_file_name.lower().endswith((".xlsx", ".xls"))
+                if is_excel:
+                    try:
+                        with open(cp_file_path, "rb") as f:
+                            excel_fields = extract_cp_fields_from_excel(f.read())
+                        if excel_fields and excel_fields.get("course_title"):
+                            # Use Excel extraction as the primary source
+                            manual_tgs = cp_fields.get("tgs_ref_code", "")
+                            for key, val in excel_fields.items():
+                                if val:
+                                    cp_fields[key] = val
+                            if not cp_fields.get("tgs_ref_code"):
+                                cp_fields["tgs_ref_code"] = manual_tgs
+                            _apply_company_overrides(cp_fields)
+                            st.session_state.audit_cp_fields = cp_fields
+                    except Exception:
+                        pass
+
         if "audit_cp_file" in st.session_state:
             cp_file = st.session_state["audit_cp_file"]
             fname = cp_file.name
@@ -738,6 +978,11 @@ def _run_audit_button(cp_fields: dict, selected_checks: list[str]):
             ext = fname.rsplit(".", 1)[-1].lower()
 
             with st.spinner(f"Extracting CP fields from {fname}..."):
+                # For Excel CPs: use direct cell extraction first (more reliable)
+                excel_fields = None
+                if ext in ("xlsx", "xls"):
+                    excel_fields = extract_cp_fields_from_excel(file_bytes)
+
                 cp_text = _extract_text(file_bytes, ext)
                 if cp_text.strip():
                     try:
@@ -760,6 +1005,16 @@ def _run_audit_button(cp_fields: dict, selected_checks: list[str]):
                             "tsc_code": cp_extracted.get("tsc_code"),
                             "tsc_title": cp_extracted.get("tsc_title"),
                         }
+
+                        # Override with direct Excel extraction (more reliable for key fields)
+                        if excel_fields:
+                            for key in ("course_title", "tsc_code", "tsc_title",
+                                        "company_name", "training_hours", "assessment_hours"):
+                                if excel_fields.get(key):
+                                    cp_fields[key] = excel_fields[key]
+                            if excel_fields.get("topics"):
+                                cp_fields["topics"] = excel_fields["topics"]
+
                         _apply_company_overrides(cp_fields)
                         st.session_state.audit_cp_fields = cp_fields
                     except Exception as e:

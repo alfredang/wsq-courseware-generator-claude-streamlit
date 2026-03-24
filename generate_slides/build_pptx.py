@@ -256,16 +256,39 @@ def add_cover(prs, course_title, tgs_code=""):
         or "tertiary" in _company_info.get("name", "").lower()
     )
 
-    if os.path.exists(WSQ_LOGO):
-        slide.shapes.add_picture(WSQ_LOGO, Emu(300000), Emu(3350000), height=Emu(700000))
+    # Logo sizing: use width-based sizing with max height cap
+    from PIL import Image as _PILImg
+    _LOGO_X = Emu(300000)
+    _MAX_LOGO_W = Emu(2800000)   # ~3.1cm max width
+    _MAX_LOGO_H = Emu(1200000)   # ~1.3cm max height
 
+    def _add_logo(slide, path, x, y):
+        """Add logo with width/height constraints so it fits neatly."""
+        if not os.path.exists(path):
+            return
+        try:
+            with _PILImg.open(path) as img:
+                iw, ih = img.size
+                aspect = iw / ih if ih > 0 else 1
+            # Calculate size: fit within max width AND max height
+            w = _MAX_LOGO_W
+            h = int(w / aspect) if aspect > 0 else w
+            if h > _MAX_LOGO_H:
+                h = _MAX_LOGO_H
+                w = int(h * aspect)
+            slide.shapes.add_picture(path, x, y, width=w, height=h)
+        except Exception:
+            slide.shapes.add_picture(path, x, y, width=_MAX_LOGO_W)
+
+    _WSQ_Y = Emu(3600000)
+    _add_logo(slide, WSQ_LOGO, _LOGO_X, _WSQ_Y)
+
+    # Company logo below WSQ
+    _COMPANY_Y = Emu(5000000)
     if is_tertiary and os.path.exists(TERTIARY_LOGO):
-        # Full Tertiary logo with tagline below WSQ
-        slide.shapes.add_picture(
-            TERTIARY_LOGO, Emu(300000), Emu(4050000), height=Emu(600000)
-        )
+        _add_logo(slide, TERTIARY_LOGO, _LOGO_X, _COMPANY_Y)
     elif os.path.exists(company_logo):
-        slide.shapes.add_picture(company_logo, Emu(300000), Emu(4050000), height=Emu(600000))
+        _add_logo(slide, company_logo, _LOGO_X, _COMPANY_Y)
 
     # --- Version info (bottom-right, black text) ---
     info_text = "Version: 1.0"
