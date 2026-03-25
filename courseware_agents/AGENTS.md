@@ -1,198 +1,191 @@
 # WSQ Courseware Generator — Multi-Agent Framework
 
-## Overview
+## How It Works
 
-This platform uses **Claude AI agents** to automate WSQ courseware creation. A user uploads a **Course Proposal (CP)**, and the system generates all required training materials automatically.
+A user uploads a **Course Proposal (CP)** → the system generates all required WSQ training materials automatically using **Claude AI agents**.
 
-All agents share a common base wrapper: `courseware_agents/base.py` → `run_agent()` / `run_agent_json()` using **Claude Agent SDK**.
+All agents use the same base wrapper: `courseware_agents/base.py` → `run_agent()` / `run_agent_json()` via **Claude Agent SDK**.
 
 ---
 
-## System Architecture
+## System Flow
 
 ```
-                         ┌─────────────────────────┐
-                         │   Course Proposal (CP)   │
-                         └────────────┬────────────┘
-                                      │
-                              ┌───────▼───────┐
-                              │ CP Interpreter │  Claude Sonnet
-                              │    (Agent)     │
-                              └───────┬───────┘
-                                      │
-                       Structured Course Data (JSON)
-                                      │
-          ┌───────────┬───────────┬───┴───┬───────────┬──────────┐
-          ▼           ▼           ▼       ▼           ▼          ▼
-    ┌──────────┐ ┌─────────┐ ┌──────┐ ┌──────┐ ┌──────────┐ ┌───────┐
-    │ AP / ASR │ │   FG    │ │  LG  │ │  LP  │ │  Slides  │ │ Audit │
-    │(Template)│ │(Template│ │(Tmpl)│ │(Tmpl)│ │(4-Agent) │ │(Agent)│
-    └──────────┘ └─────────┘ └──────┘ └──────┘ └──────────┘ └───────┘
-      No AI        No AI      No AI    No AI    Claude Haiku  Sonnet
+                      ┌──────────────────────┐
+                      │  Course Proposal (CP) │
+                      └──────────┬───────────┘
+                                 │
+                                 ▼
+                      ┌──────────────────────┐
+                      │   CP Interpreter      │  ← Claude Sonnet
+                      │   (AI Agent)          │
+                      └──────────┬───────────┘
+                                 │
+                      Structured JSON Output
+                                 │
+       ┌────────┬────────┬───────┼───────┬────────┬────────┐
+       ▼        ▼        ▼       ▼       ▼        ▼        ▼
+      AP       FG       LG      LP    Slides   Assess.   Audit
+   (Template)(Template)(Template)(Algo) (4 AI)  (AI)     (AI)
 ```
 
 ---
 
-## Agent Details
+## Features & Their Agents
 
-### 1. CP Interpreter Agent
+### 1. Extract Course Info — CP Interpreter Agent
 
-> **Purpose:** Extracts structured course data from raw Course Proposal documents
-
-| Property | Value |
-|----------|-------|
-| **File** | `courseware_agents/cp_interpreter/cp_interpreter.py` |
-| **Model** | Claude Sonnet 4 (`claude-sonnet-4-20250514`) |
-| **Tools** | `Read`, `WebFetch` (if course URL provided) |
-| **Max Turns** | 3 (or 5 with WebFetch) |
-| **Template** | `cp_interpreter/templates/cp_interpretation.md` |
-| **Input** | Raw CP document (DOCX/XLSX → parsed to markdown) |
-| **Output** | Structured JSON (course title, LUs, topics, K/A statements, assessment methods) |
+| | |
+|---|---|
+| **What it does** | Reads the CP document and extracts all course data into structured JSON |
+| **Agent file** | `cp_interpreter/cp_interpreter.py` |
+| **AI Model** | Claude Sonnet 4 |
+| **Tools** | Read, WebFetch |
+| **Prompt template** | `cp_interpreter/templates/cp_interpretation.md` |
+| **Input** | Raw CP document (DOCX or XLSX) |
+| **Output** | JSON — course title, learning units, topics, K/A statements, assessment methods, hours |
 
 ---
 
-### 2. Courseware Document Generators (AP / FG / LG)
+### 2. Generate AP/FG/LG — Courseware Agents (No AI)
 
-> **Purpose:** Fill DOCX templates with CP data — **NO AI involved**
+These agents fill DOCX templates with the CP data. **No AI is used** — it's pure Python template filling using `docxtpl`.
 
-| Document | File | Template |
-|----------|------|----------|
-| **Assessment Plan (AP)** | `courseware/assessment_plan.py` | `courseware/templates/AP_TGS-Ref-No_Course-Title_v1.docx` |
-| **Assessment Summary (ASR)** | `courseware/assessment_plan.py` | `courseware/templates/ASR_TGS-Ref-No_Course-Title_v1.docx` |
-| **Facilitator Guide (FG)** | `courseware/facilitator_guide.py` | `courseware/templates/FG_TGS-Ref-No_Course-Title_v1.docx` |
-| **Learner Guide (LG)** | `courseware/learner_guide.py` | `courseware/templates/LG_TGS-Ref-No_Course-Title_v1.docx` |
+#### AP Agent (Assessment Plan)
+| | |
+|---|---|
+| **Agent file** | `courseware/assessment_plan.py` |
+| **Template** | `courseware/templates/AP_TGS-Ref-No_Course-Title_v1.docx` |
+| **Skills** | `courseware/ap_agent/skills.md` |
+| **Tools** | `courseware/ap_agent/tools.md` |
 
-- **Technology:** `docxtpl` (Jinja2 syntax for DOCX)
-- **Model:** None — pure Python template filling
-- **Input:** Structured JSON from CP Interpreter
-- **Output:** Completed DOCX files
+#### FG Agent (Facilitator Guide)
+| | |
+|---|---|
+| **Agent file** | `courseware/facilitator_guide.py` |
+| **Template** | `courseware/templates/FG_TGS-Ref-No_Course-Title_v1.docx` |
+| **Skills** | `courseware/fg_agent/skills.md` |
+| **Tools** | `courseware/fg_agent/tools.md` |
+
+#### LG Agent (Learner Guide)
+| | |
+|---|---|
+| **Agent file** | `courseware/learner_guide.py` |
+| **Template** | `courseware/templates/LG_TGS-Ref-No_Course-Title_v1.docx` |
+| **Skills** | `courseware/lg_agent/skills.md` |
+| **Tools** | `courseware/lg_agent/tools.md` |
+
+#### ASR (Assessment Summary Record)
+| | |
+|---|---|
+| **Agent file** | `courseware/assessment_plan.py` (same as AP) |
+| **Template** | `courseware/templates/ASR_TGS-Ref-No_Course-Title_v1.docx` |
 
 ---
 
-### 3. Lesson Plan Generator (LP)
+### 3. Generate Lesson Plan — LP Agent (No AI)
 
-> **Purpose:** Generates timetable schedule using barrier algorithm — **NO AI involved**
-
-| Property | Value |
-|----------|-------|
-| **File** | `lesson_plan/lesson_plan.py` |
-| **Model** | None — pure Python |
+| | |
+|---|---|
+| **What it does** | Builds a timetable schedule using a barrier algorithm |
+| **Agent file** | `lesson_plan/lesson_plan.py` |
+| **AI Model** | None — pure Python |
 | **Template** | `lesson_plan/templates/LP_TGS-Ref-No_Course-Title_v1.docx` |
-| **Algorithm** | Barrier-based timetable scheduler |
+| **Skills** | `lesson_plan/lp_agent/skills.md` |
+| **Tools** | `lesson_plan/lp_agent/tools.md` |
 
 **Schedule Rules:**
-- Daily hours: 9:00 AM - 6:00 PM
-- Lunch: 12:30 PM - 1:15 PM (45 mins)
-- Assessment: 4:00 PM - 6:00 PM (last day only)
+- 9:00 AM – 6:00 PM daily
+- Lunch: 12:30 PM – 1:15 PM (45 mins)
+- Assessment: 4:00 PM – 6:00 PM (last day only)
 - Topics split across barriers with "(Cont'd)" labels
 
 ---
 
-### 4. Assessment Generator Agent
+### 4. Generate Assessment — Assessment Agent
 
-> **Purpose:** Generates assessment questions for multiple assessment types
-
-| Property | Value |
-|----------|-------|
-| **File** | `assessment/assessment_generator.py` |
-| **Model** | Claude Sonnet 4 (`claude-sonnet-4-20250514`) |
-| **Tools** | None (all data provided in prompt) |
-| **Max Turns** | 5 |
+| | |
+|---|---|
+| **What it does** | Generates assessment questions for each assessment type |
+| **Agent file** | `assessment/assessment_generator.py` |
+| **AI Model** | Claude Sonnet 4 |
+| **Tools** | None (all data in prompt) |
+| **Skills** | `assessment/agent/skills.md` |
+| **Tools doc** | `assessment/agent/tools.md` |
 | **Input** | FG data + K/A statements + course context |
 | **Output** | JSON with questions per assessment type |
 
-**Supported Assessment Types:**
-SAQ, PP, CS, PRJ, ASGN, OI, DEM, RP, OQ
+**Supported types:** WA-SAQ, PP, CS, OQ, OI, DEM, RP, PRJ, ASGN
 
 ---
 
-### 5. Slide Generation Pipeline (4 Agents + Assembly)
+### 5. Generate Slides — 4-Agent Pipeline
 
-> **Purpose:** Generates a full PowerPoint deck with infographic slides
-
-This is the **multi-agent pipeline** — 4 agents working sequentially, each passing output to the next.
+This is the **multi-agent pipeline** — 4 agents work sequentially, each passing output to the next.
 
 ```
-┌──────────────┐    ┌───────────────────┐    ┌──────────────┐    ┌─────────────────┐    ┌──────────┐
-│   Phase 1    │    │     Phase 2       │    │   Phase 3    │    │    Phase 4      │    │ Phase 5  │
-│   Research   │───▶│ Content Generator │───▶│    Editor    │───▶│  Infographic    │───▶│ Assembly │
-│    Agent     │    │      Agent        │    │    Agent     │    │     Agent       │    │ (Python) │
-│  (Haiku)     │    │    (Haiku)        │    │   (Haiku)    │    │ (Haiku+Playwrt) │    │  No AI   │
-└──────────────┘    └───────────────────┘    └──────────────┘    └─────────────────┘    └──────────┘
+  Research Agent  →  Content Agent  →  Editor Agent  →  Infographic Agent  →  Assembly
+    (Haiku)           (Haiku)           (Haiku)        (Haiku + Playwright)   (Python)
 ```
 
-#### Phase 1: Research Agent
+#### Research Agent (Phase 1)
+| | |
+|---|---|
+| **What it does** | Searches the web for sources and data per topic |
+| **Agent file** | `slides/research_agent.py` |
+| **AI Model** | Claude Haiku 3.5 |
+| **Tools** | WebSearch (2 searches per topic) |
+| **Skills** | `slides/research_agent/skills.md` |
+| **Tools doc** | `slides/research_agent/tools.md` |
+| **Output** | Sources, statistics, infographic-ready data |
 
-| Property | Value |
-|----------|-------|
-| **File** | `slides/research_agent.py` |
-| **Model** | Claude Haiku 3.5 (`claude-3-5-haiku-20241022`) |
-| **Tools** | `WebSearch` |
-| **Max Turns** | 5 |
-| **Input** | Topic title + bullet points |
-| **Output** | Sources, key statistics, infographic-ready data |
+#### Content Generator Agent (Phase 2)
+| | |
+|---|---|
+| **What it does** | Transforms research into structured content blocks |
+| **Agent file** | `slides/content_generator_agent.py` |
+| **AI Model** | Claude Haiku 3.5 |
+| **Tools** | WebSearch (supplementary) |
+| **Skills** | `slides/content_agent/skills.md` |
+| **Tools doc** | `slides/content_agent/tools.md` |
+| **Output** | Content blocks with title, description, items, visualization type |
 
-- Performs exactly 2 WebSearch calls per topic
-- Tags data for visualization: chart_data, process_steps, comparison_items, timeline_data
-
-#### Phase 2: Content Generator Agent
-
-| Property | Value |
-|----------|-------|
-| **File** | `slides/content_generator_agent.py` |
-| **Model** | Claude Haiku 3.5 |
-| **Tools** | `WebSearch` (supplementary only) |
-| **Max Turns** | 5 |
-| **Default Blocks** | 6 per topic |
-| **Input** | Research data |
-| **Output** | Structured content blocks with visualization types |
-
-- Each block has: title, description, items[], visualization_type
-- Visualization types: overview, process, comparison, cycle, hierarchy, statistics, timeline, relationship, quadrant
-
-#### Phase 3: Editor Agent
-
-| Property | Value |
-|----------|-------|
-| **File** | `slides/editor_agent.py` |
-| **Model** | Claude Haiku 3.5 |
+#### Editor Agent (Phase 3)
+| | |
+|---|---|
+| **What it does** | Creates slide skeleton with template assignments |
+| **Agent file** | `slides/editor_agent.py` |
+| **AI Model** | Claude Haiku 3.5 |
 | **Tools** | None |
-| **Max Turns** | 3 |
-| **Input** | Content blocks |
-| **Output** | Complete deck skeleton with template assignments |
+| **Skills** | `slides/editor_agent/skills.md` |
+| **Tools doc** | `slides/editor_agent/tools.md` |
+| **Output** | Complete deck skeleton with AntV template assignments |
 
-- Maps content blocks to slide positions
-- Assigns AntV infographic templates per block
-- Ensures visual variety across the deck
+#### Infographic Agent (Phase 4)
+| | |
+|---|---|
+| **What it does** | Renders content blocks into PNG infographic images |
+| **Agent file** | `slides/infographic_agent.py` |
+| **AI Model** | Claude Haiku 3.5 |
+| **Tools** | None (uses Playwright browser for rendering) |
+| **Skills** | `slides/infographic_agent/skills.md` |
+| **Tools doc** | `slides/infographic_agent/tools.md` |
+| **Output** | PNG image files |
 
-#### Phase 4: Infographic Agent
+**Key details:**
+- AntV script inlined from `slides/templates/infographic.min.js` (no CDN)
+- 3 retries per infographic (5s / 8s / 12s timeouts)
+- Browser restarted between topics to prevent memory issues
+- 65+ AntV templates across 9 visualization types
 
-| Property | Value |
-|----------|-------|
-| **File** | `slides/infographic_agent.py` |
-| **Model** | Claude Haiku 3.5 |
-| **Tools** | None |
-| **Max Turns** | 2 |
-| **Input** | Content block + template name |
-| **Output** | PNG image file |
-
-- Generates AntV DSL (with deterministic fallback)
-- Renders DSL → HTML → PNG via Playwright browser
-- AntV script is **inlined** (no CDN) from `slides/templates/infographic.min.js`
-- 3 retries per infographic (5s/8s/12s timeouts)
-- Browser restarted between topics to prevent memory exhaustion
-- 65+ AntV templates available across 9 visualization types
-
-#### Phase 5: Assembly (No AI)
-
-- Pure Python — maps PNG images to slide positions
+#### Assembly (Phase 5 — No AI)
 - Builds final PPTX using `python-pptx`
+- Maps PNG images to slide positions
 - Enforces slide count targets with padding slides
 
-**Slide Count Targets:**
-
-| Duration | Target Slides |
-|----------|--------------|
+**Slide Targets:**
+| Course Duration | Target Slides |
+|----------------|---------------|
 | 1-day | 100 |
 | 2-day | 160 |
 | 3-day | 210 |
@@ -201,127 +194,158 @@ This is the **multi-agent pipeline** — 4 agents working sequentially, each pas
 
 ---
 
-### 6. Audit Agent
+### 6. Courseware Audit — Audit Agent
 
-> **Purpose:** Extracts fields from courseware documents for cross-checking against CP
-
-| Property | Value |
-|----------|-------|
-| **File** | `audit/audit_agent.py` |
-| **Model** | Claude Sonnet 4 (`claude-sonnet-4-20250514`) |
-| **Tools** | None (text-only) |
-| **Max Turns** | 5 |
-| **Template** | `audit/templates/audit_extraction.md` (single source of truth) |
+| | |
+|---|---|
+| **What it does** | Extracts fields from courseware documents and cross-checks against CP |
+| **Agent file** | `audit/audit_agent.py` |
+| **AI Model** | Claude Sonnet 4 |
+| **Tools** | None (text-only extraction) |
+| **Skills** | `audit/agent/skills.md` |
+| **Tools doc** | `audit/agent/tools.md` |
+| **Rules file** | `audit/templates/audit_extraction.md` (single source of truth) |
 | **Input** | Document text + document type |
-| **Output** | JSON with extracted fields |
+| **Output** | JSON with extracted fields for comparison |
 
-**Audit Check Fields:**
-course_title, tgs_ref_code, topics, training_hours, assessment_hours, company_name, uen, learning_outcomes, k_statements, a_statements, assessment_methods, instructional_methods, tsc_code, tsc_title
+**Fields checked:** Course Title, TGS Ref No, Topics, Training Hours, Assessment Hours, Company Name, UEN, Learning Outcomes, K Statements, A Statements, Assessment Methods, Instructional Methods, TSC Code, TSC Title
 
 ---
 
-## Models Summary
+### 7. Convert Documents — Conversion Agents
 
-| Model | ID | Used By |
-|-------|------|---------|
-| **Claude Sonnet 4** | `claude-sonnet-4-20250514` | CP Interpreter, Assessment Generator, Audit Agent |
+Three sub-agents for converting existing documents into standardised WSQ format.
+
+#### Convert Assessment Agent
+| | |
+|---|---|
+| **What it does** | Extracts questions from existing assessments and rebuilds in WSQ format |
+| **Agent file** | `convert_assessment/convert_assessment.py` |
+| **AI Model** | Claude Sonnet 4 |
+| **Skills** | `convert/assessment_agent/skills.md` |
+| **Tools doc** | `convert/assessment_agent/tools.md` |
+
+#### Convert Courseware Agent
+| | |
+|---|---|
+| **What it does** | Extracts data from existing AP/FG/LG/ASR and fills WSQ templates |
+| **Agent file** | `convert_assessment/convert_assessment.py` |
+| **AI Model** | Claude Sonnet 4 |
+| **Skills** | `convert/courseware_agent/skills.md` |
+| **Tools doc** | `convert/courseware_agent/tools.md` |
+
+#### Convert Lesson Plan Agent
+| | |
+|---|---|
+| **What it does** | Extracts schedule from existing LP and fills WSQ LP template |
+| **Agent file** | `convert_assessment/convert_assessment.py` |
+| **AI Model** | Claude Sonnet 4 |
+| **Skills** | `convert/lesson_plan_agent/skills.md` |
+| **Tools doc** | `convert/lesson_plan_agent/tools.md` |
+
+---
+
+## AI Models Used
+
+| Model | ID | Where Used |
+|-------|-----|------------|
+| **Claude Sonnet 4** | `claude-sonnet-4-20250514` | CP Interpreter, Assessment, Audit, Convert Agents |
 | **Claude Haiku 3.5** | `claude-3-5-haiku-20241022` | All 4 Slide Pipeline Agents |
-| **No AI** | — | AP, FG, LG, LP (template filling only) |
+| **No AI** | — | AP, FG, LG, LP, ASR (template filling only) |
 
 ---
 
-## Base Infrastructure
-
-**File:** `courseware_agents/base.py`
-
-| Function | Returns | Description |
-|----------|---------|-------------|
-| `run_agent()` | `str` | Run Claude Agent SDK, return text |
-| `run_agent_json()` | `dict` | Run agent, parse result as JSON |
-
-- Permission mode: `bypassPermissions`
-- Default tools: `["Read", "Glob", "Grep"]`
-- Default max turns: 30
-
----
-
-## File Structure
+## Folder Structure
 
 ```
 courseware_agents/
-├── base.py                              # Core agent wrapper (run_agent, run_agent_json)
-├── __init__.py                          # Package exports
-├── AGENTS.md                            # This file
+├── base.py                                    # Core wrapper (run_agent, run_agent_json)
+├── __init__.py                                # Package exports
+├── AGENTS.md                                  # This file
 │
-├── cp_interpreter/                      # CP Interpreter Agent
-│   ├── cp_interpreter.py                #   Main agent (Sonnet 4)
+├── cp_interpreter/                            # Feature: Extract Course Info
+│   ├── cp_interpreter.py                      #   Agent (Sonnet)
 │   ├── agent/
-│   │   ├── skills.md                    #   Agent skills documentation
-│   │   └── tools.md                     #   Agent tools documentation
+│   │   ├── skills.md
+│   │   └── tools.md
 │   └── templates/
-│       ├── cp_interpretation.md         #   System prompt
-│       └── tsc_agent.md                 #   TSC extraction prompt
+│       ├── cp_interpretation.md
+│       └── tsc_agent.md
 │
-├── courseware/                           # Document Generators (No AI)
-│   ├── assessment_plan.py               #   AP + ASR generator
-│   ├── facilitator_guide.py             #   FG generator
-│   ├── learner_guide.py                 #   LG generator
+├── courseware/                                 # Feature: Generate AP/FG/LG
+│   ├── assessment_plan.py                     #   AP + ASR generator
+│   ├── facilitator_guide.py                   #   FG generator
+│   ├── learner_guide.py                       #   LG generator
 │   ├── ap_agent/
-│   │   ├── skills.md                    #   AP agent skills
-│   │   └── tools.md                     #   AP agent tools
+│   │   ├── skills.md
+│   │   └── tools.md
 │   ├── fg_agent/
-│   │   ├── skills.md                    #   FG agent skills
-│   │   └── tools.md                     #   FG agent tools
+│   │   ├── skills.md
+│   │   └── tools.md
 │   ├── lg_agent/
-│   │   ├── skills.md                    #   LG agent skills
-│   │   └── tools.md                     #   LG agent tools
+│   │   ├── skills.md
+│   │   └── tools.md
 │   └── templates/
 │       ├── AP_TGS-Ref-No_Course-Title_v1.docx
 │       ├── ASR_TGS-Ref-No_Course-Title_v1.docx
 │       ├── FG_TGS-Ref-No_Course-Title_v1.docx
 │       └── LG_TGS-Ref-No_Course-Title_v1.docx
 │
-├── lesson_plan/                         # Lesson Plan Generator (No AI)
-│   ├── lesson_plan.py                   #   Barrier algorithm + template fill
+├── lesson_plan/                               # Feature: Generate Lesson Plan
+│   ├── lesson_plan.py                         #   Barrier algorithm + template fill
 │   ├── lp_agent/
-│   │   ├── skills.md                    #   LP agent skills
-│   │   └── tools.md                     #   LP agent tools
+│   │   ├── skills.md
+│   │   └── tools.md
 │   └── templates/
 │       └── LP_TGS-Ref-No_Course-Title_v1.docx
 │
-├── assessment/                          # Assessment Generator Agent
-│   ├── assessment_generator.py          #   Main agent (Sonnet 4)
+├── assessment/                                # Feature: Generate Assessment
+│   ├── assessment_generator.py                #   Agent (Sonnet)
 │   ├── agent/
-│   │   ├── skills.md                    #   Assessment agent skills
-│   │   └── tools.md                     #   Assessment agent tools
-│   └── templates/                       #   Assessment prompt templates
+│   │   ├── skills.md
+│   │   └── tools.md
+│   └── templates/                             #   Prompt templates per type
+│       ├── saq_generation.md
+│       ├── practical_performance.md
+│       ├── case_study.md
+│       └── ... (9 assessment types)
 │
-├── audit/                               # Audit Agent
-│   ├── audit_agent.py                   #   Main agent (Sonnet 4)
+├── audit/                                     # Feature: Courseware Audit
+│   ├── audit_agent.py                         #   Agent (Sonnet)
 │   ├── agent/
-│   │   ├── skills.md                    #   Audit agent skills
-│   │   └── tools.md                     #   Audit agent tools
+│   │   ├── skills.md
+│   │   └── tools.md
 │   └── templates/
-│       └── audit_extraction.md          #   Single source of truth for audit rules
+│       └── audit_extraction.md                #   Single source of truth
 │
-└── slides/                              # Slide Pipeline (4 Agents)
-    ├── research_agent.py                #   Phase 1: Research (Haiku)
-    ├── content_generator_agent.py       #   Phase 2: Content Gen (Haiku)
-    ├── editor_agent.py                  #   Phase 3: Editor (Haiku)
-    ├── infographic_agent.py             #   Phase 4: Infographic (Haiku + Playwright)
-    ├── slides_agent.py                  #   Legacy agent
+├── convert/                                   # Feature: Convert Documents
+│   ├── assessment_agent/
+│   │   ├── skills.md
+│   │   └── tools.md
+│   ├── courseware_agent/
+│   │   ├── skills.md
+│   │   └── tools.md
+│   └── lesson_plan_agent/
+│       ├── skills.md
+│       └── tools.md
+│
+└── slides/                                    # Feature: Generate Slides (4-Agent Pipeline)
+    ├── research_agent.py                      #   Phase 1: Research (Haiku)
+    ├── content_generator_agent.py             #   Phase 2: Content (Haiku)
+    ├── editor_agent.py                        #   Phase 3: Editor (Haiku)
+    ├── infographic_agent.py                   #   Phase 4: Infographic (Haiku + Playwright)
     ├── research_agent/
-    │   ├── skills.md                    #   Research agent skills
-    │   └── tools.md                     #   Research agent tools
+    │   ├── skills.md
+    │   └── tools.md
     ├── content_agent/
-    │   ├── skills.md                    #   Content generator skills
-    │   └── tools.md                     #   Content generator tools
+    │   ├── skills.md
+    │   └── tools.md
     ├── editor_agent/
-    │   ├── skills.md                    #   Editor agent skills
-    │   └── tools.md                     #   Editor agent tools
+    │   ├── skills.md
+    │   └── tools.md
     ├── infographic_agent/
-    │   ├── skills.md                    #   Infographic agent skills
-    │   └── tools.md                     #   Infographic agent tools
+    │   ├── skills.md
+    │   └── tools.md
     └── templates/
-        └── infographic.min.js           #   AntV script (inlined, not CDN)
+        └── infographic.min.js                 #   AntV script (inlined)
 ```

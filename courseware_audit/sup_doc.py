@@ -1158,9 +1158,7 @@ def _display_results(selected_checks):
     if total_fail == 0:
         st.success(f"All {total_pass} checks passed across all documents!")
     else:
-        st.warning(f"{total_fail} issue(s) found in: {', '.join(failed_docs)}")
-
-        pass  # Issues already shown inline above
+        st.error(f"{total_fail} issue(s) found in: {', '.join(failed_docs)}")
 
     # ── Clear All ──
     st.divider()

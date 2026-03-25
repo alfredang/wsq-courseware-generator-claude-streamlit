@@ -180,8 +180,9 @@ def get_courseware_folder(context: dict) -> Optional[str]:
     if course_title:
         folder_name = f"{folder_name} - {course_title}"
     # Sanitize: remove characters invalid in Windows directory names
-    folder_name = folder_name.replace(":", "-").replace("<", "").replace(">", "")
-    folder_name = folder_name.replace('"', "").replace("|", "").replace("?", "").replace("*", "")
+    for ch in [':', '<', '>', '"', '|', '?', '*', '/', '\\']:
+        folder_name = folder_name.replace(ch, '-' if ch in [':', '/'] else '')
+    folder_name = folder_name.strip('. ')  # Windows doesn't allow trailing dots/spaces
     course_dir = os.path.join(COURSEWARE_DIR, folder_name)
     for subfolder in COURSEWARE_SUBFOLDERS:
         os.makedirs(os.path.join(course_dir, subfolder), exist_ok=True)
@@ -196,10 +197,13 @@ def copy_to_courseware(source_path: str, subfolder: str, filename: str, context:
     if not course_dir or not source_path or not os.path.exists(source_path):
         return None
     dest_dir = os.path.join(course_dir, subfolder)
-    os.makedirs(dest_dir, exist_ok=True)
-    dest_path = os.path.join(dest_dir, filename)
-    shutil.copy2(source_path, dest_path)
-    return dest_path
+    try:
+        os.makedirs(dest_dir, exist_ok=True)
+        dest_path = os.path.join(dest_dir, filename)
+        shutil.copy2(source_path, dest_path)
+        return dest_path
+    except OSError:
+        return None
 
 
 def save_json_file(data: Dict[str, Any], file_path: str) -> bool:

@@ -125,7 +125,7 @@ with st.sidebar:
         "Generate Assessment",
         "Generate Slides",
         "Generate Brochure",
-        "Convert Assessment",
+        "Convert Documents",
         "Courseware Audit",
     ]
 
@@ -246,7 +246,7 @@ elif page_to_display == "Generate Brochure":
     brochure_generation = lazy_import_brochure()
     brochure_generation.app()
 
-elif page_to_display == "Convert Assessment":
+elif page_to_display == "Convert Documents":
     st.session_state['settings_page'] = None
     convert_assessment = lazy_import_convert_assessment()
     convert_assessment.app()
