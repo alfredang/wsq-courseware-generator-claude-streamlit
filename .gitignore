@@ -37,6 +37,7 @@ ssg-api-calls*.json
 data/
 *.docx
 *.pdf
+!docs/WSQ_Courseware_Generator_User_Guide.pdf
 *.xlsx
 *.tmp
 *.log
