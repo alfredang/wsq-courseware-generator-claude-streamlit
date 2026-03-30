@@ -236,14 +236,20 @@ def scrape_with_playwright(url: str):
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(headless=True)
-            page = browser.new_page()
+            browser = p.chromium.launch(
+                headless=True,
+                args=['--disable-blink-features=AutomationControlled']
+            )
+            ctx = browser.new_context(
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'
+            )
+            page = ctx.new_page()
 
             # Navigate to the URL and wait for content to load
             page.goto(url, wait_until='networkidle', timeout=30000)
 
-            # Wait for body to be present
-            page.wait_for_selector('body', timeout=10000)
+            # Wait extra for JS-rendered content (MySkillsFuture needs this)
+            page.wait_for_timeout(5000)
 
             # Get page content and parse with BeautifulSoup
             html_content = page.content()
@@ -1415,6 +1421,7 @@ def extract_fee_before_gst_format(soup):
         r'\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)\s*\(?\s*(?:Bef|Before)\s*\.?\s*GST',
         r'\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)\s*\(?\s*(?:excl|excluding)\s*\.?\s*GST',
         r'(?:Fee|Cost|Price)[:\s]+\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)',
+        r'(?:Total Course Fee|Nett Fee)[:\s]*\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)',
     ]
 
     for pattern in patterns:
@@ -1422,6 +1429,12 @@ def extract_fee_before_gst_format(soup):
         if match:
             amount = match.group(1).replace(',', '')  # Remove commas
             return f"${amount}" if '.' in amount else f"${amount}.00"
+
+    # MySkillsFuture: "Estimated payable fee:" followed by "$X,XXX.XX*"
+    match = re.search(r'Estimated payable fee:?\s*\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)\*?', text, re.IGNORECASE)
+    if match:
+        amount = match.group(1).replace(',', '')
+        return f"${amount}" if '.' in amount else f"${amount}.00"
 
     return "$900.00"
 
@@ -1578,13 +1591,14 @@ def extract_mces_fee_calculated(soup):
 # Old extraction functions removed - now using format-specific functions above
 
 
-def populate_brochure_template(course_data: CourseData) -> str:
+def populate_brochure_template(course_data: CourseData, company_name: str = "Tertiary Infotech Academy Pte Ltd") -> str:
     """
     Populate the brochure template with scraped course data.
-    
+
     Args:
         course_data (dict): Course information extracted from web scraping
-        
+        company_name (str): Company name to use in the brochure
+
     Returns:
         str: Populated HTML content
     """
@@ -1810,7 +1824,7 @@ def populate_brochure_template(course_data: CourseData) -> str:
             tsc_info = f"{tsc_title} {tsc_code} TSC".strip() if tsc_code else f"{tsc_title} TSC".strip()
             cert_items_html = f'            <p class="cert-subheader">1. Statement of Achievement</p>\n'
             cert_items_html += f'            <p class="cert-detail"><strong>{tsc_info}</strong> under {tsc_framework} Skills Framework issued by WSG/SSG.</p>\n'
-            cert_items_html += f'            <p class="cert-subheader">2. Certification of Achievement <span class="cert-normal">issued by Tertiary Infotech Academy Pte Ltd.</span></p>\n'
+            cert_items_html += f'            <p class="cert-subheader">2. Certification of Achievement <span class="cert-normal">issued by {company_name}.</span></p>\n'
         elif cert_text and len(cert_text) < 500:
             # Non-WSQ: use scraped text only if it's clean (not nav menu garbage)
             parts = re.split(r'(?=Certificate of Completion|OpenCert|Statement of Achievement|Certification of Achievement)', cert_text, flags=re.IGNORECASE)
@@ -1841,14 +1855,6 @@ def populate_brochure_template(course_data: CourseData) -> str:
         else:
             st.warning("Certificate section not found in template - check brochure.html")
 
-        # Debug: Save a copy of the generated HTML for inspection
-        debug_html_path = os.path.join(TEMPLATE_ASSET_DIR, "debug_generated.html")
-        try:
-            with open(debug_html_path, 'w', encoding='utf-8') as f:
-                f.write(template_content)
-        except:
-            pass
-
         # Replace entry requirements with extracted data (Knowledge and Skills - dynamic based on URL content)
         entry_reqs = data_dict.get('entry_requirements', {})
         if entry_reqs:
@@ -1874,8 +1880,109 @@ def populate_brochure_template(course_data: CourseData) -> str:
                 new_requirements_block = '\n'.join(new_requirements_html)
                 template_content = template_content.replace(old_requirements_block, new_requirements_block)
 
+        # Replace company name throughout the brochure
+        template_content = template_content.replace("Tertiary Infotech Academy Pte Ltd", company_name)
+
+        # For client courses: replace ALL Tertiary-specific content
+        if company_name != "Tertiary Infotech Academy Pte Ltd":
+            import streamlit as _st
+            company_data = _st.session_state.get('brochure_company', _st.session_state.get('selected_company', {}))
+
+            # Replace email
+            company_email = company_data.get('email', '')
+            template_content = template_content.replace('support@tertiaryinfotech.com', company_email)
+
+            # Replace phone — remove entire line if no replacement
+            template_content = re.sub(
+                r'<p><strong>Tel:</strong>[^<]*</p>\s*',
+                f'<p><strong>Tel:</strong> {company_email}</p>\n' if company_email else '',
+                template_content
+            )
+
+            # Remove WhatsApp line entirely
+            template_content = re.sub(
+                r'<p><strong>WhatsApp:</strong>[^<]*<a[^>]*>[^<]*</a></p>\s*',
+                '',
+                template_content
+            )
+
+            # Replace venue/address — match any format
+            company_address = company_data.get('address', '')
+            template_content = re.sub(
+                r'(<p><strong>Venue:</strong>)\s*[^<]*(?:<br>\s*[^<]*)*(</p>)',
+                f'\\1 {company_address}\\2' if company_address else '\\1 \\2',
+                template_content
+            )
+
+            # Replace logo with client company logo on ALL pages
+            company_logo = company_data.get('logo', '')
+            if company_logo and os.path.exists(company_logo):
+                abs_logo_path = os.path.abspath(company_logo).replace('\\', '/')
+                template_content = template_content.replace('TertiaryCoursesSingapore.png', abs_logo_path)
+                template_content = template_content.replace('alt="Tertiary Courses Singapore"', f'alt="{company_name}"')
+            else:
+                # Remove logo img tags entirely if no logo
+                template_content = re.sub(
+                    r'<img[^>]*TertiaryCoursesSingapore\.png[^>]*>',
+                    '',
+                    template_content
+                )
+
+            # Replace Tertiary brand blue with neutral dark for client courses
+            template_content = template_content.replace('#2b5a87', '#333333')
+            # Remove blue left borders on course outline
+            template_content = template_content.replace('border-left: 4px solid #333333', 'border-left: 4px solid #999999')
+            # Remove any blue backgrounds
+            template_content = template_content.replace('background-color: #2b5a87', 'background-color: #ffffff')
+            template_content = template_content.replace('background: #2b5a87', 'background: #ffffff')
+
+            # Remove entire Page 4 (WSQ Funding) for client courses — not relevant
+            template_content = re.sub(
+                r'<!-- Page 4 - WSQ Funding -->.*?(?=<!-- Page \d|</div>\s*</body>|$)',
+                '',
+                template_content,
+                flags=re.DOTALL
+            )
+            # Also remove funding-section if no page comment marker
+            template_content = re.sub(
+                r'<div class="funding-section">[\s\S]*?</table>\s*</div>\s*</div>\s*</div>',
+                '',
+                template_content,
+            )
+
+            # Replace fee section with estimated payable fee from URL
+            estimated_fee = data_dict.get('gst_exclusive_price', '')
+            if estimated_fee and estimated_fee != '$900.00':
+                template_content = re.sub(
+                    r'<p><strong>Course Fee \(Before Funding\):</strong></p>\s*<p>[^<]*<br>\s*[^<]*</p>',
+                    f'<p><strong>Estimated Payable Fee:</strong> {estimated_fee}</p>',
+                    template_content
+                )
+            else:
+                # Remove fee section if no data
+                template_content = re.sub(
+                    r'<p><strong>Course Fee \(Before Funding\):</strong></p>\s*<p>[^<]*<br>\s*[^<]*</p>',
+                    '',
+                    template_content
+                )
+
+            # Remove registration link
+            template_content = re.sub(
+                r'<p><strong>Registration Link:</strong>[^<]*<a[^>]*>[^<]*</a></p>\s*',
+                '',
+                template_content
+            )
+
+        # Debug: Save a copy of the final generated HTML
+        debug_html_path = os.path.join(TEMPLATE_ASSET_DIR, "debug_generated.html")
+        try:
+            with open(debug_html_path, 'w', encoding='utf-8') as f:
+                f.write(template_content)
+        except:
+            pass
+
         return template_content
-        
+
     except Exception as e:
         st.error(f"Error reading template: {e}")
         st.error(f"Template path attempted: {template_path}")
@@ -2064,6 +2171,97 @@ def generate_brochure_outputs(html_content: str, course_title: str) -> dict:
     return outputs
 
 
+def _build_course_data_from_cp(cp_context: dict, url_data: 'CourseData', course_url: str) -> CourseData:
+    """Build CourseData from extracted CP context, supplemented with URL data for fees/funding."""
+    # Extract learning outcomes and topics grouped by LU
+    learning_outcomes = []
+    topics = []
+    for lu in cp_context.get('Learning_Units', []):
+        lo = lu.get('LO', '')
+        lo_desc = lu.get('LO_Description', '')
+        lu_title = lu.get('LU_Title', '')
+        # Use full LO text; if LO is just a label like "LO1:", append description
+        if lo:
+            lo_text = lo.strip()
+            # If LO is just "LO1:" or "LO1." with no real content, use description
+            if lo_desc and len(lo_text) < 10:
+                lo_text = f"{lo_text} {lo_desc}"
+            elif lo_desc and ':' in lo_text and len(lo_text.split(':', 1)[1].strip()) < 5:
+                lo_text = f"{lo_text.split(':')[0]}: {lo_desc}"
+            learning_outcomes.append(lo_text)
+        # Group topics under their LU
+        lu_topics = lu.get('Topics', [])
+        subtopic_list = []
+        for topic in lu_topics:
+            title = topic.get('Topic_Title', '')
+            if title:
+                subtopic_list.append(title)
+        if lu_title and subtopic_list:
+            topics.append(CourseTopic(title=lu_title, subtopics=subtopic_list))
+
+    # Build course description from overview + TSC description
+    overview = cp_context.get('Course_Overview', '')
+    tsc_desc = cp_context.get('TSC_Description', '')
+    desc_parts = []
+    if overview:
+        desc_parts.extend([p.strip() for p in overview.split('\n') if p.strip()])
+    elif tsc_desc:
+        desc_parts.append(tsc_desc)
+    description = desc_parts if desc_parts else [""]
+
+    # Get duration — parse hours from string like "24 hrs"
+    duration_str = cp_context.get('Total_Course_Duration_Hours', '')
+    import re
+    dur_match = re.search(r'(\d+\.?\d*)', str(duration_str))
+    duration_hrs = dur_match.group(1) if dur_match else '16'
+
+    # Calculate session days (assume 9hrs/day)
+    try:
+        days = max(1, round(float(duration_hrs) / 9))
+    except:
+        days = 2
+    session_days = str(days)
+
+    # Get estimated fee from URL if available
+    wsq_funding = {}
+    gst_exclusive = url_data.gst_exclusive_price if url_data else ''
+    gst_inclusive = ''
+
+    # TSC info from CP
+    tsc_title = cp_context.get('TSC_Title', '')
+    tsc_code = cp_context.get('TSC_Code', '')
+    tsc_framework = cp_context.get('Skills_Framework', 'ICT')
+
+    # Company name from CP
+    org_name = cp_context.get('Name_of_Organisation', '').strip()
+
+    # Certificate info — use actual company name
+    cert_info = CertificateInfo(
+        has_wsq_cert=bool(tsc_code and len(tsc_code) > 5),
+        statement_of_achievement=f"{tsc_title} {tsc_code} TSC under {tsc_framework} Skills Framework issued by WSG/SSG." if tsc_code else "",
+        certification_of_achievement=f"issued by {org_name}." if org_name else "",
+    )
+
+    return CourseData(
+        course_title=cp_context.get('Course_Title', ''),
+        course_description=description,
+        learning_outcomes=learning_outcomes,
+        tsc_title=tsc_title,
+        tsc_code=tsc_code,
+        tsc_framework=tsc_framework,
+        wsq_funding=wsq_funding,
+        tgs_reference_no=cp_context.get('TGS_Ref_No', ''),
+        gst_exclusive_price=gst_exclusive,
+        gst_inclusive_price=gst_inclusive,
+        session_days=session_days,
+        duration_hrs=duration_hrs,
+        course_details_topics=topics,
+        course_url=course_url,
+        certificate_info=cert_info,
+        entry_requirements=url_data.entry_requirements if url_data and url_data.entry_requirements else EntryRequirements(),
+    )
+
+
 def app():
     """
     Streamlit web interface for Brochure Generation v2.
@@ -2073,38 +2271,135 @@ def app():
     # Prompt Templates (editable, collapsed)
     from utils.prompt_template_editor import render_prompt_templates
     render_prompt_templates("brochure", "Prompt Templates (Brochure)")
-    
+
+    # Client Course CP Upload (optional)
+    col_header, col_clear = st.columns([3, 1])
+    with col_header:
+        st.subheader("📄 Client Course (Optional)")
+    with col_clear:
+        if st.button("🗑 Clear All", type="secondary"):
+            for key in ['brochure_company']:
+                st.session_state.pop(key, None)
+            st.rerun()
+
+    cp_file = st.file_uploader(
+        "Upload Course Proposal for client courses:",
+        type=["docx", "xlsx"],
+        help="Upload CP only for client courses. Leave empty for Tertiary Infotech courses.",
+        key="brochure_cp_uploader"
+    )
+    tgs_code_input = ""
+    if cp_file:
+        tgs_code_input = st.text_input(
+            "TGS Reference Code:",
+            placeholder="e.g., TGS-2026062163",
+            help="Enter the TGS code for this course"
+        )
+
     # URL Input Section
     st.subheader("🔗 Course URL")
     course_url = st.text_input(
         "Enter the course URL to scrape information from:",
-        placeholder="https://example.com/course-page",
-        help="💡 Paste or type the course URL here"
+        placeholder="https://courses.myskillsfuture.gov.sg/courses/TGS-...",
+        help="💡 Paste the MySkillsFuture or course page URL here"
     )
 
     st.divider()
-    
+
     # Generation Section
     if st.button("🚀 Generate Brochure", type="primary"):
-        if not course_url:
-            st.error("❌ Please enter a course URL first")
+        if not cp_file and not course_url:
+            st.error("❌ Please upload a CP (for client courses) or enter a course URL (for Tertiary courses)")
             return
 
-        if not course_url.startswith(('http://', 'https://')):
+        if course_url and not course_url.startswith(('http://', 'https://')):
             st.error("❌ Please enter a valid URL starting with http:// or https://")
             return
-        
-        with st.spinner("Scraping course information..."):
-            # Step 1: Web scrape course information
-            course_data = web_scrape_course_info(course_url)
-            
-            if not course_data or not course_data.course_title:
-                st.error("Failed to scrape course information from the provided URL")
-                return
+
+        # Determine mode: client (CP uploaded) or Tertiary (URL only)
+        cp_context = None
+        company_name_override = "Tertiary Infotech Academy Pte Ltd"
+
+        if cp_file:
+            # Client course — parse CP to get course data and company name
+            with st.spinner("Parsing Course Proposal..."):
+                import tempfile
+                from generate_ap_fg_lg.courseware_generation import parse_cp_document
+                from courseware_agents.cp_interpreter import interpret_cp
+                import asyncio
+
+                # Parse CP to markdown (pass the UploadedFile directly)
+                parsed_text = parse_cp_document(cp_file)
+                if not parsed_text:
+                    st.error("❌ Failed to parse Course Proposal")
+                    return
+
+                # Save parsed text for agent — use unique path to avoid caching
+                import hashlib
+                cp_hash = hashlib.md5(parsed_text.encode()).hexdigest()[:8]
+                parsed_cp_path = os.path.join(tempfile.gettempdir(), f"brochure_parsed_cp_{cp_hash}.md")
+                context_output_path = os.path.join(tempfile.gettempdir(), f"brochure_context_{cp_hash}.json")
+                with open(parsed_cp_path, 'w', encoding='utf-8') as f:
+                    f.write(parsed_text)
+
+            with st.spinner("Extracting course information from CP (this may take a moment)..."):
+                cp_context = asyncio.run(interpret_cp(parsed_cp_path, output_path=context_output_path, course_ref_code=tgs_code_input or None))
+
+                if not cp_context:
+                    st.error("❌ Failed to extract course info from CP")
+                    return
+
+                # Override TGS code if provided
+                if tgs_code_input:
+                    cp_context['TGS_Ref_No'] = tgs_code_input
+
+                # Auto-detect company from CP and look up in database
+                org_name = cp_context.get('Name_of_Organisation', '').strip()
+                if org_name:
+                    company_name_override = org_name
+                    # Look up company in database for address, email, logo
+                    from company.database import get_all_organizations
+                    all_orgs = get_all_organizations()
+                    matched_company = None
+                    # Try exact match first, then partial
+                    for org in all_orgs:
+                        if org['name'].lower().strip() == org_name.lower().strip():
+                            matched_company = org
+                            break
+                    if not matched_company:
+                        for org in all_orgs:
+                            if org_name.lower().split()[0] in org['name'].lower():
+                                matched_company = org
+                                break
+                    if matched_company:
+                        st.session_state['brochure_company'] = matched_company
+                        st.info(f"Detected company: **{matched_company['name']}** (address: {matched_company.get('address', 'N/A')})")
+                    else:
+                        st.session_state['brochure_company'] = {'name': org_name, 'address': '', 'email': '', 'logo': ''}
+                        st.warning(f"Detected company: **{org_name}** — not found in database. Add it in Company Management for full details.")
+
+                # Reset file pointer for potential reuse
+                cp_file.seek(0)
+
+        url_data = None
+        if course_url:
+            with st.spinner("Scraping course information from URL..."):
+                url_data = web_scrape_course_info(course_url)
+
+        if cp_context:
+            # Client course — use CP data + URL for fees
+            course_data = _build_course_data_from_cp(cp_context, url_data, course_url)
+        else:
+            # Tertiary course — use URL data only
+            course_data = url_data
+
+        if not course_data or not course_data.course_title:
+            st.error("Failed to get course information")
+            return
         
         with st.spinner("Generating brochure..."):
             # Step 2: Populate template
-            html_content = populate_brochure_template(course_data)
+            html_content = populate_brochure_template(course_data, company_name=company_name_override)
             
             if not html_content:
                 st.error("Failed to populate brochure template")
@@ -2143,15 +2438,22 @@ def app():
         # Download Section
         st.subheader("📥 Download Generated PDF")
 
-        # PDF Download
+        # PDF Download and Clear button
         if 'pdf' in outputs:
-            with open(outputs['pdf'], 'rb') as pdf_file:
-                st.download_button(
-                    label="📄 Download PDF",
-                    data=pdf_file.read(),
-                    file_name=f"{course_data.course_title.replace(' ', '_')}_brochure.pdf",
-                    mime="application/pdf"
-                )
+            col_dl, col_clear = st.columns([1, 1])
+            with col_dl:
+                with open(outputs['pdf'], 'rb') as pdf_file:
+                    st.download_button(
+                        label="📄 Download PDF",
+                        data=pdf_file.read(),
+                        file_name=f"{course_data.course_title.replace(' ', '_')}_brochure.pdf",
+                        mime="application/pdf"
+                    )
+            with col_clear:
+                if st.button("🗑 Clear & Generate New", type="secondary"):
+                    for key in ['brochure_company']:
+                        st.session_state.pop(key, None)
+                    st.rerun()
 
 
 if __name__ == "__main__":

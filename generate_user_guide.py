@@ -27,7 +27,7 @@ ACCENT_GREEN = HexColor("#548235")
 ACCENT_ORANGE = HexColor("#ED7D31")
 ACCENT_RED = HexColor("#C00000")
 
-OUTPUT_PATH = os.path.join("Courseware", "WSQ_Courseware_Generator_User_Guide_v2.pdf")
+OUTPUT_PATH = os.path.join("docs", "WSQ_Courseware_Generator_User_Guide_v3.pdf")
 
 def get_styles():
     styles = getSampleStyleSheet()
@@ -365,12 +365,12 @@ def build_pdf():
     story.append(Paragraph("1.1  Opening the App", styles["SubHeader"]))
     story.append(Paragraph(
         "The WSQ Courseware Generator runs as a web application in your browser. "
-        "To start the app:", styles["BodyText2"]))
-    story.append(step(1, "Open a terminal / command prompt in the project folder.", styles))
-    story.append(step(2, "Run the command:  <b>uv run streamlit run app.py</b>", styles))
-    story.append(step(3, "Your browser will open automatically at <b>http://localhost:7860</b>", styles))
+        "To access the app:", styles["BodyText2"]))
+    story.append(step(1, "Open <b>Google Chrome</b> (or any web browser).", styles))
+    story.append(step(2, "Go to the <b>app link</b> provided to you by your administrator.", styles))
+    story.append(step(3, "The app will load and you can start using it immediately.", styles))
     story.append(note(
-        "If the browser does not open automatically, manually go to http://localhost:7860 in Google Chrome.",
+        "You do not need to install anything. The app runs entirely in your web browser.",
         styles))
 
     story.append(Paragraph("1.2  Selecting a Company", styles["SubHeader"]))
@@ -731,9 +731,9 @@ def build_pdf():
     faq_data = [
         ["Problem", "Solution"],
         [
-            "App won't start / port in use",
-            "Close all Streamlit processes: taskkill /F /IM streamlit.exe (Windows)\n"
-            "Then restart: uv run streamlit run app.py"
+            "App won't load / page error",
+            "Refresh the page (F5 or Ctrl+R). If it still doesn't load, "
+            "contact your administrator to check if the app is running."
         ],
         [
             "'No course info loaded' warning",

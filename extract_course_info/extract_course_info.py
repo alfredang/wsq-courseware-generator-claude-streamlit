@@ -16,6 +16,39 @@ from courseware_agents.cp_interpreter import interpret_cp
 from utils.helpers import get_courseware_folder, copy_to_courseware
 
 
+def _normalize_assessment_duration(raw: str) -> str:
+    """Only fix decimal hour formats (e.g., '1.2 hrs' → '1 hour 12 min').
+    All other values pass through as-is — trust the CP interpreter output.
+    """
+    import re
+    if not raw:
+        return raw
+    s = str(raw).strip().lower()
+
+    # Only fix decimal hours like "1.2 hrs", "0.8 hrs" — everything else pass through
+    m = re.match(r'^(\d+\.\d+)\s*(?:hr|hour)s?$', s)
+    if m:
+        total = float(m.group(1))
+        h = int(total)
+        mins = round((total - h) * 60)
+        if h == 0 and mins > 0:
+            return f"{mins} min"
+        if mins == 0:
+            return f"{h} hour{'s' if h > 1 else ''}"
+        return f"{h} hour{'s' if h > 1 else ''} {mins} min"
+
+    return raw
+
+
+def _normalize_context_durations(context: dict) -> dict:
+    """Normalize all assessment durations in the extracted context."""
+    details = context.get('Assessment_Methods_Details', [])
+    for am in details:
+        raw = am.get('Total_Delivery_Hours', '')
+        am['Total_Delivery_Hours'] = _normalize_assessment_duration(raw)
+    return context
+
+
 def display_course_info(context):
     """Display extracted course information in organized sections."""
 
@@ -252,6 +285,7 @@ def app():
                 result['TGS_Ref_No'] = user_tgs
             # Fill Skills Framework, Sector, Proficiency Level from TSC Code
             result = apply_tsc_defaults(result)
+            result = _normalize_context_durations(result)
             st.session_state['extracted_course_info'] = result
             # Clear downstream contexts so they pick up the new data
             st.session_state.pop('context', None)

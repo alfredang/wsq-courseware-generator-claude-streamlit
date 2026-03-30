@@ -58,7 +58,7 @@ The JSON must follow this exact schema:
         {
             "Assessment_Method": "string (e.g., Written Assessment - Short Answer Questions)",
             "Method_Abbreviation": "string (e.g., WA-SAQ)",
-            "Total_Delivery_Hours": "string",
+            "Total_Delivery_Hours": "string (MUST be in clean format: '30 min', '1 hour', '1 hour 30 min', '2 hours'. NEVER use decimals like 1.2 hrs or 0.8 hrs. Convert from CP exactly as written.)",
             "Assessor_to_Candidate_Ratio": ["string"],
             "Evidence": [
                 {"LO": "string", "Evidence": "string"}
@@ -77,6 +77,15 @@ RULES:
 4. For Assessment_Methods_Details, include Evidence for each LO showing what evidence is required
 5. If a field cannot be found in the document, use an empty string or empty list
 6. Do NOT truncate or omit any data
+
+CRITICAL — Assessment Duration Rules:
+- The CP assessment table has MULTIPLE rows per assessment method (one row per LO).
+  For example: Written Exam appears for LO1 (24 min), LO2 (24 min), LO3 (12 min).
+- You MUST SUM all rows for the same assessment method to get the TOTAL duration.
+  Example: Written Exam total = 24 + 24 + 12 = 60 min = "1 hour".
+- Output the TOTAL in clean format: "30 min", "48 min", "1 hour", "1 hour 12 min", "2 hours", etc.
+- NEVER output a single LO's duration as the total. ALWAYS sum ALL LO rows for that method.
+- NEVER output decimal hours (e.g., "1.2 hrs", "0.8 hrs"). Always use whole hours and minutes.
 """
 
 
