@@ -245,11 +245,11 @@ def scrape_with_playwright(url: str):
             )
             page = ctx.new_page()
 
-            # Navigate to the URL and wait for content to load
-            page.goto(url, wait_until='networkidle', timeout=30000)
+            # Navigate to the URL — use domcontentloaded (faster, avoids timeout on slow sites)
+            page.goto(url, wait_until='domcontentloaded', timeout=60000)
 
-            # Wait extra for JS-rendered content (MySkillsFuture needs this)
-            page.wait_for_timeout(5000)
+            # Wait for JS-rendered content to load
+            page.wait_for_timeout(8000)
 
             # Get page content and parse with BeautifulSoup
             html_content = page.content()
@@ -1417,11 +1417,12 @@ def extract_fee_before_gst_format(soup):
 
     # More flexible patterns to handle different spacing and formatting
     patterns = [
-        r'\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)\s*\(?\s*GST[- ]exclusive',  # GST-exclusive or GST exclusive
-        r'\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)\s*\(?\s*(?:Bef|Before)\s*\.?\s*GST',
-        r'\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)\s*\(?\s*(?:excl|excluding)\s*\.?\s*GST',
-        r'(?:Fee|Cost|Price)[:\s]+\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)',
-        r'(?:Total Course Fee|Nett Fee)[:\s]*\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)',
+        r'S?\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)\s*\(?\s*GST[- ]exclusive',
+        r'S?\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)\s*\(?\s*(?:Bef|Before)\s*\.?\s*GST',
+        r'S?\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)\s*\(?\s*(?:excl|excluding)\s*\.?\s*GST',
+        r'(?:Fee|Cost|Price)[:\s]+S?\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)',
+        r'(?:Total Course Fee|Nett Fee)[:\s]*S?\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)',
+        r'Full course fee\s*S?\$\s*(\d+(?:,\d+)?(?:\.\d{2})?)',  # GoBusiness SkillsFuture format
     ]
 
     for pattern in patterns:
@@ -2278,15 +2279,16 @@ def app():
         st.subheader("📄 Client Course (Optional)")
     with col_clear:
         if st.button("🗑 Clear All", type="secondary"):
-            for key in ['brochure_company']:
-                st.session_state.pop(key, None)
+            st.session_state.pop('brochure_company', None)
+            st.session_state['brochure_uploader_key'] = st.session_state.get('brochure_uploader_key', 0) + 1
             st.rerun()
 
+    uploader_key = f"brochure_cp_{st.session_state.get('brochure_uploader_key', 0)}"
     cp_file = st.file_uploader(
         "Upload Course Proposal for client courses:",
         type=["docx", "xlsx"],
         help="Upload CP only for client courses. Leave empty for Tertiary Infotech courses.",
-        key="brochure_cp_uploader"
+        key=uploader_key
     )
     tgs_code_input = ""
     if cp_file:
@@ -2298,10 +2300,12 @@ def app():
 
     # URL Input Section
     st.subheader("🔗 Course URL")
+    url_key = f"brochure_url_{st.session_state.get('brochure_uploader_key', 0)}"
     course_url = st.text_input(
         "Enter the course URL to scrape information from:",
         placeholder="https://courses.myskillsfuture.gov.sg/courses/TGS-...",
-        help="💡 Paste the MySkillsFuture or course page URL here"
+        help="💡 Paste the MySkillsFuture or course page URL here",
+        key=url_key
     )
 
     st.divider()
@@ -2361,16 +2365,27 @@ def app():
                     from company.database import get_all_organizations
                     all_orgs = get_all_organizations()
                     matched_company = None
-                    # Try exact match first, then partial
+                    org_lower = org_name.lower().strip().rstrip('.')
+                    # Try exact match first
                     for org in all_orgs:
-                        if org['name'].lower().strip() == org_name.lower().strip():
+                        if org['name'].lower().strip().rstrip('.') == org_lower:
                             matched_company = org
                             break
+                    # Then try contains match (either direction)
                     if not matched_company:
                         for org in all_orgs:
-                            if org_name.lower().split()[0] in org['name'].lower():
+                            db_lower = org['name'].lower().strip().rstrip('.')
+                            if db_lower in org_lower or org_lower in db_lower:
                                 matched_company = org
                                 break
+                    # Then try first word match
+                    if not matched_company:
+                        first_word = org_lower.split()[0] if org_lower.split() else ''
+                        if first_word and first_word not in ('pte', 'ltd', 'the'):
+                            for org in all_orgs:
+                                if first_word in org['name'].lower():
+                                    matched_company = org
+                                    break
                     if matched_company:
                         st.session_state['brochure_company'] = matched_company
                         st.info(f"Detected company: **{matched_company['name']}** (address: {matched_company.get('address', 'N/A')})")

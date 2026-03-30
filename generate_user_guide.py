@@ -27,7 +27,7 @@ ACCENT_GREEN = HexColor("#548235")
 ACCENT_ORANGE = HexColor("#ED7D31")
 ACCENT_RED = HexColor("#C00000")
 
-OUTPUT_PATH = os.path.join("docs", "WSQ_Courseware_Generator_User_Guide_v3.pdf")
+OUTPUT_PATH = os.path.join("docs", "WSQ_Courseware_Generator_User_Guide.pdf")
 
 def get_styles():
     styles = getSampleStyleSheet()
@@ -289,7 +289,7 @@ def build_pdf():
     story.append(Paragraph("Complete User Guide", styles["CoverSubtitle"]))
     story.append(Paragraph("Step-by-Step Instructions for All Features", styles["CoverSubtitle"]))
     story.append(Spacer(1, 10*mm))
-    story.append(Paragraph(f"Version 1.0  |  {today}", styles["CoverDate"]))
+    story.append(Paragraph(f"Version 2.0  |  {today}", styles["CoverDate"]))
     story.append(Spacer(1, 8*mm))
     story.append(Paragraph("Prepared by: Tertiary Infotech Academy Pte Ltd", styles["CoverDate"]))
     story.append(PageBreak())
@@ -330,8 +330,9 @@ def build_pdf():
             "6.2  Downloading the Slide Deck",
         ]),
         ("7.", "Generate Brochure (Step 6)", [
-            "7.1  Entering Course URL",
-            "7.2  Generating & Downloading",
+            "7.1  Tertiary Courses (URL Only)",
+            "7.2  Client Courses (Upload CP)",
+            "7.3  Downloading & Clearing",
         ]),
         ("8.", "Convert Documents", [
             "8.1  Convert Assessments",
@@ -612,22 +613,51 @@ def build_pdf():
     story.append(blue_header_table("7. Generate Brochure"))
     story.append(Spacer(1, 4*mm))
     story.append(Paragraph(
-        "Creates a marketing brochure PDF by scraping course information from a webpage.",
+        "Creates a marketing brochure PDF for any WSQ course. There are <b>two modes</b> depending on "
+        "whether the course is a Tertiary Infotech course or a client course.",
         styles["BodyText2"]))
 
-    story.append(Paragraph("7.1  Entering Course URL", styles["SubHeader"]))
+    story.append(Paragraph("7.1  Tertiary Courses (URL Only)", styles["SubHeader"]))
+    story.append(Paragraph(
+        "For Tertiary Infotech courses, the brochure is generated entirely from the course webpage:",
+        styles["BodyText2"]))
     story.append(step(1, "Navigate to <b>Generate Brochure</b> in the sidebar.", styles))
-    story.append(step(2, "Enter the <b>Course URL</b> — the link to the course page "
-        "(e.g., from MySkillsFuture or the training provider's website).", styles))
-    story.append(note(
-        "If you already entered the Course URL during Extract Course Info (Section 2), "
-        "it will be auto-filled here.", styles))
+    story.append(step(2, "Leave the <b>Client Course</b> upload area empty.", styles))
+    story.append(step(3, "Paste the <b>Course URL</b> (e.g., from MySkillsFuture or tertiarycourses.com).", styles))
+    story.append(step(4, "Click <b>Generate Brochure</b>.", styles))
+    story.append(Paragraph(
+        "The system scrapes all course details (title, topics, fees, requirements) from the URL "
+        "and generates a branded PDF with the Tertiary Infotech logo and contact details.",
+        styles["BodyText2"]))
 
-    story.append(Paragraph("7.2  Generating & Downloading", styles["SubHeader"]))
-    story.append(step(1, "Click <b>Generate Brochure</b>.", styles))
-    story.append(step(2, "The system scrapes the webpage for course details, fees, requirements, etc.", styles))
-    story.append(step(3, "A branded PDF is generated with company logo and WSQ branding.", styles))
-    story.append(step(4, "Click <b>Download</b> to save the PDF brochure.", styles))
+    story.append(Paragraph("7.2  Client Courses (Upload CP)", styles["SubHeader"]))
+    story.append(Paragraph(
+        "For client courses (e.g., Laures, other training providers), MySkillsFuture has limited info. "
+        "Instead, upload the client's Course Proposal:",
+        styles["BodyText2"]))
+    story.append(step(1, "Navigate to <b>Generate Brochure</b> in the sidebar.", styles))
+    story.append(step(2, "Upload the client's <b>Course Proposal</b> (.docx or .xlsx).", styles))
+    story.append(step(3, "Enter the <b>TGS Reference Code</b> (e.g., TGS-2026062163).", styles))
+    story.append(step(4, "(Optional) Paste the <b>Course URL</b> — used to fetch the estimated payable fee.", styles))
+    story.append(step(5, "Click <b>Generate Brochure</b>.", styles))
+    story.append(Spacer(1, 2*mm))
+    story.append(Paragraph("The system will automatically:", styles["BodyText2"]))
+    story.append(bullet("<b>Extract course data</b> from the CP (title, topics, learning outcomes, description).", styles))
+    story.append(bullet("<b>Detect the company name</b> from the CP and look up the company in the database.", styles))
+    story.append(bullet("<b>Replace all branding</b> — company name, logo, address, email from the database.", styles))
+    story.append(bullet("<b>Fetch the estimated fee</b> from the URL (if provided).", styles))
+    story.append(bullet("<b>Remove Tertiary-specific content</b> — phone, WhatsApp, registration link, funding table.", styles))
+    story.append(note(
+        "The client company must be added in Company Management (Section 10) with their address, email, "
+        "and logo BEFORE generating the brochure. Otherwise the brochure will have missing details.",
+        styles))
+
+    story.append(Paragraph("7.3  Downloading & Clearing", styles["SubHeader"]))
+    story.append(bullet("<b>Download PDF</b> — Click to save the brochure.", styles))
+    story.append(bullet("<b>Clear & Generate New</b> — Click to reset and upload a new CP for the next course.", styles))
+    story.append(tip(
+        "When generating brochures for multiple client courses, use the Clear button after each one "
+        "to ensure fresh data for the next course.", styles))
     story.append(PageBreak())
 
     # ══════════════════════════════════════════════
@@ -796,7 +826,7 @@ def build_pdf():
         ["3", "Generate Lesson Plan", "Click Generate", "LP (.docx)"],
         ["4", "Generate Assessment", "Select types → Generate", "Assessment papers (.docx)"],
         ["5", "Generate Slides", "Click Generate", "Slide deck (.pptx)"],
-        ["6", "Generate Brochure", "Enter URL → Generate", "Brochure (.pdf)"],
+        ["6", "Generate Brochure", "URL (Tertiary) or CP (Client)", "Brochure (.pdf)"],
         ["7", "Courseware Audit", "Quick Check or Upload", "Audit report"],
     ]
     story.append(info_table(workflow_data, col_widths=[15*mm, 42*mm, 52*mm, 52*mm]))
@@ -804,7 +834,7 @@ def build_pdf():
     story.append(Spacer(1, 15*mm))
     story.append(HRFlowable(width="40%", thickness=1, color=MEDIUM_GRAY, spaceAfter=6))
     story.append(Paragraph(
-        f"WSQ Courseware Generator User Guide  |  Version 1.0  |  {today}",
+        f"WSQ Courseware Generator User Guide  |  Version 2.0  |  {today}",
         styles["FooterStyle"]))
     story.append(Paragraph(
         "© Tertiary Infotech Academy Pte Ltd. All Rights Reserved.",
