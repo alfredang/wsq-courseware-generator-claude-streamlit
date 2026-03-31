@@ -11,6 +11,8 @@
 
 Built with **Claude Agent SDK** — all AI processing runs through Claude Code subscription.
 
+📖 [**User Guide (PDF)**](docs/WSQ_Courseware_Generator_User_Guide.pdf) — Complete step-by-step guide for new team members & interns
+
 ![WSQ Courseware Generator](screenshot.png)
 
 </div>

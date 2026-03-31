@@ -249,7 +249,7 @@ def build_pdf():
     # ══════════════════════════════════════════════
     # COVER PAGE
     # ══════════════════════════════════════════════
-    story.append(Spacer(1, 60*mm))
+    story.append(Spacer(1, 50*mm))
 
     # Try to add logos
     wsq_logo = "assets/slide_logos/wsq_logo.png"
@@ -288,8 +288,10 @@ def build_pdf():
     story.append(HRFlowable(width="60%", thickness=2, color=BLUE, spaceAfter=10))
     story.append(Paragraph("Complete User Guide", styles["CoverSubtitle"]))
     story.append(Paragraph("Step-by-Step Instructions for All Features", styles["CoverSubtitle"]))
+    story.append(Spacer(1, 8*mm))
+    story.append(Paragraph("For New Team Members & Interns", styles["CoverSubtitle"]))
     story.append(Spacer(1, 10*mm))
-    story.append(Paragraph(f"Version 2.0  |  {today}", styles["CoverDate"]))
+    story.append(Paragraph(f"Version 3.0  |  {today}", styles["CoverDate"]))
     story.append(Spacer(1, 8*mm))
     story.append(Paragraph("Prepared by: Tertiary Infotech Academy Pte Ltd", styles["CoverDate"]))
     story.append(PageBreak())
@@ -301,53 +303,66 @@ def build_pdf():
     story.append(HRFlowable(width="100%", thickness=1, color=BLUE, spaceAfter=10))
 
     toc_items = [
-        ("1.", "Getting Started", [
-            "1.1  Opening the App",
-            "1.2  Selecting a Company",
-            "1.3  Understanding the Sidebar",
+        ("1.", "Introduction — What is WSQ?", [
+            "1.1  About WSQ (Workforce Skills Qualifications)",
+            "1.2  What This App Does",
+            "1.3  Key Terminology (Glossary)",
         ]),
-        ("2.", "Extract Course Info (Step 1 — Always Start Here)", [
-            "2.1  Uploading a Course Proposal",
-            "2.2  Entering Course Details",
-            "2.3  Reviewing Extracted Data",
+        ("2.", "Getting Started", [
+            "2.1  Opening the App",
+            "2.2  Selecting a Company",
+            "2.3  Understanding the Sidebar",
         ]),
-        ("3.", "Generate AP / FG / LG (Step 2)", [
-            "3.1  Selecting Documents to Generate",
-            "3.2  Running Generation",
-            "3.3  Downloading Documents",
+        ("3.", "Extract Course Info (Step 1 — Always Start Here)", [
+            "3.1  Uploading a Course Proposal",
+            "3.2  Entering Course Details",
+            "3.3  Reviewing Extracted Data",
         ]),
-        ("4.", "Generate Lesson Plan (Step 3)", [
-            "4.1  Generating the Schedule",
-            "4.2  Previewing & Downloading",
+        ("4.", "Generate AP / FG / LG (Step 2)", [
+            "4.1  Selecting Documents to Generate",
+            "4.2  Running Generation",
+            "4.3  Downloading Documents",
         ]),
-        ("5.", "Generate Assessment (Step 4)", [
-            "5.1  Uploading Facilitator Guide (Optional)",
-            "5.2  Selecting Assessment Types",
-            "5.3  Downloading Assessments",
+        ("5.", "Generate Lesson Plan (Step 3)", [
+            "5.1  Generating the Schedule",
+            "5.2  Previewing & Downloading",
         ]),
-        ("6.", "Generate Slides (Step 5)", [
-            "6.1  Generating Slides",
-            "6.2  Downloading the Slide Deck",
+        ("6.", "Generate Assessment (Step 4)", [
+            "6.1  Uploading Facilitator Guide (Optional)",
+            "6.2  Selecting Assessment Types",
+            "6.3  Downloading Assessments",
         ]),
-        ("7.", "Generate Brochure (Step 6)", [
-            "7.1  Tertiary Courses (URL Only)",
-            "7.2  Client Courses (Upload CP)",
-            "7.3  Downloading & Clearing",
+        ("7.", "Add Assessment to AP (Step 5)", [
+            "7.1  Uploading the AP and Assessment Files",
+            "7.2  Merging & Downloading",
         ]),
-        ("8.", "Convert Documents", [
-            "8.1  Convert Assessments",
-            "8.2  Convert Courseware",
-            "8.3  Convert Lesson Plans",
+        ("8.", "Generate Slides (Step 6)", [
+            "8.1  Generating Slides",
+            "8.2  Downloading the Slide Deck",
         ]),
-        ("9.", "Courseware Audit", [
-            "9.1  Quick Check Mode",
-            "9.2  Upload & Check Mode",
+        ("9.", "Generate Brochure (Step 7)", [
+            "9.1  Tertiary Courses (URL Only)",
+            "9.2  Client Courses (Upload CP)",
+            "9.3  Downloading & Clearing",
         ]),
-        ("10.", "Company Management (Settings)", [
-            "10.1  Adding a Company",
-            "10.2  Editing / Deleting a Company",
+        ("10.", "Convert Documents", [
+            "10.1  Convert Assessments",
+            "10.2  Convert Courseware",
+            "10.3  Convert Lesson Plans",
         ]),
-        ("11.", "Troubleshooting & FAQ", []),
+        ("11.", "Courseware Audit", [
+            "11.1  Quick Check Mode",
+            "11.2  Upload & Check Mode",
+        ]),
+        ("12.", "Company Management (Settings)", [
+            "12.1  Adding a Company",
+            "12.2  Editing / Deleting a Company",
+        ]),
+        ("13.", "File Organisation & Output", [
+            "13.1  Courseware Folder Structure",
+            "13.2  File Naming Convention",
+        ]),
+        ("14.", "Troubleshooting & FAQ", []),
     ]
 
     for num, title, subs in toc_items:
@@ -358,12 +373,80 @@ def build_pdf():
     story.append(PageBreak())
 
     # ══════════════════════════════════════════════
-    # SECTION 1 — GETTING STARTED
+    # SECTION 1 — INTRODUCTION
     # ══════════════════════════════════════════════
-    story.append(blue_header_table("1. Getting Started"))
+    story.append(blue_header_table("1. Introduction — What is WSQ?"))
     story.append(Spacer(1, 4*mm))
 
-    story.append(Paragraph("1.1  Opening the App", styles["SubHeader"]))
+    story.append(Paragraph("1.1  About WSQ (Workforce Skills Qualifications)", styles["SubHeader"]))
+    story.append(Paragraph(
+        "The <b>Singapore Workforce Skills Qualifications (WSQ)</b> system is a national credential "
+        "system that trains, develops, assesses, and certifies skills and competencies of the "
+        "Singapore workforce. WSQ is developed by SkillsFuture Singapore (SSG) together with "
+        "industry partners.",
+        styles["BodyText2"]))
+    story.append(Spacer(1, 2*mm))
+    story.append(Paragraph(
+        "Training providers (like Tertiary Infotech Academy) must submit a standardised set of "
+        "courseware documents to SSG for each WSQ course they offer. These documents must follow "
+        "strict formatting and content requirements. This is where the WSQ Courseware Generator "
+        "comes in — it automates the creation of these documents.",
+        styles["BodyText2"]))
+
+    story.append(Paragraph("1.2  What This App Does", styles["SubHeader"]))
+    story.append(Paragraph(
+        "The <b>WSQ Courseware Generator</b> is an AI-powered web application that takes a single "
+        "<b>Course Proposal (CP)</b> document and generates <b>all required courseware</b> "
+        "automatically. Instead of manually creating 8+ documents for each course (which can take "
+        "days), the app produces them in minutes.",
+        styles["BodyText2"]))
+    story.append(Spacer(1, 2*mm))
+    story.append(Paragraph("The app generates the following documents:", styles["BodyText2"]))
+    story.append(bullet("<b>Assessment Plan (AP)</b> — Defines how trainees will be assessed", styles))
+    story.append(bullet("<b>Assessment Summary Record (ASR)</b> — Records trainee assessment results", styles))
+    story.append(bullet("<b>Facilitator Guide (FG)</b> — Instructor's teaching manual", styles))
+    story.append(bullet("<b>Learner Guide (LG)</b> — Student's learning handbook", styles))
+    story.append(bullet("<b>Lesson Plan (LP)</b> — Day-by-day training schedule/timetable", styles))
+    story.append(bullet("<b>Assessment Papers</b> — Question papers and answer keys (9 types)", styles))
+    story.append(bullet("<b>Slide Deck (PPTX)</b> — Presentation slides with infographics", styles))
+    story.append(bullet("<b>Marketing Brochure (PDF)</b> — Course brochure for promotion", styles))
+
+    story.append(Paragraph("1.3  Key Terminology (Glossary)", styles["SubHeader"]))
+    glossary_data = [
+        ["Term", "Meaning"],
+        ["CP", "Course Proposal — the approved document submitted to SSG describing a course"],
+        ["AP", "Assessment Plan — document outlining assessment strategy and criteria"],
+        ["ASR", "Assessment Summary Record — form for recording trainee assessment outcomes"],
+        ["FG", "Facilitator Guide — instructor's teaching manual with lesson content"],
+        ["LG", "Learner Guide — student's handbook with learning materials"],
+        ["LP", "Lesson Plan — day-by-day timetable/schedule for the course"],
+        ["TGS", "Training Grant for Skills — unique reference code for each WSQ course (e.g., TGS-2024001234)"],
+        ["TSC", "Training & Skills Competency — the competency framework a course maps to"],
+        ["SSG", "SkillsFuture Singapore — government agency that oversees WSQ"],
+        ["LU", "Learning Unit — a major section of the course (a course has 1 or more LUs)"],
+        ["K statement", "Knowledge statement — what the trainee should KNOW"],
+        ["A statement", "Ability statement — what the trainee should be able to DO"],
+        ["UEN", "Unique Entity Number — Singapore business registration number"],
+        ["SAQ / WA", "Short Answer Questions / Written Assessment"],
+        ["PP", "Practical Performance assessment"],
+        ["CS", "Case Study assessment"],
+        ["OQ", "Oral Questioning assessment"],
+        ["OI", "Oral Interview assessment"],
+        ["DEM", "Demonstration assessment"],
+        ["RP", "Role Play assessment"],
+        ["PRJ", "Project-based assessment"],
+        ["ASGN", "Assignment-based assessment"],
+    ]
+    story.append(info_table(glossary_data, col_widths=[30*mm, 140*mm]))
+    story.append(PageBreak())
+
+    # ══════════════════════════════════════════════
+    # SECTION 2 — GETTING STARTED
+    # ══════════════════════════════════════════════
+    story.append(blue_header_table("2. Getting Started"))
+    story.append(Spacer(1, 4*mm))
+
+    story.append(Paragraph("2.1  Opening the App", styles["SubHeader"]))
     story.append(Paragraph(
         "The WSQ Courseware Generator runs as a web application in your browser. "
         "To access the app:", styles["BodyText2"]))
@@ -374,16 +457,16 @@ def build_pdf():
         "You do not need to install anything. The app runs entirely in your web browser.",
         styles))
 
-    story.append(Paragraph("1.2  Selecting a Company", styles["SubHeader"]))
+    story.append(Paragraph("2.2  Selecting a Company", styles["SubHeader"]))
     story.append(Paragraph(
         "At the top of the left sidebar, you will see a <b>Company dropdown</b>. "
         "This determines which company's branding (logo, UEN, address) appears on all generated documents.",
         styles["BodyText2"]))
     story.append(bullet("Select the correct company <b>before</b> generating any documents.", styles))
     story.append(bullet("The default is 'Tertiary Infotech Academy Pte Ltd'.", styles))
-    story.append(bullet("To add or edit companies, see <b>Section 10: Company Management</b>.", styles))
+    story.append(bullet("To add or edit companies, see <b>Section 12: Company Management</b>.", styles))
 
-    story.append(Paragraph("1.3  Understanding the Sidebar", styles["SubHeader"]))
+    story.append(Paragraph("2.3  Understanding the Sidebar", styles["SubHeader"]))
     story.append(Paragraph(
         "The left sidebar contains the main navigation menu with 8 pages. "
         "Below the menu, you will find:", styles["BodyText2"]))
@@ -392,14 +475,14 @@ def build_pdf():
     story.append(Spacer(1, 4*mm))
     story.append(note(
         "The recommended workflow follows the menu order from top to bottom: "
-        "Extract Course Info → Generate AP/FG/LG → Lesson Plan → Assessment → Slides → Brochure → Audit.",
+        "Extract Course Info → Generate AP/FG/LG → Lesson Plan → Assessment → Add Assessment to AP → Slides → Brochure → Audit.",
         styles))
     story.append(PageBreak())
 
     # ══════════════════════════════════════════════
-    # SECTION 2 — EXTRACT COURSE INFO
+    # SECTION 3 — EXTRACT COURSE INFO
     # ══════════════════════════════════════════════
-    story.append(blue_header_table("2. Extract Course Info"))
+    story.append(blue_header_table("3. Extract Course Info"))
     story.append(Spacer(1, 4*mm))
     story.append(Paragraph(
         "This is <b>always the first step</b>. You must extract course information from an approved "
@@ -407,7 +490,7 @@ def build_pdf():
         "automatically shared across all other pages.",
         styles["BodyText2"]))
 
-    story.append(Paragraph("2.1  Uploading a Course Proposal", styles["SubHeader"]))
+    story.append(Paragraph("3.1  Uploading a Course Proposal", styles["SubHeader"]))
     story.append(step(1, "Navigate to <b>Extract Course Info</b> in the sidebar.", styles))
     story.append(step(2, "Click the <b>file upload area</b> (drag-and-drop also works).", styles))
     story.append(step(3, "Upload your Course Proposal file. Supported formats:", styles))
@@ -415,7 +498,7 @@ def build_pdf():
     story.append(bullet("<b>.xlsx</b> — Excel spreadsheet", styles))
     story.append(Spacer(1, 2*mm))
 
-    story.append(Paragraph("2.2  Entering Course Details", styles["SubHeader"]))
+    story.append(Paragraph("3.2  Entering Course Details", styles["SubHeader"]))
     story.append(step(1, "Enter the <b>Course Reference Code (TGS)</b> — e.g., TGS-2024001234. "
         "This code appears on all generated documents.", styles))
     story.append(step(2, "(Optional) Enter the <b>Course URL</b> — the link to the course webpage. "
@@ -428,7 +511,7 @@ def build_pdf():
         "You can wait on this page or navigate away; the extraction will continue.",
         styles["BodyText2"]))
 
-    story.append(Paragraph("2.3  Reviewing Extracted Data", styles["SubHeader"]))
+    story.append(Paragraph("3.3  Reviewing Extracted Data", styles["SubHeader"]))
     story.append(Paragraph(
         "Once extraction completes, you will see a <b>success card</b> showing:", styles["BodyText2"]))
     story.append(bullet("Course Title", styles))
@@ -447,9 +530,9 @@ def build_pdf():
     story.append(PageBreak())
 
     # ══════════════════════════════════════════════
-    # SECTION 3 — GENERATE AP / FG / LG
+    # SECTION 4 — GENERATE AP / FG / LG
     # ══════════════════════════════════════════════
-    story.append(blue_header_table("3. Generate AP / FG / LG"))
+    story.append(blue_header_table("4. Generate AP / FG / LG"))
     story.append(Spacer(1, 4*mm))
     story.append(Paragraph(
         "This page generates three core WSQ courseware documents using AI agents:",
@@ -459,17 +542,17 @@ def build_pdf():
     story.append(bullet("<b>Facilitator Guide (FG)</b> — Instructor manual with lesson content and activities.", styles))
     story.append(bullet("<b>Learner Guide (LG)</b> — Student handbook with learning content.", styles))
 
-    story.append(Paragraph("3.1  Selecting Documents to Generate", styles["SubHeader"]))
+    story.append(Paragraph("4.1  Selecting Documents to Generate", styles["SubHeader"]))
     story.append(step(1, "Navigate to <b>Generate AP/FG/LG</b> in the sidebar.", styles))
     story.append(step(2, "You will see the extracted course info summary at the top. "
-        "If it says 'No course info loaded', go back to Step 2 first.", styles))
+        "If it says 'No course info loaded', go back to Step 3 first.", styles))
     story.append(step(3, "Use the <b>checkboxes</b> to select which documents to generate:", styles))
     story.append(bullet("Learning Guide (LG) — checked by default", styles))
     story.append(bullet("Assessment Plan (AP) — checked by default", styles))
     story.append(bullet("Facilitator Guide (FG) — checked by default", styles))
     story.append(note("You can uncheck any document you don't need. For example, if you only need the LG.", styles))
 
-    story.append(Paragraph("3.2  Running Generation", styles["SubHeader"]))
+    story.append(Paragraph("4.2  Running Generation", styles["SubHeader"]))
     story.append(step(1, "Click the <b>Generate Documents</b> button.", styles))
     story.append(step(2, "A spinner will appear as each document is being generated by the AI agent.", styles))
     story.append(step(3, "Generation takes 1-3 minutes per document depending on course complexity.", styles))
@@ -478,7 +561,7 @@ def build_pdf():
         "proficiency levels, and sector information before generating.",
         styles["BodyText2"]))
 
-    story.append(Paragraph("3.3  Downloading Documents", styles["SubHeader"]))
+    story.append(Paragraph("4.3  Downloading Documents", styles["SubHeader"]))
     story.append(Paragraph("Once generation completes, you have two download options:", styles["BodyText2"]))
     story.append(bullet("<b>Individual downloads</b> — Click the download button next to each document.", styles))
     story.append(bullet("<b>Bulk download</b> — Click <b>Download All as ZIP</b> to get all documents in one file.", styles))
@@ -494,16 +577,16 @@ def build_pdf():
     story.append(PageBreak())
 
     # ══════════════════════════════════════════════
-    # SECTION 4 — GENERATE LESSON PLAN
+    # SECTION 5 — GENERATE LESSON PLAN
     # ══════════════════════════════════════════════
-    story.append(blue_header_table("4. Generate Lesson Plan"))
+    story.append(blue_header_table("5. Generate Lesson Plan"))
     story.append(Spacer(1, 4*mm))
     story.append(Paragraph(
         "The Lesson Plan is generated <b>instantly</b> using a pure Python scheduling algorithm — "
         "no AI processing is needed. It creates a day-by-day timetable for the course.",
         styles["BodyText2"]))
 
-    story.append(Paragraph("4.1  Generating the Schedule", styles["SubHeader"]))
+    story.append(Paragraph("5.1  Generating the Schedule", styles["SubHeader"]))
     story.append(step(1, "Navigate to <b>Generate Lesson Plan</b> in the sidebar.", styles))
     story.append(step(2, "The extracted course info is auto-loaded. Verify the course details at the top.", styles))
     story.append(step(3, "Click <b>Generate Lesson Plan</b>.", styles))
@@ -515,7 +598,7 @@ def build_pdf():
     story.append(bullet("Topics are distributed evenly across available time", styles))
     story.append(bullet("Breaks fill all remaining gaps to ensure a full 9am–6pm day", styles))
 
-    story.append(Paragraph("4.2  Previewing & Downloading", styles["SubHeader"]))
+    story.append(Paragraph("5.2  Previewing & Downloading", styles["SubHeader"]))
     story.append(Paragraph(
         "After generation, you will see:", styles["BodyText2"]))
     story.append(bullet("<b>Statistics</b> — Total days, minutes per topic, instructional hours, assessment hours.", styles))
@@ -524,9 +607,9 @@ def build_pdf():
     story.append(PageBreak())
 
     # ══════════════════════════════════════════════
-    # SECTION 5 — GENERATE ASSESSMENT
+    # SECTION 6 — GENERATE ASSESSMENT
     # ══════════════════════════════════════════════
-    story.append(blue_header_table("5. Generate Assessment"))
+    story.append(blue_header_table("6. Generate Assessment"))
     story.append(Spacer(1, 4*mm))
     story.append(Paragraph(
         "Generate assessment question papers in standard WSQ format. "
@@ -549,7 +632,7 @@ def build_pdf():
     story.append(info_table(assess_data, col_widths=[30*mm, 45*mm, 95*mm]))
     story.append(Spacer(1, 4*mm))
 
-    story.append(Paragraph("5.1  Uploading Facilitator Guide (Optional)", styles["SubHeader"]))
+    story.append(Paragraph("6.1  Uploading Facilitator Guide (Optional)", styles["SubHeader"]))
     story.append(Paragraph(
         "You can optionally upload the Facilitator Guide (FG) to extract Knowledge (K) and "
         "Ability (A) statements. This helps the AI map assessment questions to specific K/A items.",
@@ -557,27 +640,60 @@ def build_pdf():
     story.append(step(1, "Navigate to <b>Generate Assessment</b> in the sidebar.", styles))
     story.append(step(2, "(Optional) Upload the FG .docx file to extract K/A statements.", styles))
 
-    story.append(Paragraph("5.2  Selecting Assessment Types", styles["SubHeader"]))
+    story.append(Paragraph("6.2  Selecting Assessment Types", styles["SubHeader"]))
     story.append(step(1, "Use the <b>checkboxes</b> to select which assessment types to generate.", styles))
     story.append(step(2, "Click <b>Generate Assessments</b>.", styles))
     story.append(step(3, "The AI agent creates questions, expected answers, and K/A mappings for each type.", styles))
 
-    story.append(Paragraph("5.3  Downloading Assessments", styles["SubHeader"]))
+    story.append(Paragraph("6.3  Downloading Assessments", styles["SubHeader"]))
     story.append(bullet("<b>Individual downloads</b> — Each assessment type has its own download button.", styles))
     story.append(bullet("<b>Bulk download</b> — Download all as assessments_[CourseName].zip", styles))
     story.append(PageBreak())
 
     # ══════════════════════════════════════════════
-    # SECTION 6 — GENERATE SLIDES
+    # SECTION 7 — ADD ASSESSMENT TO AP
     # ══════════════════════════════════════════════
-    story.append(blue_header_table("6. Generate Slides"))
+    story.append(blue_header_table("7. Add Assessment to AP"))
+    story.append(Spacer(1, 4*mm))
+    story.append(Paragraph(
+        "After generating assessment papers (Section 6), you need to attach them to the "
+        "Assessment Plan as annexes. This step merges the assessment question papers and "
+        "answer keys into the AP document with proper annex labelling.",
+        styles["BodyText2"]))
+
+    story.append(Paragraph("7.1  Uploading the AP and Assessment Files", styles["SubHeader"]))
+    story.append(step(1, "Navigate to <b>Add Assessment to AP</b> in the sidebar.", styles))
+    story.append(step(2, "Upload the <b>Assessment Plan (AP)</b> .docx file generated in Section 4.", styles))
+    story.append(step(3, "Upload your <b>assessment files</b> — the question papers and answer keys "
+        "generated in Section 6.", styles))
+    story.append(Spacer(1, 2*mm))
+    story.append(Paragraph(
+        "The system auto-detects the assessment types from the filenames. For each type, it "
+        "creates annex sections (Annex A, Annex B, etc.) with proper headers:",
+        styles["BodyText2"]))
+    story.append(bullet("Annex A: QUESTION PAPER OF [Assessment Type] ASSESSMENT", styles))
+    story.append(bullet("Annex B: SUGGESTED ANSWER TO [Assessment Type] ASSESSMENT QUESTIONS", styles))
+
+    story.append(Paragraph("7.2  Merging & Downloading", styles["SubHeader"]))
+    story.append(step(1, "Click <b>Merge</b> to combine the AP with all assessment annexes.", styles))
+    story.append(step(2, "Download the merged document. Page breaks are automatically inserted "
+        "between each annex section.", styles))
+    story.append(tip(
+        "Always review the merged document in Microsoft Word to verify the annex formatting "
+        "and page breaks look correct.", styles))
+    story.append(PageBreak())
+
+    # ══════════════════════════════════════════════
+    # SECTION 8 — GENERATE SLIDES
+    # ══════════════════════════════════════════════
+    story.append(blue_header_table("8. Generate Slides"))
     story.append(Spacer(1, 4*mm))
     story.append(Paragraph(
         "Generates a presentation slide deck with infographics for the course content. "
         "The system uses a multi-agent pipeline to create content-rich slides with visuals.",
         styles["BodyText2"]))
 
-    story.append(Paragraph("6.1  Generating Slides", styles["SubHeader"]))
+    story.append(Paragraph("8.1  Generating Slides", styles["SubHeader"]))
     story.append(step(1, "Navigate to <b>Generate Slides</b> in the sidebar.", styles))
     story.append(step(2, "Ensure course info has been extracted (Section 2).", styles))
     story.append(step(3, "Click <b>Generate Slides</b> to start the multi-agent pipeline.", styles))
@@ -589,7 +705,7 @@ def build_pdf():
     story.append(bullet("<b>Phase 4: Infographic</b> — Creates visual infographics", styles))
     story.append(bullet("<b>Phase 5: Assembly</b> — Builds the final PPTX file", styles))
 
-    story.append(Paragraph("6.2  Downloading the Slide Deck", styles["SubHeader"]))
+    story.append(Paragraph("8.2  Downloading the Slide Deck", styles["SubHeader"]))
     story.append(Paragraph(
         "Once complete, use the <b>Download</b> button to save the PPTX presentation file. "
         "The slide deck includes company branding, WSQ logos, and topic infographics.",
@@ -608,16 +724,16 @@ def build_pdf():
     story.append(PageBreak())
 
     # ══════════════════════════════════════════════
-    # SECTION 7 — GENERATE BROCHURE
+    # SECTION 9 — GENERATE BROCHURE
     # ══════════════════════════════════════════════
-    story.append(blue_header_table("7. Generate Brochure"))
+    story.append(blue_header_table("9. Generate Brochure"))
     story.append(Spacer(1, 4*mm))
     story.append(Paragraph(
         "Creates a marketing brochure PDF for any WSQ course. There are <b>two modes</b> depending on "
         "whether the course is a Tertiary Infotech course or a client course.",
         styles["BodyText2"]))
 
-    story.append(Paragraph("7.1  Tertiary Courses (URL Only)", styles["SubHeader"]))
+    story.append(Paragraph("9.1  Tertiary Courses (URL Only)", styles["SubHeader"]))
     story.append(Paragraph(
         "For Tertiary Infotech courses, the brochure is generated entirely from the course webpage:",
         styles["BodyText2"]))
@@ -630,7 +746,7 @@ def build_pdf():
         "and generates a branded PDF with the Tertiary Infotech logo and contact details.",
         styles["BodyText2"]))
 
-    story.append(Paragraph("7.2  Client Courses (Upload CP)", styles["SubHeader"]))
+    story.append(Paragraph("9.2  Client Courses (Upload CP)", styles["SubHeader"]))
     story.append(Paragraph(
         "For client courses (e.g., Laures, other training providers), MySkillsFuture has limited info. "
         "Instead, upload the client's Course Proposal:",
@@ -652,7 +768,7 @@ def build_pdf():
         "and logo BEFORE generating the brochure. Otherwise the brochure will have missing details.",
         styles))
 
-    story.append(Paragraph("7.3  Downloading & Clearing", styles["SubHeader"]))
+    story.append(Paragraph("9.3  Downloading & Clearing", styles["SubHeader"]))
     story.append(bullet("<b>Download PDF</b> — Click to save the brochure.", styles))
     story.append(bullet("<b>Clear & Generate New</b> — Click to reset and upload a new CP for the next course.", styles))
     story.append(tip(
@@ -661,43 +777,43 @@ def build_pdf():
     story.append(PageBreak())
 
     # ══════════════════════════════════════════════
-    # SECTION 8 — CONVERT DOCUMENTS
+    # SECTION 10 — CONVERT DOCUMENTS
     # ══════════════════════════════════════════════
-    story.append(blue_header_table("8. Convert Documents"))
+    story.append(blue_header_table("10. Convert Documents"))
     story.append(Spacer(1, 4*mm))
     story.append(Paragraph(
         "Convert existing (non-standard) documents into standardized WSQ format. "
         "This page has <b>three tabs</b>:",
         styles["BodyText2"]))
 
-    story.append(Paragraph("8.1  Convert Assessments", styles["SubHeader"]))
+    story.append(Paragraph("10.1  Convert Assessments", styles["SubHeader"]))
     story.append(step(1, "Go to the <b>Convert Assessment</b> tab.", styles))
     story.append(step(2, "Upload one or more assessment .docx files (question papers, answer keys).", styles))
     story.append(step(3, "Click <b>Convert</b>. The AI extracts questions, answers, and K/A mappings.", styles))
     story.append(step(4, "Download the converted files as a ZIP — each file is in standard WSQ format.", styles))
 
-    story.append(Paragraph("8.2  Convert Courseware", styles["SubHeader"]))
+    story.append(Paragraph("10.2  Convert Courseware", styles["SubHeader"]))
     story.append(step(1, "Go to the <b>Convert Courseware</b> tab.", styles))
     story.append(step(2, "Upload AP, FG, LG, or ASR documents (.docx).", styles))
     story.append(step(3, "Click <b>Convert</b> to reformat into WSQ standard.", styles))
 
-    story.append(Paragraph("8.3  Convert Lesson Plans", styles["SubHeader"]))
+    story.append(Paragraph("10.3  Convert Lesson Plans", styles["SubHeader"]))
     story.append(step(1, "Go to the <b>Convert Lesson Plan</b> tab.", styles))
     story.append(step(2, "Upload existing lesson plan .docx files.", styles))
     story.append(step(3, "Click <b>Convert</b> to restructure into the standard timetable format.", styles))
     story.append(PageBreak())
 
     # ══════════════════════════════════════════════
-    # SECTION 9 — COURSEWARE AUDIT
+    # SECTION 11 — COURSEWARE AUDIT
     # ══════════════════════════════════════════════
-    story.append(blue_header_table("9. Courseware Audit"))
+    story.append(blue_header_table("11. Courseware Audit"))
     story.append(Spacer(1, 4*mm))
     story.append(Paragraph(
         "The audit tool cross-checks your generated courseware documents against the "
         "Course Proposal (source of truth) to catch any mismatches or errors.",
         styles["BodyText2"]))
 
-    story.append(Paragraph("9.1  Quick Check Mode", styles["SubHeader"]))
+    story.append(Paragraph("11.1  Quick Check Mode", styles["SubHeader"]))
     story.append(Paragraph(
         "If you have just generated documents on the AP/FG/LG page, you can use <b>Quick Check</b>:",
         styles["BodyText2"]))
@@ -707,7 +823,7 @@ def build_pdf():
     story.append(step(3, "Review the audit table: green checkmarks (✓) for matches, "
         "red crosses (✗) for mismatches.", styles))
 
-    story.append(Paragraph("9.2  Upload & Check Mode", styles["SubHeader"]))
+    story.append(Paragraph("11.2  Upload & Check Mode", styles["SubHeader"]))
     story.append(Paragraph(
         "For auditing existing documents (not just generated ones):",
         styles["BodyText2"]))
@@ -725,15 +841,15 @@ def build_pdf():
     story.append(PageBreak())
 
     # ══════════════════════════════════════════════
-    # SECTION 10 — COMPANY MANAGEMENT
+    # SECTION 12 — COMPANY MANAGEMENT
     # ══════════════════════════════════════════════
-    story.append(blue_header_table("10. Company Management (Settings)"))
+    story.append(blue_header_table("12. Company Management (Settings)"))
     story.append(Spacer(1, 4*mm))
     story.append(Paragraph(
         "Manage the training provider companies whose branding appears on generated documents.",
         styles["BodyText2"]))
 
-    story.append(Paragraph("10.1  Adding a Company", styles["SubHeader"]))
+    story.append(Paragraph("12.1  Adding a Company", styles["SubHeader"]))
     story.append(step(1, "Click the <b>Companies</b> button at the bottom of the sidebar.", styles))
     story.append(step(2, "Click <b>Add New Company</b>.", styles))
     story.append(step(3, "Fill in the details:", styles))
@@ -745,7 +861,7 @@ def build_pdf():
     story.append(step(4, "Upload the <b>company logo</b> (PNG or JPG). This appears on all documents.", styles))
     story.append(step(5, "Click <b>Save</b>.", styles))
 
-    story.append(Paragraph("10.2  Editing / Deleting a Company", styles["SubHeader"]))
+    story.append(Paragraph("12.2  Editing / Deleting a Company", styles["SubHeader"]))
     story.append(bullet("<b>Edit:</b> Click the edit button next to any company to update its details or logo.", styles))
     story.append(bullet("<b>Delete:</b> Click delete — the system auto-backs up the company data "
         "before removing it (saved in company/deleted_companies/).", styles))
@@ -753,9 +869,64 @@ def build_pdf():
     story.append(PageBreak())
 
     # ══════════════════════════════════════════════
-    # SECTION 11 — TROUBLESHOOTING
+    # SECTION 13 — FILE ORGANISATION & OUTPUT
     # ══════════════════════════════════════════════
-    story.append(blue_header_table("11. Troubleshooting & FAQ"))
+    story.append(blue_header_table("13. File Organisation & Output"))
+    story.append(Spacer(1, 4*mm))
+
+    story.append(Paragraph("13.1  Courseware Folder Structure", styles["SubHeader"]))
+    story.append(Paragraph(
+        "All generated documents are automatically saved to a <b>Courseware/</b> folder in the "
+        "project directory. Each course gets its own subfolder, organised by document type:",
+        styles["BodyText2"]))
+    story.append(Spacer(1, 2*mm))
+
+    folder_data = [
+        ["Folder", "Contents"],
+        ["Courseware/[Course Name]/", "Root folder for each course"],
+        ["  Course Proposal/", "Original uploaded CP document"],
+        ["  AP/", "Assessment Plan and ASR documents"],
+        ["  FG/", "Facilitator Guide document"],
+        ["  LG/", "Learner Guide document"],
+        ["  Lesson Plan/", "Lesson Plan document"],
+        ["  Assessment/", "Question papers and answer keys"],
+        ["  Slides/", "PowerPoint slide deck"],
+        ["  Brochure/", "Marketing brochure PDF"],
+    ]
+    story.append(info_table(folder_data, col_widths=[55*mm, 115*mm]))
+    story.append(Spacer(1, 4*mm))
+
+    story.append(Paragraph("13.2  File Naming Convention", styles["SubHeader"]))
+    story.append(Paragraph(
+        "All generated files follow a consistent naming pattern for easy identification:",
+        styles["BodyText2"]))
+    story.append(Spacer(1, 2*mm))
+
+    naming_data = [
+        ["Document", "Filename Pattern", "Example"],
+        ["Assessment Plan", "Assessment_Plan_[TGS]_[Title].docx", "Assessment_Plan_TGS-2024001234_Python.docx"],
+        ["ASR", "Assessment_Summary_Record_[TGS]_[Title].docx", "Assessment_Summary_Record_TGS-2024001234_Python.docx"],
+        ["Facilitator Guide", "FG_[TGS]_[Title].docx", "FG_TGS-2024001234_Python.docx"],
+        ["Learner Guide", "LG_[TGS]_[Title].docx", "LG_TGS-2024001234_Python.docx"],
+        ["Lesson Plan", "LP_[TGS]_[Title]_v1.docx", "LP_TGS-2024001234_Python_v1.docx"],
+        ["Assessment QP", "[Type]_QP_[TGS]_[Title].docx", "SAQ_QP_TGS-2024001234_Python.docx"],
+        ["Assessment AK", "[Type]_AK_[TGS]_[Title].docx", "SAQ_AK_TGS-2024001234_Python.docx"],
+    ]
+    ps_small = ParagraphStyle("sm", fontName="Helvetica", fontSize=8, textColor=DARK_GRAY, leading=10)
+    naming_styled = []
+    ps_header_sm = ParagraphStyle("smh", fontName="Helvetica-Bold", fontSize=8, textColor=white, leading=10)
+    for i, row in enumerate(naming_data):
+        if i == 0:
+            naming_styled.append([Paragraph(c, ps_header_sm) for c in row])
+        else:
+            naming_styled.append([Paragraph(c, ps_small) for c in row])
+    story.append(info_table(naming_styled, col_widths=[35*mm, 60*mm, 75*mm]))
+    story.append(PageBreak())
+
+    # ══════════════════════════════════════════════
+    # SECTION 14 — TROUBLESHOOTING
+    # ══════════════════════════════════════════════
+    story.append(blue_header_table("14. Troubleshooting & FAQ"))
     story.append(Spacer(1, 4*mm))
 
     faq_data = [
@@ -798,6 +969,21 @@ def build_pdf():
             "Simply upload the CP again on the Extract Course Info page. "
             "It will overwrite the previous extraction."
         ],
+        [
+            "Assessments not attaching to AP",
+            "Make sure you are uploading the correct AP file (generated from Section 4) "
+            "and that the assessment files are .docx format."
+        ],
+        [
+            "Company logo not appearing on documents",
+            "Go to Company Management (Section 12) and check that a logo image (PNG/JPG) "
+            "has been uploaded for the selected company."
+        ],
+        [
+            "Lesson Plan times don't add up",
+            "The Lesson Plan auto-fills gaps with breaks so every day is exactly 9am-6pm. "
+            "If topics seem short, check the instructional hours in the CP."
+        ],
     ]
 
     # Build FAQ table with wrapping
@@ -825,16 +1011,17 @@ def build_pdf():
         ["2", "Generate AP/FG/LG", "Select docs → Generate", "AP, ASR, FG, LG (.docx)"],
         ["3", "Generate Lesson Plan", "Click Generate", "LP (.docx)"],
         ["4", "Generate Assessment", "Select types → Generate", "Assessment papers (.docx)"],
-        ["5", "Generate Slides", "Click Generate", "Slide deck (.pptx)"],
-        ["6", "Generate Brochure", "URL (Tertiary) or CP (Client)", "Brochure (.pdf)"],
-        ["7", "Courseware Audit", "Quick Check or Upload", "Audit report"],
+        ["5", "Add Assessment to AP", "Upload AP + assessments → Merge", "AP with annexes (.docx)"],
+        ["6", "Generate Slides", "Click Generate", "Slide deck (.pptx)"],
+        ["7", "Generate Brochure", "URL (Tertiary) or CP (Client)", "Brochure (.pdf)"],
+        ["8", "Courseware Audit", "Quick Check or Upload", "Audit report"],
     ]
     story.append(info_table(workflow_data, col_widths=[15*mm, 42*mm, 52*mm, 52*mm]))
 
     story.append(Spacer(1, 15*mm))
     story.append(HRFlowable(width="40%", thickness=1, color=MEDIUM_GRAY, spaceAfter=6))
     story.append(Paragraph(
-        f"WSQ Courseware Generator User Guide  |  Version 2.0  |  {today}",
+        f"WSQ Courseware Generator User Guide  |  Version 3.0  |  {today}",
         styles["FooterStyle"]))
     story.append(Paragraph(
         "© Tertiary Infotech Academy Pte Ltd. All Rights Reserved.",
