@@ -291,7 +291,7 @@ def build_pdf():
     story.append(Spacer(1, 8*mm))
     story.append(Paragraph("For New Team Members & Interns", styles["CoverSubtitle"]))
     story.append(Spacer(1, 10*mm))
-    story.append(Paragraph(f"Version 3.0  |  {today}", styles["CoverDate"]))
+    story.append(Paragraph(f"Version 3.1  |  {today}", styles["CoverDate"]))
     story.append(Spacer(1, 8*mm))
     story.append(Paragraph("Prepared by: Tertiary Infotech Academy Pte Ltd", styles["CoverDate"]))
     story.append(PageBreak())
@@ -392,6 +392,13 @@ def build_pdf():
         "strict formatting and content requirements. This is where the WSQ Courseware Generator "
         "comes in — it automates the creation of these documents.",
         styles["BodyText2"]))
+    story.append(Spacer(1, 2*mm))
+    story.append(Paragraph(
+        "<b>In simple terms:</b> When a company wants to offer a WSQ-certified course, they first get "
+        "a Course Proposal (CP) approved by SSG. Then they need to create a full package of training "
+        "documents — lesson plans, assessment papers, teaching guides, etc. This app generates all "
+        "of those documents automatically from just the CP.",
+        styles["BodyText2"]))
 
     story.append(Paragraph("1.2  What This App Does", styles["SubHeader"]))
     story.append(Paragraph(
@@ -402,14 +409,19 @@ def build_pdf():
         styles["BodyText2"]))
     story.append(Spacer(1, 2*mm))
     story.append(Paragraph("The app generates the following documents:", styles["BodyText2"]))
-    story.append(bullet("<b>Assessment Plan (AP)</b> — Defines how trainees will be assessed", styles))
-    story.append(bullet("<b>Assessment Summary Record (ASR)</b> — Records trainee assessment results", styles))
-    story.append(bullet("<b>Facilitator Guide (FG)</b> — Instructor's teaching manual", styles))
-    story.append(bullet("<b>Learner Guide (LG)</b> — Student's learning handbook", styles))
-    story.append(bullet("<b>Lesson Plan (LP)</b> — Day-by-day training schedule/timetable", styles))
-    story.append(bullet("<b>Assessment Papers</b> — Question papers and answer keys (9 types)", styles))
-    story.append(bullet("<b>Slide Deck (PPTX)</b> — Presentation slides with infographics", styles))
-    story.append(bullet("<b>Marketing Brochure (PDF)</b> — Course brochure for promotion", styles))
+    story.append(bullet("<b>Assessment Plan (AP)</b> — Defines how trainees will be assessed, what methods are used, and what evidence is required", styles))
+    story.append(bullet("<b>Assessment Summary Record (ASR)</b> — A form for recording each trainee's assessment results (pass/fail)", styles))
+    story.append(bullet("<b>Facilitator Guide (FG)</b> — The instructor's teaching manual with lesson content, activities, examples, and trainer notes", styles))
+    story.append(bullet("<b>Learner Guide (LG)</b> — The student's handbook with learning content, exercises, and self-check questions", styles))
+    story.append(bullet("<b>Lesson Plan (LP)</b> — Day-by-day training timetable (e.g., 9am-10am Topic 1, 10am-12pm Topic 2, etc.)", styles))
+    story.append(bullet("<b>Assessment Papers</b> — Question papers and answer keys for up to 9 assessment types (written, practical, case study, etc.)", styles))
+    story.append(bullet("<b>Slide Deck (PPTX)</b> — PowerPoint presentation slides with infographics for the trainer to use during class", styles))
+    story.append(bullet("<b>Marketing Brochure (PDF)</b> — A professional PDF brochure for promoting the course to potential trainees", styles))
+    story.append(Spacer(1, 2*mm))
+    story.append(note(
+        "You do not need to be a technical person to use this app. It runs in your web browser "
+        "like any website. Just upload the CP, click a few buttons, and download the generated documents.",
+        styles))
 
     story.append(Paragraph("1.3  Key Terminology (Glossary)", styles["SubHeader"]))
     glossary_data = [
@@ -448,13 +460,17 @@ def build_pdf():
 
     story.append(Paragraph("2.1  Opening the App", styles["SubHeader"]))
     story.append(Paragraph(
-        "The WSQ Courseware Generator runs as a web application in your browser. "
-        "To access the app:", styles["BodyText2"]))
-    story.append(step(1, "Open <b>Google Chrome</b> (or any web browser).", styles))
-    story.append(step(2, "Go to the <b>app link</b> provided to you by your administrator.", styles))
-    story.append(step(3, "The app will load and you can start using it immediately.", styles))
+        "The WSQ Courseware Generator runs as a web application in your browser — just like "
+        "Google Docs or any website. No installation is needed.",
+        styles["BodyText2"]))
+    story.append(step(1, "Open <b>Google Chrome</b> (recommended) or any web browser.", styles))
+    story.append(step(2, "Go to the <b>app link</b> provided to you by your administrator "
+        "(e.g., http://localhost:7860 or the public URL).", styles))
+    story.append(step(3, "The app will load with a dark-themed interface. You will see the "
+        "<b>sidebar menu</b> on the left and the main content area on the right.", styles))
     story.append(note(
-        "You do not need to install anything. The app runs entirely in your web browser.",
+        "You do not need to install Python, Claude, or any software. Everything runs in your browser. "
+        "If the app link doesn't load, ask your administrator if the app is running.",
         styles))
 
     story.append(Paragraph("2.2  Selecting a Company", styles["SubHeader"]))
@@ -485,10 +501,15 @@ def build_pdf():
     story.append(blue_header_table("3. Extract Course Info"))
     story.append(Spacer(1, 4*mm))
     story.append(Paragraph(
-        "This is <b>always the first step</b>. You must extract course information from an approved "
-        "Course Proposal (CP) before generating any courseware documents. The extracted data is "
-        "automatically shared across all other pages.",
+        "This is <b>always the first step</b> — you cannot skip it. You must extract course "
+        "information from an approved Course Proposal (CP) before generating any documents. "
+        "Think of it as loading the course data into the system. Once extracted, this data is "
+        "automatically available on all other pages.",
         styles["BodyText2"]))
+    story.append(Spacer(1, 2*mm))
+    story.append(tip(
+        "If you skip this step and go directly to Generate AP/FG/LG, you will see a warning: "
+        "'No course info loaded'. Always start here first.", styles))
 
     story.append(Paragraph("3.1  Uploading a Course Proposal", styles["SubHeader"]))
     story.append(step(1, "Navigate to <b>Extract Course Info</b> in the sidebar.", styles))
@@ -764,8 +785,13 @@ def build_pdf():
     story.append(bullet("<b>Fetch the estimated fee</b> from the URL (if provided).", styles))
     story.append(bullet("<b>Remove Tertiary-specific content</b> — phone, WhatsApp, registration link, funding table.", styles))
     story.append(note(
-        "The client company must be added in Company Management (Section 10) with their address, email, "
+        "The client company must be added in Company Management (Section 12) with their address, email, "
         "and logo BEFORE generating the brochure. Otherwise the brochure will have missing details.",
+        styles))
+    story.append(tip(
+        "The company name matching is flexible — it ignores uppercase/lowercase, periods, and extra spaces. "
+        "So 'LAURES SOLUTIONS PTE. LTD.' in the CP will correctly match 'Laures Solutions Pte Ltd' in the database. "
+        "You do not need to worry about exact formatting.",
         styles))
 
     story.append(Paragraph("9.3  Downloading & Clearing", styles["SubHeader"]))
@@ -866,6 +892,12 @@ def build_pdf():
     story.append(bullet("<b>Delete:</b> Click delete — the system auto-backs up the company data "
         "before removing it (saved in company/deleted_companies/).", styles))
     story.append(bullet("<b>Search:</b> Use the search bar to find companies by name, UEN, or address.", styles))
+    story.append(Spacer(1, 3*mm))
+    story.append(note(
+        "Always add a new client company BEFORE generating their courseware or brochure. "
+        "The company logo, UEN, and address appear on the AP, FG, LG, Slides, and Brochure. "
+        "If the company is missing from the database, these fields will be blank or show defaults.",
+        styles))
     story.append(PageBreak())
 
     # ══════════════════════════════════════════════
@@ -927,6 +959,23 @@ def build_pdf():
     # SECTION 14 — TROUBLESHOOTING
     # ══════════════════════════════════════════════
     story.append(blue_header_table("14. Troubleshooting & FAQ"))
+    story.append(Spacer(1, 4*mm))
+
+    story.append(Paragraph("Common Mistakes to Avoid", styles["SubSubHeader"]))
+    story.append(bullet(
+        "<b>Skipping Extract Course Info</b> — Always start with Step 1. All other pages need this data.", styles))
+    story.append(bullet(
+        "<b>Wrong company selected</b> — Check the sidebar dropdown before generating. "
+        "The wrong company means wrong logo, UEN, and address on all documents.", styles))
+    story.append(bullet(
+        "<b>Generating brochure without adding client company first</b> — Add the client in Company Management "
+        "(Section 12) with their logo, address, and email before generating their brochure.", styles))
+    story.append(bullet(
+        "<b>Opening DOCX in Google Docs</b> — Always use Microsoft Word. "
+        "Google Docs may break the formatting of WSQ templates.", styles))
+    story.append(bullet(
+        "<b>Not reviewing extracted data</b> — Always check the extracted course info before generating. "
+        "If the AI misinterpreted something, the error will carry into all documents.", styles))
     story.append(Spacer(1, 4*mm))
 
     faq_data = [
@@ -1021,7 +1070,7 @@ def build_pdf():
     story.append(Spacer(1, 15*mm))
     story.append(HRFlowable(width="40%", thickness=1, color=MEDIUM_GRAY, spaceAfter=6))
     story.append(Paragraph(
-        f"WSQ Courseware Generator User Guide  |  Version 3.0  |  {today}",
+        f"WSQ Courseware Generator User Guide  |  Version 3.1  |  {today}",
         styles["FooterStyle"]))
     story.append(Paragraph(
         "© Tertiary Infotech Academy Pte Ltd. All Rights Reserved.",
