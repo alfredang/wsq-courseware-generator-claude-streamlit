@@ -2372,30 +2372,33 @@ def app():
                     from company.database import get_all_organizations
                     all_orgs = get_all_organizations()
                     matched_company = None
-                    org_lower = org_name.lower().strip().rstrip('.')
-                    # Try exact match first
+                    # Normalize: lowercase, strip periods/commas, collapse whitespace
+                    def _norm(s):
+                        return re.sub(r'\s+', ' ', s.lower().replace('.', '').replace(',', '').strip())
+                    org_norm = _norm(org_name)
+                    # Try exact match first (after normalization)
                     for org in all_orgs:
-                        if org['name'].lower().strip().rstrip('.') == org_lower:
+                        if _norm(org['name']) == org_norm:
                             matched_company = org
                             break
                     # Then try contains match (either direction)
                     if not matched_company:
                         for org in all_orgs:
-                            db_lower = org['name'].lower().strip().rstrip('.')
-                            if db_lower in org_lower or org_lower in db_lower:
+                            db_norm = _norm(org['name'])
+                            if db_norm in org_norm or org_norm in db_norm:
                                 matched_company = org
                                 break
                     # Then try first word match
                     if not matched_company:
-                        first_word = org_lower.split()[0] if org_lower.split() else ''
+                        first_word = org_norm.split()[0] if org_norm.split() else ''
                         if first_word and first_word not in ('pte', 'ltd', 'the'):
                             for org in all_orgs:
-                                if first_word in org['name'].lower():
+                                if first_word in _norm(org['name']):
                                     matched_company = org
                                     break
                     if matched_company:
                         st.session_state['brochure_company'] = matched_company
-                        st.info(f"Detected company: **{matched_company['name']}** (address: {matched_company.get('address', 'N/A')})")
+                        pass  # Company matched silently — logo/address/email loaded from database
                     else:
                         st.session_state['brochure_company'] = {'name': org_name, 'address': '', 'email': '', 'logo': ''}
                         st.warning(f"Detected company: **{org_name}** — not found in database. Add it in Company Management for full details.")
