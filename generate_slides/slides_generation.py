@@ -642,30 +642,49 @@ def _stamp_logos_on_pptx(pptx_path: str, company_name: str = None) -> str:
         slide_width = prs.slide_width
         slide_height = prs.slide_height
 
-        # Stamp logos on FIRST slide (cover)
+        # Stamp logos on FIRST slide (cover) — bottom-left, stacked
         if prs.slides and len(prs.slides) > 0:
             cover = prs.slides[0]
+            from PIL import Image as _PILImg
+            from generate_slides.build_pptx import _get_company_logo
 
-            # WSQ logo — top-left
+            _LOGO_X = Emu(300000)
+            _MAX_W = Emu(2500000)
+            _MAX_H = Emu(800000)
+            _GAP = Emu(100000)
+            _CR_Y = Emu(4920000)
+            _MARGIN = Emu(80000)
+
+            def _sz(p):
+                try:
+                    with _PILImg.open(str(p)) as img:
+                        iw, ih = img.size
+                        a = iw / ih if ih > 0 else 1
+                    w = int(_MAX_W)
+                    h = int(w / a) if a > 0 else w
+                    if h > int(_MAX_H):
+                        h = int(_MAX_H)
+                        w = int(h * a)
+                    return (w, h)
+                except Exception:
+                    return (int(_MAX_W), int(_MAX_H))
+
+            # Determine company logo (use database company, fall back to Tertiary)
+            co_logo = _get_company_logo()
+            if not co_logo or not Path(co_logo).exists():
+                co_logo = str(company_logo) if company_logo.exists() else None
+
+            ww, wh = _sz(wsq_logo) if wsq_logo.exists() else (0, 0)
+            cw, ch = _sz(co_logo) if co_logo else (0, 0)
+            total = wh + int(_GAP) + ch
+
+            wy = int(_CR_Y) - int(_MARGIN) - total
+            cy = wy + wh + int(_GAP)
+
             if wsq_logo.exists():
-                logo_w = Inches(2.2)
-                logo_h = Inches(1.5)
-                cover.shapes.add_picture(
-                    str(wsq_logo),
-                    Inches(0.3), Inches(0.2),
-                    logo_w, logo_h
-                )
-
-            # Company logo — top-right
-            if company_logo.exists():
-                logo_w = Inches(3.5)
-                logo_h = Inches(1.0)
-                left = slide_width - logo_w - Inches(0.3)
-                cover.shapes.add_picture(
-                    str(company_logo),
-                    left, Inches(0.3),
-                    logo_w, logo_h
-                )
+                cover.shapes.add_picture(str(wsq_logo), _LOGO_X, Emu(wy), width=ww, height=wh)
+            if co_logo and Path(co_logo).exists():
+                cover.shapes.add_picture(str(co_logo), _LOGO_X, Emu(cy), width=cw, height=ch)
 
         # Add copyright footer to ALL slides
         footer_text = "This material belongs to Tertiary Infotech Academy Pte Ltd (UEN: 20120096W). All Rights Reserved"
@@ -3938,17 +3957,51 @@ def _add_branded_cover_slide(prs, course_title: str):
         sp = ph._element
         sp.getparent().remove(sp)
 
-    # WSQ logo — top left
-    if wsq_logo.exists():
-        cover.shapes.add_picture(str(wsq_logo), Inches(0.5), Inches(0.3), Inches(2.5), None)
+    # --- Logos: bottom-left, stacked (WSQ on top, company below) ---
+    from PIL import Image as _PILImg
+    from generate_slides.build_pptx import _get_company_logo, TERTIARY_LOGO
 
-    # Tertiary Infotech Academy logo — top right
-    if tia_logo.exists():
-        cover.shapes.add_picture(str(tia_logo), Inches(9.5), Inches(0.2), Inches(3.3), None)
+    _LOGO_X = Emu(300000)
+    _MAX_LOGO_W = Emu(2500000)
+    _MAX_LOGO_H = Emu(800000)
+    _LOGO_GAP = Emu(100000)
+    _COPYRIGHT_Y = Emu(4920000)
+    _BOTTOM_MARGIN = Emu(80000)
+
+    def _calc_size(path):
+        try:
+            with _PILImg.open(str(path)) as img:
+                iw, ih = img.size
+                aspect = iw / ih if ih > 0 else 1
+            w = int(_MAX_LOGO_W)
+            h = int(w / aspect) if aspect > 0 else w
+            if h > int(_MAX_LOGO_H):
+                h = int(_MAX_LOGO_H)
+                w = int(h * aspect)
+            return (w, h)
+        except Exception:
+            return (int(_MAX_LOGO_W), int(_MAX_LOGO_H))
+
+    # Determine company logo
+    company_logo_path = _get_company_logo()
+    if not company_logo_path or not Path(company_logo_path).exists():
+        company_logo_path = str(tia_logo) if tia_logo.exists() else None
+
+    wsq_w, wsq_h = _calc_size(wsq_logo) if wsq_logo.exists() else (0, 0)
+    co_w, co_h = _calc_size(company_logo_path) if company_logo_path else (0, 0)
+    total_h = wsq_h + int(_LOGO_GAP) + co_h
+
+    _wsq_y = int(_COPYRIGHT_Y) - int(_BOTTOM_MARGIN) - total_h
+    _co_y = _wsq_y + wsq_h + int(_LOGO_GAP)
+
+    if wsq_logo.exists():
+        cover.shapes.add_picture(str(wsq_logo), _LOGO_X, Emu(_wsq_y), width=wsq_w, height=wsq_h)
+    if company_logo_path and Path(company_logo_path).exists():
+        cover.shapes.add_picture(str(company_logo_path), _LOGO_X, Emu(_co_y), width=co_w, height=co_h)
 
     # Course title — centered
     title_box = cover.shapes.add_textbox(
-        Inches(1.5), Inches(2.8), Inches(10.333), Inches(2.5)
+        Inches(1.5), Inches(1.5), Inches(10.333), Inches(2.5)
     )
     tf = title_box.text_frame
     tf.word_wrap = True

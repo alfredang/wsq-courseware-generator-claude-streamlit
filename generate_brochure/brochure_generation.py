@@ -1918,8 +1918,15 @@ def populate_brochure_template(course_data: CourseData, company_name: str = "Ter
             # Replace logo with client company logo on ALL pages
             company_logo = company_data.get('logo', '')
             if company_logo and os.path.exists(company_logo):
-                abs_logo_path = os.path.abspath(company_logo).replace('\\', '/')
-                template_content = template_content.replace('TertiaryCoursesSingapore.png', abs_logo_path)
+                # Encode logo as base64 data URI so it works in all renderers
+                # (file:// paths break in Playwright/WeasyPrint across platforms)
+                import base64
+                import mimetypes
+                mime_type = mimetypes.guess_type(company_logo)[0] or 'image/png'
+                with open(company_logo, 'rb') as logo_f:
+                    logo_b64 = base64.b64encode(logo_f.read()).decode('utf-8')
+                logo_data_uri = f'data:{mime_type};base64,{logo_b64}'
+                template_content = template_content.replace('TertiaryCoursesSingapore.png', logo_data_uri)
                 template_content = template_content.replace('alt="Tertiary Courses Singapore"', f'alt="{company_name}"')
             else:
                 # Remove logo img tags entirely if no logo

@@ -9,9 +9,13 @@ python-docx
 docxcompose
 requests
 pypdf2
+pymupdf
 python-dotenv
 psycopg2-binary
 jinja2
+reportlab>=4.4.10
+python-pptx>=0.6.21
+anthropic>=0.40.0
 
 # Streamlit (UI Framework)
 streamlit>=1.30.0
@@ -20,6 +24,9 @@ streamlit-modal
 
 # Claude Agent SDK (agentic AI processing)
 claude-agent-sdk
+
+# Browser automation (brochure PDF generation)
+playwright
 
 # NotebookLM (slide generation)
 notebooklm-py[browser]

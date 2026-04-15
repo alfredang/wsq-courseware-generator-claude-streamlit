@@ -247,8 +247,9 @@ def add_cover(prs, course_title, tgs_code=""):
     p.font.name = "Arial"
     p.alignment = PP_ALIGN.CENTER
 
-    # --- Logos (bottom-left) ---
-    # WSQ logo always shown; Tertiary full logo (with tagline) or company logo below
+    # --- Logos (bottom-left, stacked and aligned above copyright bar) ---
+    # WSQ logo on top, company logo directly below — both left-aligned
+    # Copyright bar starts at Y=4920000, so all logos must fit above it.
     company_logo = _get_company_logo()
     is_tertiary = (
         company_logo == TERTIARY_LOGO
@@ -256,47 +257,56 @@ def add_cover(prs, course_title, tgs_code=""):
         or "tertiary" in _company_info.get("name", "").lower()
     )
 
-    # Logo sizing: use width-based sizing with max height cap
     from PIL import Image as _PILImg
     _LOGO_X = Emu(300000)
-    _MAX_LOGO_W = Emu(2800000)   # ~3.1cm max width
-    _MAX_LOGO_H = Emu(1200000)   # ~1.3cm max height
+    _MAX_LOGO_W = Emu(2500000)   # ~2.8cm max width
+    _MAX_LOGO_H = Emu(800000)    # ~0.9cm max height
+    _LOGO_GAP = Emu(100000)      # gap between WSQ and company logo
+    _COPYRIGHT_Y = Emu(4920000)  # copyright bar position
 
-    def _add_logo(slide, path, x, y):
-        """Add logo with width/height constraints so it fits neatly."""
+    def _calc_logo_size(path):
+        """Calculate logo dimensions within constraints. Returns (w, h)."""
         if not os.path.exists(path):
-            return
+            return (0, 0)
         try:
             with _PILImg.open(path) as img:
                 iw, ih = img.size
                 aspect = iw / ih if ih > 0 else 1
-            # Calculate size: fit within max width AND max height
             w = _MAX_LOGO_W
             h = int(w / aspect) if aspect > 0 else w
             if h > _MAX_LOGO_H:
                 h = _MAX_LOGO_H
                 w = int(h * aspect)
-            slide.shapes.add_picture(path, x, y, width=w, height=h)
+            return (w, h)
         except Exception:
-            slide.shapes.add_picture(path, x, y, width=_MAX_LOGO_W)
+            return (int(_MAX_LOGO_W), int(_MAX_LOGO_H))
 
-    _WSQ_Y = Emu(3600000)
-    _add_logo(slide, WSQ_LOGO, _LOGO_X, _WSQ_Y)
+    # Calculate total height needed for both logos + gap
+    wsq_w, wsq_h = _calc_logo_size(WSQ_LOGO)
+    company_path = TERTIARY_LOGO if (is_tertiary and os.path.exists(TERTIARY_LOGO)) else company_logo
+    co_w, co_h = _calc_logo_size(company_path)
+    total_logos_h = wsq_h + _LOGO_GAP + co_h
 
-    # Company logo below WSQ
-    _COMPANY_Y = Emu(5000000)
-    if is_tertiary and os.path.exists(TERTIARY_LOGO):
-        _add_logo(slide, TERTIARY_LOGO, _LOGO_X, _COMPANY_Y)
-    elif os.path.exists(company_logo):
-        _add_logo(slide, company_logo, _LOGO_X, _COMPANY_Y)
+    # Position logos so company logo bottom edge sits 80000 EMU above the copyright bar
+    _BOTTOM_MARGIN = Emu(80000)
+    _WSQ_Y = _COPYRIGHT_Y - _BOTTOM_MARGIN - total_logos_h
+    _COMPANY_Y = _WSQ_Y + wsq_h + _LOGO_GAP
 
-    # --- Version info (bottom-right, black text) ---
+    # Add WSQ logo
+    if os.path.exists(WSQ_LOGO):
+        slide.shapes.add_picture(WSQ_LOGO, _LOGO_X, _WSQ_Y, width=wsq_w, height=wsq_h)
+
+    # Add company logo below WSQ
+    if os.path.exists(company_path):
+        slide.shapes.add_picture(company_path, _LOGO_X, _COMPANY_Y, width=co_w, height=co_h)
+
+    # --- Version info (bottom-right, aligned with company logo area) ---
     info_text = "Version: 1.0"
     if tgs_code:
         info_text = f"Version: 1.0\nCourse Code: {tgs_code}"
     info_text += f"\nWebsite: {_get_company_website()}"
     info_box = slide.shapes.add_textbox(
-        Emu(5500000), Emu(4100000), Emu(3500000), Emu(700000)
+        Emu(5500000), _COMPANY_Y, Emu(3500000), Emu(700000)
     )
     inf_tf = info_box.text_frame
     inf_tf.word_wrap = True
