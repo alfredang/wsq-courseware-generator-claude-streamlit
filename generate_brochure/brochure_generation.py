@@ -125,6 +125,10 @@ def web_scrape_course_info(url: str) -> CourseData:
         CourseData: Extracted course information
     """
     try:
+        # Ensure HTTPS — many .gov.sg sites reject plain HTTP
+        if url.startswith('http://'):
+            url = url.replace('http://', 'https://', 1)
+
         if PLAYWRIGHT_AVAILABLE:
             # Use Playwright for web scraping (handles JavaScript-rendered content)
             soup = scrape_with_playwright(url)
@@ -1958,21 +1962,12 @@ def populate_brochure_template(course_data: CourseData, company_name: str = "Ter
                 template_content,
             )
 
-            # Replace fee section with estimated payable fee from URL
-            estimated_fee = data_dict.get('gst_exclusive_price', '')
-            if estimated_fee and estimated_fee != '$900.00':
-                template_content = re.sub(
-                    r'<p><strong>Course Fee \(Before Funding\):</strong></p>\s*<p>[^<]*<br>\s*[^<]*</p>',
-                    f'<p><strong>Estimated Payable Fee:</strong> {estimated_fee}</p>',
-                    template_content
-                )
-            else:
-                # Remove fee section if no data
-                template_content = re.sub(
-                    r'<p><strong>Course Fee \(Before Funding\):</strong></p>\s*<p>[^<]*<br>\s*[^<]*</p>',
-                    '',
-                    template_content
-                )
+            # Client courses: show pricing label but leave blank for client to fill in
+            template_content = re.sub(
+                r'<p><strong>Course Fee \(Before Funding\):</strong></p>\s*<p>[^<]*<br>\s*[^<]*</p>',
+                '<p><strong>Course Fee:</strong> ___________________</p>',
+                template_content
+            )
 
             # Remove registration link
             template_content = re.sub(
