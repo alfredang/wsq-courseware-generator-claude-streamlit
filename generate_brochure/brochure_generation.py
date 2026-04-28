@@ -64,23 +64,46 @@ except ImportError:
     PLAYWRIGHT_AVAILABLE = False
 
 def _ensure_playwright_browsers():
-    """Install Playwright browsers if not already installed (for Streamlit Cloud)."""
+    """Install Playwright browsers if not already installed.
+
+    Handles both Streamlit Cloud and self-hosted Linux/Windows deployments.
+    Tries multiple install methods and survives install failures gracefully.
+    """
     global PLAYWRIGHT_BROWSERS_INSTALLED
     if PLAYWRIGHT_BROWSERS_INSTALLED:
         return True
+
+    import subprocess
+    import sys
+
+    # Check if chromium is already installed by probing the cache directory
     try:
-        import subprocess
-        # Try to install chromium browser
-        result = subprocess.run(
-            ['playwright', 'install', 'chromium'],
-            capture_output=True,
-            timeout=180
-        )
-        PLAYWRIGHT_BROWSERS_INSTALLED = True
-        return True
-    except Exception as e:
-        st.warning(f"Could not install Playwright browsers: {e}")
-        return False
+        from playwright.sync_api import sync_playwright
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            browser.close()
+            PLAYWRIGHT_BROWSERS_INSTALLED = True
+            return True
+    except Exception:
+        pass  # browser missing — proceed to install
+
+    # Try multiple install commands in order of reliability
+    install_cmds = [
+        [sys.executable, '-m', 'playwright', 'install', 'chromium'],
+        [sys.executable, '-m', 'playwright', 'install', '--with-deps', 'chromium'],
+        ['playwright', 'install', 'chromium'],
+    ]
+
+    for cmd in install_cmds:
+        try:
+            result = subprocess.run(cmd, capture_output=True, timeout=300, text=True)
+            if result.returncode == 0:
+                PLAYWRIGHT_BROWSERS_INSTALLED = True
+                return True
+        except Exception:
+            continue  # try next command
+
+    return False
 
 # PDF generation imports - prioritize libraries that don't need external deps
 PDF_GENERATOR = None
