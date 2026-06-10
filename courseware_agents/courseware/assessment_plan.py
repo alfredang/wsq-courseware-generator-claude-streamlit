@@ -145,6 +145,11 @@ def generate_assessment_plan(context: dict, name_of_organisation, sfw_dataset_di
     context['Reviewed_By'] = ""
     context['Approved_By'] = ""
 
+    # Attach standard fixed C/NYC marking-rubric criteria for each assessment
+    # method, used by the "Marking Rubric" section of the AP template.
+    from generate_ap_fg_lg.utils.rubrics import attach_rubric_criteria
+    attach_rubric_criteria(context)
+
     doc.render(context, autoescape=True)
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".docx") as tmp_file:

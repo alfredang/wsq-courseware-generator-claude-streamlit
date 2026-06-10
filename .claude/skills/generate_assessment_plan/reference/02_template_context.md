@@ -138,6 +138,21 @@ def is_evidence_extracted(context):
 {% endfor %}
 ```
 
+### Marking Rubric (AP)
+
+The AP also renders a **Marking Rubric** section: one Competent / Not Yet
+Competent (C/NYC) checklist table per assessment method. Each method gets a
+fixed `Rubric_Criteria` list (4 items) injected automatically by
+`generate_ap_fg_lg/utils/rubrics.py` (`attach_rubric_criteria`) at render time —
+it is **not** produced by the evidence agent, so no extraction step is needed.
+
+```
+{% for mtd in Assessment_Methods_Details %}
+    {{ mtd.Assessment_Method }} ({{ mtd.Method_Abbreviation }})
+    {{ mtd.Rubric_Criteria[0] }}   # rows 0..3, each judged C / NYC
+{% endfor %}
+```
+
 ### Assessment Summary Report (ASR)
 
 ```
